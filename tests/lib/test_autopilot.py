@@ -488,7 +488,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     cmd_str = " ".join(cmd)
                     self.assertIn("/home/dev/.luskctl:Z", cmd_str)
 
-    def test_headless_generates_claude_wrapper(self) -> None:
+    def test_headless_generates_agent_wrapper(self) -> None:
         """task_run_headless generates luskctl-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)

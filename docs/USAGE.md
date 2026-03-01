@@ -327,10 +327,8 @@ The provider is resolved in this order:
 4. `claude` (ultimate fallback)
 
 ```yaml
-# Set per-project default in project.yml
-project:
-  id: myproj
-  default_agent: codex
+# Set per-project default in project.yml (top-level key)
+default_agent: codex
 
 # Set global default in config.yml
 default_agent: claude
