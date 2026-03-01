@@ -30,7 +30,7 @@ from ..lib.facade import (
     task_run_web,
 )
 from .clipboard import copy_to_clipboard_detailed
-from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen, TaskNameScreen
+from .screens import AgentSelectionScreen, AutopilotPromptScreen, SubagentInfo, TaskNameScreen
 from .widgets import TaskList
 
 
@@ -47,16 +47,16 @@ class TaskActionsMixin:
     # ---------- Helpers ----------
 
     @staticmethod
-    def _normalize_subagents(subagents: list[dict]) -> list[AgentInfo]:
-        """Resolve ``file:`` shorthand entries into full agent dicts.
+    def _normalize_subagents(subagents: list[dict]) -> list[SubagentInfo]:
+        """Resolve ``file:`` shorthand entries into full sub-agent dicts.
 
         Each entry in *subagents* may be either an inline dict (already has
         ``name``, ``description``, etc.) or a ``file:`` reference whose
         ``name`` and ``description`` live inside the ``.md`` YAML frontmatter.
-        This normalises both forms into :class:`AgentInfo` dicts so the UI
+        This normalises both forms into :class:`SubagentInfo` dicts so the UI
         screens always have ``name`` and ``description`` to display.
         """
-        result: list[AgentInfo] = []
+        result: list[SubagentInfo] = []
         for sa in subagents:
             if "file" in sa:
                 parsed = parse_md_agent(sa["file"])
@@ -71,7 +71,7 @@ class TaskActionsMixin:
             if not name:
                 continue
             result.append(
-                AgentInfo(
+                SubagentInfo(
                     name=name,
                     description=agent.get("description", ""),
                     default=bool(agent.get("default", False)),
@@ -236,66 +236,63 @@ class TaskActionsMixin:
             self._on_autopilot_name_result,
         )
 
+    _autopilot_pending_agent: tuple[str, list[str] | None] | None = None
+
     async def _on_autopilot_name_result(self, name: str | None) -> None:
         """Handle the name returned from TaskNameScreen for autopilot."""
         if name is None or not self.current_project_id:
             return
 
-        # Store the name and show prompt input screen
-        self._autopilot_pending_name = name
-        await self.push_screen(
-            AutopilotPromptScreen(),
-            self._on_autopilot_prompt_result,
-        )
-
-    async def _on_autopilot_prompt_result(self, prompt: str | None) -> None:
-        """Handle the prompt returned from AutopilotPromptScreen."""
-        if not prompt or not self.current_project_id:
-            return
-
         pid = self.current_project_id
 
-        # Load project to check for subagents and resolve provider
+        # Store the name and show agent selection screen
+        self._autopilot_pending_name = name
+
         try:
             project = load_project(pid)
         except Exception as e:
             self.notify(f"Error loading project: {e}")
             return
 
-        # Resolve provider — agent selection is only relevant for Claude
-        from ..lib.containers.headless_providers import get_provider
-
-        try:
-            resolved = get_provider(None, project)
-        except SystemExit as e:
-            self.notify(str(e))
-            return
-
+        default_agent = project.default_agent or "claude"
         raw_subagents = project.agent_config.get("subagents", [])
         subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
 
-        provider_name = resolved.name
+        await self.push_screen(
+            AgentSelectionScreen(subagents=subagents or None, default_agent=default_agent),
+            self._on_agent_selection_result,
+        )
 
-        if subagents and resolved.supports_agents_json:
-            # Show agent selection screen (Claude only)
-            await self.push_screen(
-                AgentSelectionScreen(subagents),
-                lambda selected, p=prompt, prov=provider_name: self._on_agent_selection_result(
-                    p, selected, provider=prov
-                ),
-            )
-        else:
-            # No agents or non-Claude provider — launch directly
-            await self._launch_autopilot(prompt, agents=None, provider=provider_name)
-
-    async def _on_agent_selection_result(
-        self, prompt: str, selected: list[str] | None, provider: str | None = None
-    ) -> None:
-        """Handle the agent list returned from AgentSelectionScreen."""
-        if selected is None:
-            # User cancelled agent selection
+    async def _on_agent_selection_result(self, result: tuple[str, list[str] | None] | None) -> None:
+        """Handle the result from AgentSelectionScreen, then show the prompt screen."""
+        if result is None:
             return
-        await self._launch_autopilot(prompt, agents=selected, provider=provider)
+
+        self._autopilot_pending_agent = result
+        await self.push_screen(
+            AutopilotPromptScreen(),
+            self._on_autopilot_prompt_result,
+        )
+
+    async def _on_autopilot_prompt_result(self, prompt: str | None) -> None:
+        """Handle the prompt returned from AutopilotPromptScreen and launch."""
+        if not prompt:
+            return
+
+        result = self._autopilot_pending_agent
+        self._autopilot_pending_agent = None
+        if not result:
+            return
+
+        agent_name, selected_subagents = result
+
+        # Only pass sub-agents if the agent supports them
+        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
+        provider = HEADLESS_PROVIDERS.get(agent_name)
+        agents = selected_subagents if provider and provider.supports_agents_json else None
+
+        await self._launch_autopilot(prompt, agents=agents, provider=agent_name)
 
     async def _launch_autopilot(
         self, prompt: str, agents: list[str] | None = None, provider: str | None = None

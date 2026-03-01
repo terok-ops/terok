@@ -131,6 +131,10 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
             def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
+        class OptionHighlighted:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 

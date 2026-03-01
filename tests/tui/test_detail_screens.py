@@ -212,19 +212,31 @@ class ScreenConstructionTests(TestCase):
 
     def test_agent_selection_screen_construction(self) -> None:
         screens, _ = import_screens()
-        agents = [
+        screen = screens.AgentSelectionScreen()
+        self.assertIsNotNone(screen)
+        self.assertEqual(screen._default_agent, "claude")
+        self.assertEqual(screen._subagents, [])
+
+    def test_agent_selection_screen_custom_default(self) -> None:
+        screens, _ = import_screens()
+        screen = screens.AgentSelectionScreen(default_agent="codex")
+        self.assertEqual(screen._default_agent, "codex")
+
+    def test_agent_selection_screen_with_subagents(self) -> None:
+        screens, _ = import_screens()
+        subagents = [
             {"name": "reviewer", "description": "Code reviewer", "default": True},
             {"name": "debugger", "description": "Debugger", "default": False},
         ]
-        screen = screens.AgentSelectionScreen(agents)
+        screen = screens.AgentSelectionScreen(subagents=subagents)
         self.assertIsNotNone(screen)
-        self.assertEqual(len(screen._agents), 2)
+        self.assertEqual(len(screen._subagents), 2)
 
-    def test_agent_selection_screen_empty_agents(self) -> None:
+    def test_agent_selection_screen_no_subagents(self) -> None:
         screens, _ = import_screens()
-        screen = screens.AgentSelectionScreen([])
+        screen = screens.AgentSelectionScreen(subagents=None)
         self.assertIsNotNone(screen)
-        self.assertEqual(len(screen._agents), 0)
+        self.assertEqual(screen._subagents, [])
 
 
 class TaskScreenKeyBindingTests(TestCase):

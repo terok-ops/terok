@@ -299,13 +299,16 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 
 
-class AgentInfo(TypedDict):
-    """Metadata for a single agent shown in the autopilot selection screen.
+class SubagentInfo(TypedDict):
+    """Metadata for a single sub-agent shown in the autopilot selection screen.
+
+    Sub-agents are provider-specific assistants (currently Claude only) that can
+    be included in an autopilot run via ``--agents`` JSON.
 
     Attributes:
-        name: Unique agent identifier used as the dict key in ``--agents`` JSON.
-        description: Human-readable summary of the agent's purpose.
-        default: Whether the agent is pre-selected when the selection screen opens.
+        name: Unique sub-agent identifier used as the dict key in ``--agents`` JSON.
+        description: Human-readable summary of the sub-agent's purpose.
+        default: Whether the sub-agent is pre-selected when the selection screen opens.
     """
 
     name: str
@@ -394,12 +397,22 @@ class AutopilotPromptScreen(screen.ModalScreen[str | None]):
 
 
 # ---------------------------------------------------------------------------
-# Agent Selection Screen
+# Agent Selection Screen (agent + optional sub-agents)
 # ---------------------------------------------------------------------------
 
 
-class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
-    """Modal for selecting non-default agents to include in an autopilot run."""
+class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | None]):
+    """Combined modal for selecting the autopilot agent and optional sub-agents.
+
+    The top section lists all registered headless agents (Claude, Codex, etc.)
+    with the project default marked ``*``.  The bottom section shows sub-agent
+    checkboxes when the project defines them (currently Claude-only).
+
+    Number keys (1-9) act as shortcuts for agent selection.
+
+    Dismisses with ``(agent_name, selected_subagents_or_None)`` on OK,
+    or ``None`` if cancelled.
+    """
 
     BINDINGS = [
         _modal_binding("escape", "cancel", "Cancel"),
@@ -421,9 +434,21 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
         padding: 1;
     }
 
-    #agent-selection {
+    #agent-list {
         height: auto;
-        max-height: 12;
+        max-height: 10;
+        margin-bottom: 1;
+    }
+
+    #subagent-label {
+        height: 1;
+        margin-top: 1;
+        color: $text-muted;
+    }
+
+    #subagent-selection {
+        height: auto;
+        max-height: 8;
         margin-bottom: 1;
     }
 
@@ -431,35 +456,82 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
         height: auto;
         align-horizontal: right;
     }
+
+    #agent-buttons Button {
+        margin-left: 1;
+    }
     """
 
-    def __init__(self, agents: list[AgentInfo]) -> None:
-        """agents: list of AgentInfo dicts with 'name', 'description', 'default' fields."""
+    def __init__(
+        self,
+        subagents: list[SubagentInfo] | None = None,
+        default_agent: str = "claude",
+    ) -> None:
+        """Create the combined agent + sub-agent selection screen.
+
+        Args:
+            subagents: Optional list of sub-agent dicts. When non-empty a
+                checkbox section is shown below the agent list.
+            default_agent: Name of the project's default agent (pre-highlighted
+                and marked with ``*``).
+        """
         super().__init__()
-        self._agents = agents
+        self._subagents = subagents or []
+        self._default_agent = default_agent
+        self._selected_agent: str = default_agent
 
     def compose(self) -> ComposeResult:
-        """Build the agent selection list with OK/Cancel buttons."""
+        """Build the agent list, optional sub-agent checkboxes, and buttons."""
+        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
         with Vertical(id="agent-dialog") as dialog:
-            items = []
-            for agent in self._agents:
-                name = agent.get("name", "unnamed")
-                desc = agent.get("description", "")
-                label = f"{name}: {desc}" if desc else name
-                # Pre-select agents marked as default
-                initial = bool(agent.get("default", False))
-                items.append((label, name, initial))
-            yield SelectionList(*items, id="agent-selection")
+            options = []
+            for i, provider in enumerate(HEADLESS_PROVIDERS.values(), 1):
+                marker = " *" if provider.name == self._default_agent else ""
+                options.append(Option(f"\\[{i}] {provider.label}{marker}", id=provider.name))
+            yield OptionList(*options, id="agent-list")
+
+            if self._subagents:
+                yield Static("Sub-agents (Claude only):", id="subagent-label")
+                items = []
+                for sa in self._subagents:
+                    name = sa.get("name", "unnamed")
+                    desc = sa.get("description", "")
+                    label = f"{name}: {desc}" if desc else name
+                    initial = bool(sa.get("default", False))
+                    items.append((label, name, initial))
+                yield SelectionList(*items, id="subagent-selection")
+
             with Horizontal(id="agent-buttons"):
                 yield Button("Cancel", id="btn-cancel", variant="default")
                 yield Button("OK", id="btn-ok", variant="primary")
-        dialog.border_title = "Select Agents"
-        dialog.border_subtitle = "Esc to cancel"
+        dialog.border_title = "Select Agent"
+        dialog.border_subtitle = "Esc to cancel  (* = default)"
 
     def on_mount(self) -> None:
-        """Focus the OK button on mount."""
-        btn = self.query_one("#btn-ok", Button)
-        btn.focus()
+        """Focus the agent list and highlight the default entry."""
+        agent_list = self.query_one("#agent-list", OptionList)
+        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
+        for idx, name in enumerate(HEADLESS_PROVIDERS):
+            if name == self._default_agent:
+                agent_list.highlighted = idx
+                break
+        agent_list.focus()
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        """Track the currently highlighted agent as the selection."""
+        if event.option_id:
+            self._selected_agent = event.option_id
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Confirm agent choice on Enter and advance focus."""
+        if event.option_id:
+            self._selected_agent = event.option_id
+        if self._subagents:
+            self.query_one("#subagent-selection", SelectionList).focus()
+        else:
+            self.query_one("#btn-ok", Button).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle OK or Cancel button clicks."""
@@ -469,10 +541,26 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
             self.dismiss(None)
 
     def _submit(self) -> None:
-        """Dismiss with the list of selected agent names."""
-        sel = self.query_one("#agent-selection", SelectionList)
-        selected = list(sel.selected)
-        self.dismiss(selected)
+        """Dismiss with the selected agent and sub-agent list."""
+        agent = self._selected_agent
+        subagents: list[str] | None = None
+        if self._subagents:
+            sel = self.query_one("#subagent-selection", SelectionList)
+            subagents = list(sel.selected)
+        self.dismiss((agent, subagents))
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle number-key shortcuts (1-9) to select an agent."""
+        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
+        if event.character and event.character.isdigit():
+            idx = int(event.character) - 1
+            providers = list(HEADLESS_PROVIDERS.values())
+            if 0 <= idx < len(providers):
+                self._selected_agent = providers[idx].name
+                agent_list = self.query_one("#agent-list", OptionList)
+                agent_list.highlighted = idx
+                event.stop()
 
     def action_cancel(self) -> None:
         """Cancel agent selection and dismiss without a result."""
