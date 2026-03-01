@@ -58,16 +58,13 @@ COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
 RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
 
-# Configure shell aliases and PATH for agent CLIs
+# Configure shell environment and PATH for agent CLIs
 RUN set -eux; \
     printf '%s\n' \
       '# Add user-installed agent CLIs to PATH' \
       'export PATH="$HOME/.npm-packages/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH"' \
       '' \
-      'alias codex="GIT_AUTHOR_NAME=Codex GIT_AUTHOR_EMAIL=codex@openai.com GIT_COMMITTER_NAME="\${HUMAN_GIT_NAME:-Nobody}" GIT_COMMITTER_EMAIL="\${HUMAN_GIT_EMAIL:-nobody@localhost}" codex --dangerously-bypass-approvals-and-sandbox"' \
-      'alias copilot="GIT_AUTHOR_NAME=\"GitHub Copilot\" GIT_AUTHOR_EMAIL=copilot@github.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" copilot"' \
-      'alias vibe="GIT_AUTHOR_NAME=\"Mistral Vibe\" GIT_AUTHOR_EMAIL=vibe@mistral.ai GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" vibe --agent auto-approve"' \
-      'alias blablador="GIT_AUTHOR_NAME=Blablador GIT_AUTHOR_EMAIL=blablador@helmholtz.de GIT_COMMITTER_NAME="\${HUMAN_GIT_NAME:-Nobody}" GIT_COMMITTER_EMAIL="\${HUMAN_GIT_EMAIL:-nobody@localhost}" blablador"' \
+      '# Git identity aliases for non-agent CLIs (agent wrappers are in zz-luskctl-project.sh)' \
       'alias gh="GIT_AUTHOR_NAME=\"GitHub CLI\" GIT_AUTHOR_EMAIL=gh@github.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" gh"' \
       'alias glab="GIT_AUTHOR_NAME=\"GitLab CLI\" GIT_AUTHOR_EMAIL=glab@gitlab.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" glab"' \
       '' \
@@ -83,7 +80,7 @@ RUN set -eux; \
       '  printf "\\n"' \
       'fi' \
       '' \
-      '# Source luskctl project config (claude wrapper function)' \
+      '# Source luskctl project config (agent wrapper functions)' \
       '[ -r /etc/profile.d/zz-luskctl-project.sh ] && . /etc/profile.d/zz-luskctl-project.sh' \
       > /etc/profile.d/luskctl-agent-aliases.sh; \
     if [ -f /etc/bash.bashrc ]; then \

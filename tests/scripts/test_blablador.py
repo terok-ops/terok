@@ -194,8 +194,8 @@ class BlabladorScriptTests(unittest.TestCase):
 class BlabladorDockerfileTests(unittest.TestCase):
     """Tests for Blablador integration in the L1 CLI Dockerfile."""
 
-    def test_l1_cli_has_blablador_alias(self) -> None:
-        """Verify that the L1 CLI Dockerfile includes the blablador alias."""
+    def test_l1_cli_has_blablador_binary(self) -> None:
+        """Verify that the L1 CLI Dockerfile installs the blablador binary."""
         yaml_text = (
             "project:\n"
             "  id: proj_blablador_test\n"
@@ -210,28 +210,8 @@ class BlabladorDockerfileTests(unittest.TestCase):
 
             content = l1_cli.read_text(encoding="utf-8")
 
-            # Verify blablador alias exists
-            self.assertIn("alias blablador=", content)
-
-    def test_l1_cli_blablador_alias_has_git_author(self) -> None:
-        """Verify the blablador alias sets GIT_AUTHOR_NAME."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_blablador_git_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_blablador_git_test") as _env:
-            generate_dockerfiles("proj_blablador_git_test")
-            out_dir = build_root() / "proj_blablador_git_test"
-            l1_cli = out_dir / "L1.cli.Dockerfile"
-
-            content = l1_cli.read_text(encoding="utf-8")
-
-            # Verify blablador alias has git author configuration
-            self.assertIn("GIT_AUTHOR_NAME=Blablador", content)
-            self.assertIn("GIT_AUTHOR_EMAIL=blablador@helmholtz.de", content)
+            # Verify blablador binary is installed (wrapper function is in zz-luskctl-project.sh)
+            self.assertIn("COPY scripts/blablador /usr/local/bin/blablador", content)
 
     def test_l1_cli_blablador_in_agents_list(self) -> None:
         """Verify blablador appears in the available agents list."""
