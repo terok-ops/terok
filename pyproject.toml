@@ -53,6 +53,7 @@ textual-dev = "^1.8.0"
 docstr-coverage = "^2.3.2"
 complexipy = ">=5.0"
 vulture = ">=2.12"
+reuse = "^6.2.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=7.0"

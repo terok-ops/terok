@@ -1,4 +1,4 @@
-.PHONY: all lint format test tach docstrings complexity deadcode check install install-dev clean
+.PHONY: all lint format test tach docstrings complexity deadcode reuse check install install-dev clean
 
 all: check
 
@@ -32,8 +32,12 @@ complexity:
 deadcode:
 	poetry run vulture src/luskctl/ vulture_whitelist.py --min-confidence 80
 
+# Check REUSE (SPDX license/copyright) compliance
+reuse:
+	poetry run reuse lint
+
 # Run all checks (equivalent to CI)
-check: lint test tach docstrings deadcode
+check: lint test tach docstrings deadcode reuse
 
 # Install runtime dependencies only
 install:
