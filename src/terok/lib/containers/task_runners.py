@@ -79,14 +79,37 @@ def _prepare_agent_config(
     )
 
 
+_CDI_HINT = (
+    "Hint: NVIDIA CDI configuration appears to be missing or broken.\n"
+    "Ensure the NVIDIA Container Toolkit is installed and CDI is configured.\n"
+    "See: https://podman-desktop.io/docs/podman/gpu"
+)
+
+_CDI_ERROR_PATTERNS = ("cdi.k8s.io", "nvidia.com/gpu", "CDI")
+
+
+def _enrich_run_error(prefix: str, exc: subprocess.CalledProcessError) -> str:
+    """Return an enriched error message, adding a CDI hint when applicable."""
+    stderr = (exc.stderr or b"").decode(errors="replace")
+    msg = f"{prefix}: {exc}" if not stderr else f"{prefix}:\n{stderr.strip()}"
+    if any(pat in stderr for pat in _CDI_ERROR_PATTERNS):
+        msg += f"\n\n{_CDI_HINT}"
+    return msg
+
+
 def _podman_start(cname: str) -> None:
     """Start an existing container, raising SystemExit on failure."""
     try:
-        subprocess.run(["podman", "start", cname], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["podman", "start", cname],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Failed to start container: {e}")
+        raise SystemExit(_enrich_run_error("Failed to start container", e))
 
 
 def _assert_running(cname: str) -> None:
@@ -160,11 +183,11 @@ def _run_container(
         cmd += command
     print("$", " ".join(map(str, cmd)))
     try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
+        subprocess.run(cmd, check=True, capture_output=True)
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Run failed: {e}")
+        raise SystemExit(_enrich_run_error("Run failed", e))
 
 
 def task_run_cli(
