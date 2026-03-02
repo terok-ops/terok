@@ -42,6 +42,7 @@ from .task_display import (
     effective_status,
     mode_emoji,
 )
+from .work_status import read_work_status
 
 
 @dataclass
@@ -59,6 +60,8 @@ class TaskMeta:
     preset: str | None = None
     name: str = ""
     provider: str | None = None
+    work_status: str | None = None
+    work_message: str | None = None
 
     @property
     def status(self) -> str:
@@ -331,12 +334,27 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     tasks: list[TaskMeta] = []
     if not meta_dir.is_dir():
         return tasks
+    # Resolve tasks_root once for work-status enrichment
+    try:
+        project = load_project(project_id)
+        tasks_root = project.tasks_root
+    except SystemExit:
+        tasks_root = None
     for f in meta_dir.glob("*.yml"):
         try:
             meta = yaml.safe_load(f.read_text()) or {}
+            tid = str(meta.get("task_id", ""))
+            # Read agent work status from agent-config dir
+            ws_status = None
+            ws_message = None
+            if tasks_root and tid:
+                agent_cfg = tasks_root / tid / "agent-config"
+                ws = read_work_status(agent_cfg)
+                ws_status = ws.status
+                ws_message = ws.message
             tasks.append(
                 TaskMeta(
-                    task_id=str(meta.get("task_id", "")),
+                    task_id=tid,
                     mode=meta.get("mode"),
                     workspace=meta.get("workspace", ""),
                     web_port=meta.get("web_port"),
@@ -346,6 +364,8 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     preset=meta.get("preset"),
                     name=meta["name"],
                     provider=meta.get("provider"),
+                    work_status=ws_status,
+                    work_message=ws_message,
                 )
             )
         except Exception:
@@ -429,6 +449,8 @@ def task_list(
             extra.append(f"mode={t.mode}")
         if t.web_port:
             extra.append(f"port={t.web_port}")
+        if t.work_status:
+            extra.append(f"work={t.work_status}")
         extra_s = f" [{'; '.join(extra)}]" if extra else ""
         print(f"- {t.task_id}: {t.name} {t_status}{extra_s}")
 
@@ -689,3 +711,11 @@ def task_status(project_id: str, task_id: str) -> None:
         print(f"  Exit code:       {exit_code}")
     if web_port:
         print(f"  Web port:        {web_port}")
+    # Work status from agent
+    tasks_root = project.tasks_root
+    agent_cfg = tasks_root / task_id / "agent-config"
+    ws = read_work_status(agent_cfg)
+    if ws.status:
+        print(f"  Work status:     {ws.status}")
+        if ws.message:
+            print(f"  Work message:    {ws.message}")

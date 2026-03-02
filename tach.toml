@@ -130,6 +130,12 @@ path = "luskctl.lib.containers.task_display"
 layer = "services"
 depends_on = []
 
+# Agent work status reading
+[[modules]]
+path = "luskctl.lib.containers.work_status"
+layer = "services"
+depends_on = []
+
 # Task log viewing and streaming
 [[modules]]
 path = "luskctl.lib.containers.task_logs"
@@ -148,6 +154,7 @@ layer = "services"
 depends_on = [
     "luskctl.lib.containers.runtime",
     "luskctl.lib.containers.task_display",
+    "luskctl.lib.containers.work_status",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.util.ansi",
@@ -414,6 +421,23 @@ expose = [
     "mode_emoji",
 ]
 from = ["luskctl.lib.containers.task_display"]
+
+[[interfaces]]
+expose = [
+    "read_work_status",
+    "write_work_status",
+    "WORK_STATUSES",
+    "WORK_STATUS_DISPLAY",
+    "WorkStatus",
+    "WorkStatusInfo",
+    "STATUS_FILE_NAME",
+    "PENDING_PHASE_FILE",
+    "PendingPhase",
+    "read_pending_phase",
+    "write_pending_phase",
+    "clear_pending_phase",
+]
+from = ["luskctl.lib.containers.work_status"]
 
 [[interfaces]]
 expose = ["task_logs"]

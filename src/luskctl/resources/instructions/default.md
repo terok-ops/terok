@@ -37,3 +37,13 @@ Python 3 and Node.js are available. Use `sudo apt install` or `pip`/`npm` for an
 - Read existing project documentation (README, CLAUDE.md, AGENTS.md, etc.) first.
 - Make focused, minimal changes; avoid unrelated modifications.
 - Run the project's test suite after making changes when possible.
+
+## Work Status Reporting
+
+Report your current work phase by writing to `/home/dev/.luskctl/work-status.yml`:
+
+    status: coding
+    message: "Brief description of current work"
+
+Valid statuses: planning, coding, testing, debugging, reviewing, documenting, done, blocked, error.
+Update this file when transitioning between work phases. Set `done` with a summary when finished.
