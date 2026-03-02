@@ -1,6 +1,6 @@
 # terok User Guide
 
-A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`terok`) and a Textual TUI (`terok`).
+A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`terokctl`) and a Textual TUI (`terok`).
 
 ## Table of Contents
 

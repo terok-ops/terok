@@ -1,6 +1,6 @@
 # terok
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terok`) and a Textual TUI (`terok`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terokctl`) and a Textual TUI (`terok`).
 
 ## Features
 

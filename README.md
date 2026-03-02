@@ -3,7 +3,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![REUSE compliant](https://api.reuse.software/badge/github.com/terok-ops/terok)](https://api.reuse.software/info/github.com/terok-ops/terok)
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terok`) and a Textual TUI (`terok`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terokctl`) and a Textual TUI (`terok`).
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).
 
