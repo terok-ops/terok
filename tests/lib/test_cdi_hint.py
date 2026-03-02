@@ -59,6 +59,13 @@ class CdiHintTests(unittest.TestCase):
         msg = _enrich_run_error("Run failed", exc)
         self.assertNotIn(_CDI_HINT, msg)
 
+    def test_cdi_hint_case_insensitive(self) -> None:
+        """CDI hint is shown regardless of stderr case."""
+        for text in ("Error: cdi device failed", "Error: Cdi device failed", "Error: CDI failed"):
+            exc = self._make_error(text)
+            msg = _enrich_run_error("Run failed", exc)
+            self.assertIn(_CDI_HINT, msg, f"CDI hint missing for stderr: {text!r}")
+
     def test_prefix_in_message(self) -> None:
         """The prefix is always included in the error message."""
         exc = self._make_error("some error")
