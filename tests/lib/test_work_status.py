@@ -91,11 +91,13 @@ class TestReadWorkStatus(unittest.TestCase):
         (self.tmp_dir / STATUS_FILE_NAME).write_text("42\n")
         ws = read_work_status(self.tmp_dir)
         self.assertIsNone(ws.status)
+        self.assertIsNone(ws.message)
 
     def test_list_yaml_returns_empty(self):
         (self.tmp_dir / STATUS_FILE_NAME).write_text("- item1\n- item2\n")
         ws = read_work_status(self.tmp_dir)
         self.assertIsNone(ws.status)
+        self.assertIsNone(ws.message)
 
     def test_non_string_status_and_message_normalized(self):
         (self.tmp_dir / STATUS_FILE_NAME).write_text(
@@ -135,6 +137,7 @@ class TestWorkStatusVocabulary(unittest.TestCase):
         for status, info in WORK_STATUS_DISPLAY.items():
             self.assertTrue(info.label, f"Empty label for {status}")
             self.assertTrue(info.emoji, f"Empty emoji for {status}")
+            self.assertNotIn("\ufe0f", info.emoji, f"VS16 found in emoji for {status}")
 
 
 class TestWorkStatusDataclass(unittest.TestCase):
@@ -191,6 +194,12 @@ class TestWriteWorkStatus(unittest.TestCase):
         write_work_status(self.tmp_dir, None)
         self.assertFalse((self.tmp_dir / STATUS_FILE_NAME).exists())
 
+    def test_clear_does_not_create_parent_dirs(self):
+        missing = self.tmp_dir / "does" / "not" / "exist"
+        self.assertFalse(missing.exists())
+        write_work_status(missing, None)
+        self.assertFalse(missing.exists())
+
     def test_creates_parent_dirs(self):
         nested = self.tmp_dir / "a" / "b" / "c"
         write_work_status(nested, "done")
@@ -235,6 +244,13 @@ class TestPendingPhase(unittest.TestCase):
     def test_read_non_dict(self):
         (self.tmp_dir / PENDING_PHASE_FILE).write_text("bare string\n")
         self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_read_missing_prompt_defaults_empty(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text(yaml.safe_dump({"phase": "coding"}))
+        pp = read_pending_phase(self.tmp_dir)
+        self.assertIsNotNone(pp)
+        self.assertEqual(pp.phase, "coding")
+        self.assertEqual(pp.prompt, "")
 
     def test_read_non_string_phase_and_prompt(self):
         (self.tmp_dir / PENDING_PHASE_FILE).write_text(

@@ -117,7 +117,7 @@ def write_work_status(
     data: dict[str, str] = {"status": status}
     if message:
         data["message"] = message
-    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
 # ---------- Pending phase I/O ----------
@@ -156,9 +156,12 @@ def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
 
 def write_pending_phase(agent_config_dir: Path, phase: str, prompt: str) -> None:
     """Write ``pending-phase.yml`` into *agent_config_dir*."""
+    if not phase:
+        raise ValueError("phase must be a non-empty string")
     agent_config_dir.mkdir(parents=True, exist_ok=True)
     phase_path = agent_config_dir / PENDING_PHASE_FILE
-    phase_path.write_text(yaml.safe_dump({"phase": phase, "prompt": prompt}), encoding="utf-8")
+    data = {"phase": phase, "prompt": prompt}
+    phase_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
 def clear_pending_phase(agent_config_dir: Path) -> None:
