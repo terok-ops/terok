@@ -54,7 +54,7 @@ WORK_STATUS_DISPLAY: dict[str, WorkStatusInfo] = {
     "documenting": WorkStatusInfo("Documenting", "📝"),
     "done": WorkStatusInfo("Done", "✅"),
     "blocked": WorkStatusInfo("Blocked", "🚧"),
-    "error": WorkStatusInfo("Error", "⚠️"),
+    "error": WorkStatusInfo("Error", "🚫"),
 }
 """Emoji and label for each work status, used by TUI and kanban-tui."""
 
