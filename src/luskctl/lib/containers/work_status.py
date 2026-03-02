@@ -36,6 +36,7 @@ def _write_yaml_atomic(path: Path, data: dict[str, str]) -> None:
         tmp_path = Path(tmp.name)
     tmp_path.replace(path)
 
+
 STATUS_FILE_NAME = "work-status.yml"
 """Filename agents write inside their agent-config directory."""
 
@@ -98,7 +99,7 @@ def read_work_status(agent_config_dir: Path) -> WorkStatus:
         return WorkStatus()
     try:
         raw = yaml.safe_load(status_path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError):
+    except (yaml.YAMLError, OSError, UnicodeDecodeError):
         return WorkStatus()
     if raw is None:
         return WorkStatus()
@@ -153,7 +154,7 @@ def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
         return None
     try:
         raw = yaml.safe_load(phase_path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError):
+    except (yaml.YAMLError, OSError, UnicodeDecodeError):
         return None
     if not isinstance(raw, dict):
         return None
