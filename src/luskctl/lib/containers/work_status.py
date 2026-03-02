@@ -126,9 +126,13 @@ def write_work_status(
     if status is None:
         path.unlink(missing_ok=True)
         return
+    if not isinstance(status, str) or not status:
+        raise ValueError("status must be a non-empty string")
+    if message is not None and not isinstance(message, str):
+        raise ValueError("message must be a string or None")
     agent_config_dir.mkdir(parents=True, exist_ok=True)
     data: dict[str, str] = {"status": status}
-    if message:
+    if message is not None:
         data["message"] = message
     _write_yaml_atomic(path, data)
 
