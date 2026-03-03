@@ -214,21 +214,6 @@ def _print_config() -> None:
                     f"(exists: {_yes_no(path.is_file(), color_enabled)})"
                 )
 
-    # Native Claude configuration locations
-    home = Path.home()
-    claude_agents_dir = home / ".claude" / "agents"
-    claude_settings = home / ".claude" / "settings.json"
-    print("Native Claude configuration (edit with your OS tools):")
-    print(
-        f"- Global agents dir: {_gray(str(claude_agents_dir), color_enabled)} "
-        f"(exists: {_yes_no(claude_agents_dir.is_dir(), color_enabled)})"
-    )
-    print(
-        f"- Global settings: {_gray(str(claude_settings), color_enabled)} "
-        f"(exists: {_yes_no(claude_settings.is_file(), color_enabled)})"
-    )
-    print("  (MCPs go in settings.json under mcpServers)")
-
     # ENVIRONMENT
     print("Environment overrides (if set):")
     for var in (
