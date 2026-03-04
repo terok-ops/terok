@@ -273,7 +273,7 @@ This pattern (config key for inheritance control + file for additive content) is
 
 ## Making a Release
 
-Releases are created exclusively through the **GitHub Actions Release workflow**. Manual tag creation is blocked by a repository ruleset.
+Releases are created through the **GitHub Actions Release workflow**. Do not create `v*` tags manually — the workflow handles version bumping, tagging, building, and publishing in one step.
 
 ### Steps
 
