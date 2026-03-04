@@ -81,6 +81,14 @@ class HeadlessProvider:
     continue_flag: str | None
     """Flag to continue a session (e.g. ``"--continue"``)."""
 
+    session_file: str | None
+    """Filename in ``/home/dev/.terok/`` for stored session ID.
+
+    Providers that capture session IDs via plugin or post-run parsing set this
+    to a filename (e.g. ``"opencode-session.txt"``).  Providers with their own
+    hook mechanism (Claude) or no session support set this to ``None``.
+    """
+
     # -- Claude-specific capabilities --
 
     supports_agents_json: bool
@@ -119,6 +127,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_session_resume=True,
         resume_flag="--resume",
         continue_flag=None,
+        session_file=None,
         supports_agents_json=True,
         supports_session_hook=True,
         supports_add_dir=True,
@@ -140,6 +149,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_session_resume=False,
         resume_flag=None,
         continue_flag=None,
+        session_file=None,
         supports_agents_json=False,
         supports_session_hook=False,
         supports_add_dir=False,
@@ -161,6 +171,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_session_resume=False,
         resume_flag=None,
         continue_flag=None,
+        session_file=None,
         supports_agents_json=False,
         supports_session_hook=False,
         supports_add_dir=False,
@@ -182,6 +193,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_session_resume=True,
         resume_flag="--resume",
         continue_flag="--continue",
+        session_file="vibe-session.txt",
         supports_agents_json=False,
         supports_session_hook=False,
         supports_add_dir=False,
@@ -193,7 +205,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         binary="blablador",
         git_author_name="Blablador",
         git_author_email="noreply@hzdr.de",
-        headless_subcommand=None,
+        headless_subcommand="run",
         prompt_flag="",
         auto_approve_flags=(),
         output_format_flags=(),
@@ -201,8 +213,9 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         max_turns_flag=None,
         verbose_flag=None,
         supports_session_resume=True,
-        resume_flag=None,
+        resume_flag="--session",
         continue_flag="--continue",
+        session_file="blablador-session.txt",
         supports_agents_json=False,
         supports_session_hook=False,
         supports_add_dir=False,
@@ -224,6 +237,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_session_resume=True,
         resume_flag="--session",
         continue_flag="--continue",
+        session_file="opencode-session.txt",
         supports_agents_json=False,
         supports_session_hook=False,
         supports_add_dir=False,
@@ -524,6 +538,16 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
 
     Sets git identity env vars and wraps the binary with optional timeout
     support (``--terok-timeout``), matching the Claude wrapper's interface.
+
+    Session resume logic (for providers with ``session_file``):
+
+    - An OpenCode plugin (or post-run parse for Vibe) captures the session
+      ID to ``/home/dev/.terok/<session_file>``.
+    - Resume args (``--session <id>`` or ``--resume <id>``) are injected
+      only in headless mode (``--terok-timeout`` present) or on bare
+      interactive launch (no user args).
+    - When the user passes their own arguments, passthrough is transparent
+      — no resume args are injected.
     """
     human_name = shlex.quote(project.human_name or "Nobody")
     human_email = shlex.quote(project.human_email or "nobody@localhost")
@@ -544,16 +568,37 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         "    done",
     ]
 
-    # Session resume support for providers that have it.
-    # --continue is a standalone flag (no session ID argument) for all
-    # non-Claude providers — it tells the agent to resume its most recent
-    # session.  The session-id.txt marker file is created after the first
-    # run so that --continue is only passed on subsequent invocations
-    # (i.e. follow-up prompts via `podman start`).
-    if provider.continue_flag:
+    # OpenCode session plugin setup for opencode/blablador.
+    if provider.session_file and provider.name in {"opencode", "blablador"}:
+        plugin_dir = (
+            "$HOME/.blablador/opencode/plugins"
+            if provider.name == "blablador"
+            else "$HOME/.config/opencode/plugins"
+        )
+        lines.append("    # Ensure OpenCode session plugin is installed")
+        lines.append("    local _plugin_src=/usr/local/share/terok/opencode-session-plugin.mjs")
+        lines.append(f"    local _plugin_dir={plugin_dir}")
+        lines.append('    if [ -f "$_plugin_src" ]; then')
+        lines.append('        mkdir -p "$_plugin_dir"')
+        lines.append('        [ -e "$_plugin_dir/terok-session.mjs" ] || \\')
+        lines.append('            ln -sf "$_plugin_src" "$_plugin_dir/terok-session.mjs"')
+        lines.append("    fi")
+
+    # Session resume support for providers with session_file.
+    # Resume args are only injected in headless mode (--terok-timeout present)
+    # or on bare interactive launch (no user args — convenience for container
+    # re-entry).  When the user provides their own args, passthrough is
+    # transparent.
+    session_path = f"/home/dev/.terok/{provider.session_file}" if provider.session_file else None
+    if session_path and provider.resume_flag:
         lines.append("    local _resume_args=()")
-        lines.append("    [ -f /home/dev/.terok/session-id.txt ] && \\")
-        lines.append(f"        _resume_args+=({provider.continue_flag})")
+        lines.append(f"    if [ -s {session_path} ] && \\")
+        lines.append('       { [ -n "$_timeout" ] || [ $# -eq 0 ]; }; then')
+        lines.append(
+            f"        _resume_args+=({provider.resume_flag}"
+            f' "$(cat {session_path})")'
+        )
+        lines.append("    fi")
 
     # Codex supports model_instructions_file in config; this injects the
     # mounted /home/dev/.terok/instructions.md into startup context for both
@@ -566,32 +611,67 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
             "'model_instructions_file=\"/home/dev/.terok/instructions.md\"')"
         )
 
-    # Git env vars and exec — with optional timeout
-    lines.append('    if [ -n "$_timeout" ]; then')
-    lines.append(f"        GIT_AUTHOR_NAME={author_name} \\")
-    lines.append(f"        GIT_AUTHOR_EMAIL={author_email} \\")
-    lines.append(f"        GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\")
-    lines.append(f"        GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\")
+    # Vibe session capture helper (no plugin system — parse logs post-run).
+    if provider.name == "vibe" and session_path:
+        lines.append("    _terok_capture_vibe_session() {")
+        lines.append("        python3 -c \"")
+        lines.append("import json, os, glob")
+        lines.append(
+            "files = sorted(glob.glob(os.path.expanduser("
+            "'~/.vibe/logs/session/session_*/meta.json')),"
+        )
+        lines.append("               key=os.path.getmtime, reverse=True)")
+        lines.append("if files:")
+        lines.append("    with open(files[0]) as f:")
+        lines.append("        sid = json.load(f).get('session_id', '')")
+        lines.append("    if sid:")
+        lines.append("        print(sid)")
+        lines.append(f'\" > {session_path} 2>/dev/null || true')
+        lines.append("    }")
 
-    if provider.continue_flag:
+    # Git env vars and exec — with optional timeout (headless mode)
+    lines.append('    if [ -n "$_timeout" ]; then')
+
+    # Build env var block
+    env_lines = [
+        f"        GIT_AUTHOR_NAME={author_name} \\",
+        f"        GIT_AUTHOR_EMAIL={author_email} \\",
+        f"        GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\",
+        f"        GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\",
+    ]
+    if session_path:
+        env_lines.append(f"        TEROK_SESSION_FILE={session_path} \\")
+
+    lines.extend(env_lines)
+
+    if session_path and provider.resume_flag:
         lines.append(f'        timeout "$_timeout" {binary} "${{_resume_args[@]}}" "$@"')
-        # Write session marker so subsequent runs pass --continue.
-        # Preserve the agent's exit code across the touch.
-        lines.append("        local _rc=$?; touch /home/dev/.terok/session-id.txt; return $_rc")
     elif provider.name == "codex":
         lines.append(f'        timeout "$_timeout" {binary} "${{_instr_args[@]}}" "$@"')
     else:
         lines.append(f'        timeout "$_timeout" {binary} "$@"')
 
-    lines.append("    else")
-    lines.append(f"        GIT_AUTHOR_NAME={author_name} \\")
-    lines.append(f"        GIT_AUTHOR_EMAIL={author_email} \\")
-    lines.append(f"        GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\")
-    lines.append(f"        GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\")
+    # Post-run: capture vibe session ID
+    if provider.name == "vibe" and session_path:
+        lines.append("        local _rc=$?; _terok_capture_vibe_session; return $_rc")
 
-    if provider.continue_flag:
+    # Interactive mode (no timeout)
+    lines.append("    else")
+
+    env_lines_interactive = [
+        f"        GIT_AUTHOR_NAME={author_name} \\",
+        f"        GIT_AUTHOR_EMAIL={author_email} \\",
+        f"        GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\",
+        f"        GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\",
+    ]
+    # Set session file env var for bare interactive launch only
+    if session_path:
+        env_lines_interactive.append(f"        TEROK_SESSION_FILE={session_path} \\")
+
+    lines.extend(env_lines_interactive)
+
+    if session_path and provider.resume_flag:
         lines.append(f'        command {binary} "${{_resume_args[@]}}" "$@"')
-        lines.append("        local _rc=$?; touch /home/dev/.terok/session-id.txt; return $_rc")
     elif provider.name == "codex":
         lines.append(f'        command {binary} "${{_instr_args[@]}}" "$@"')
     else:

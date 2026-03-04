@@ -600,9 +600,11 @@ def task_followup_headless(
 
     - **Claude**: resumes via ``--resume <session-id>`` (captured by a
       ``SessionStart`` hook that writes ``claude-session.txt``).
-    - **Vibe / OpenCode / Blablador**: resumes via standalone ``--continue``
-      flag.  A ``session-id.txt`` marker is written after the first run;
-      the shell wrapper detects it on restart and passes ``--continue``.
+    - **OpenCode / Blablador**: resumes via ``--session <id>`` (captured by
+      the ``opencode-session-plugin.mjs`` plugin that writes the session
+      file on ``session.created`` events).
+    - **Vibe**: resumes via ``--resume <id>`` (session ID parsed post-run
+      from ``~/.vibe/logs/session/`` metadata).
     - **Codex / Copilot**: no session resume support — follow-ups start a
       fresh session with the new prompt only.
 

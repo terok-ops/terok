@@ -52,6 +52,10 @@ RUN set -eux; \
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
 
+# Copy OpenCode session plugin for terok session resume
+RUN mkdir -p /usr/local/share/terok
+COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
+
 # Copy blablador wrapper (OpenCode-based)
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync

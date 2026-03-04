@@ -104,6 +104,9 @@ class HeadlessProviderRegistryTests(unittest.TestCase):
         self.assertEqual(p.binary, "blablador")
         self.assertIsNone(p.model_flag)
         self.assertEqual(p.continue_flag, "--continue")
+        self.assertEqual(p.headless_subcommand, "run")
+        self.assertEqual(p.resume_flag, "--session")
+        self.assertEqual(p.session_file, "blablador-session.txt")
 
     def test_opencode_provider_attributes(self) -> None:
         """OpenCode provider has expected attributes."""
@@ -208,10 +211,11 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         self.assertIn("prompt.txt", cmd)
 
     def test_blablador_command(self) -> None:
-        """Blablador command uses blablador binary."""
+        """Blablador command uses blablador binary with run subcommand."""
         p = HEADLESS_PROVIDERS["blablador"]
         cmd = build_headless_command(p, timeout=1800)
         self.assertIn("blablador", cmd)
+        self.assertIn("run", cmd)
         self.assertIn("prompt.txt", cmd)
 
     def test_all_commands_start_with_init(self) -> None:
@@ -289,63 +293,94 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             wrapper = generate_agent_wrapper(p, project, has_agents=False, **kwargs)
             self.assertIn("Alice", wrapper, f"{name} missing committer name")
 
-    def test_opencode_wrapper_has_continue_flag(self) -> None:
-        """OpenCode wrapper includes --continue session resume support."""
+    # Canonical sets of providers by session_file support.
+    # Hardcoded so tests fail fast if a provider accidentally gains/loses the field.
+    _SESSION_FILE_PROVIDERS = {"vibe", "opencode", "blablador"}
+    _NO_SESSION_FILE_PROVIDERS = {"codex", "copilot"}  # excludes claude (own wrapper)
+
+    def test_session_file_providers(self) -> None:
+        """Verify which providers have session_file set."""
+        actual = {n for n, p in HEADLESS_PROVIDERS.items() if p.session_file}
+        self.assertEqual(actual, self._SESSION_FILE_PROVIDERS)
+
+    def test_session_resume_uses_explicit_id(self) -> None:
+        """Providers with session_file use --session/--resume with explicit ID."""
         project = _make_project()
-        p = HEADLESS_PROVIDERS["opencode"]
-        wrapper = generate_agent_wrapper(p, project, has_agents=False)
-        self.assertIn("--continue", wrapper)
-        self.assertIn("session-id.txt", wrapper)
-
-    # Canonical set of providers that support --continue session resume.
-    # Hardcoded so tests fail fast if a provider accidentally gains/loses the flag.
-    _CONTINUE_PROVIDERS = {"vibe", "opencode", "blablador"}
-    _NO_CONTINUE_PROVIDERS = {"codex", "copilot"}  # excludes claude (own wrapper)
-
-    def test_continue_flag_is_standalone(self) -> None:
-        """Providers with continue_flag pass it standalone (no session ID argument)."""
-        actual = {n for n, p in HEADLESS_PROVIDERS.items() if p.continue_flag}
-        self.assertEqual(actual, self._CONTINUE_PROVIDERS)
-
-        project = _make_project()
-        for name in self._CONTINUE_PROVIDERS:
+        for name in self._SESSION_FILE_PROVIDERS:
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            # --continue should appear standalone, not followed by a session ID read
-            self.assertIn(f"_resume_args+=({p.continue_flag})", wrapper, f"{name}")
-            self.assertNotIn(
-                "cat /home/dev/.terok/session-id.txt",
+            # Uses resume_flag with cat to read the session ID
+            self.assertIn(p.resume_flag, wrapper, f"{name} missing resume flag")
+            self.assertIn(
+                f"cat /home/dev/.terok/{p.session_file}",
                 wrapper,
-                f"{name} should not read session ID file",
+                f"{name} should read session ID from file",
             )
+            # Should NOT use standalone --continue
+            self.assertNotIn("_resume_args+=(--continue)", wrapper, f"{name}")
 
-    def test_continue_providers_write_session_marker(self) -> None:
-        """Providers with continue_flag write session-id.txt after command exits."""
+    def test_session_resume_only_headless_or_bare(self) -> None:
+        """Resume args are only injected in headless mode or bare interactive launch."""
         project = _make_project()
-        for name in self._CONTINUE_PROVIDERS:
+        for name in self._SESSION_FILE_PROVIDERS:
+            p = HEADLESS_PROVIDERS[name]
+            wrapper = generate_agent_wrapper(p, project, has_agents=False)
+            # Conditional on timeout or zero args
+            self.assertIn('[ -n "$_timeout" ]', wrapper, f"{name} missing timeout check")
+            self.assertIn("[ $# -eq 0 ]", wrapper, f"{name} missing arg count check")
+
+    def test_session_env_var_set(self) -> None:
+        """Providers with session_file set TEROK_SESSION_FILE env var."""
+        project = _make_project()
+        for name in self._SESSION_FILE_PROVIDERS:
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
             self.assertIn(
-                "touch /home/dev/.terok/session-id.txt", wrapper, f"{name} missing marker write"
+                f"TEROK_SESSION_FILE=/home/dev/.terok/{p.session_file}",
+                wrapper,
+                f"{name} missing TEROK_SESSION_FILE",
             )
 
-    def test_continue_providers_preserve_exit_code(self) -> None:
-        """Providers with continue_flag preserve the agent's exit code."""
+    def test_opencode_plugin_setup(self) -> None:
+        """OpenCode and Blablador wrappers set up the session plugin."""
         project = _make_project()
-        for name in self._CONTINUE_PROVIDERS:
+        for name in ("opencode", "blablador"):
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            self.assertIn("local _rc=$?", wrapper, f"{name} missing exit code capture")
-            self.assertIn("return $_rc", wrapper, f"{name} missing exit code return")
+            self.assertIn("opencode-session-plugin.mjs", wrapper, f"{name} missing plugin setup")
+            self.assertIn("terok-session.mjs", wrapper, f"{name} missing plugin symlink")
 
-    def test_no_continue_providers_skip_session_logic(self) -> None:
-        """Providers without continue_flag do not include session resume logic."""
+    def test_blablador_plugin_dir(self) -> None:
+        """Blablador uses its own plugin directory (not default opencode)."""
         project = _make_project()
-        for name in self._NO_CONTINUE_PROVIDERS:
+        p = HEADLESS_PROVIDERS["blablador"]
+        wrapper = generate_agent_wrapper(p, project, has_agents=False)
+        self.assertIn(".blablador/opencode/plugins", wrapper)
+
+    def test_opencode_plugin_dir(self) -> None:
+        """OpenCode uses the default config plugin directory."""
+        project = _make_project()
+        p = HEADLESS_PROVIDERS["opencode"]
+        wrapper = generate_agent_wrapper(p, project, has_agents=False)
+        self.assertIn(".config/opencode/plugins", wrapper)
+
+    def test_vibe_session_capture(self) -> None:
+        """Vibe wrapper includes post-run session capture function."""
+        project = _make_project()
+        p = HEADLESS_PROVIDERS["vibe"]
+        wrapper = generate_agent_wrapper(p, project, has_agents=False)
+        self.assertIn("_terok_capture_vibe_session", wrapper)
+        self.assertIn("meta.json", wrapper)
+        self.assertIn("vibe-session.txt", wrapper)
+
+    def test_no_session_providers_skip_session_logic(self) -> None:
+        """Providers without session_file do not include session resume logic."""
+        project = _make_project()
+        for name in self._NO_SESSION_FILE_PROVIDERS:
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
             self.assertNotIn("_resume_args", wrapper, f"{name} should not have resume args")
-            self.assertNotIn("session-id.txt", wrapper, f"{name} should not reference session")
+            self.assertNotIn("TEROK_SESSION_FILE", wrapper, f"{name} should not set session env")
 
 
 class ResolveProviderValueTests(unittest.TestCase):
