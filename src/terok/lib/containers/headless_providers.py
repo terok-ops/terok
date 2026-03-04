@@ -594,10 +594,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         lines.append("    local _resume_args=()")
         lines.append(f"    if [ -s {session_path} ] && \\")
         lines.append('       { [ -n "$_timeout" ] || [ $# -eq 0 ]; }; then')
-        lines.append(
-            f"        _resume_args+=({provider.resume_flag}"
-            f' "$(cat {session_path})")'
-        )
+        lines.append(f'        _resume_args+=({provider.resume_flag} "$(cat {session_path})")')
         lines.append("    fi")
 
     # Codex supports model_instructions_file in config; this injects the
@@ -614,7 +611,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
     # Vibe session capture helper (no plugin system — parse logs post-run).
     if provider.name == "vibe" and session_path:
         lines.append("    _terok_capture_vibe_session() {")
-        lines.append("        python3 -c \"")
+        lines.append('        python3 -c "')
         lines.append("import json, os, glob")
         lines.append(
             "files = sorted(glob.glob(os.path.expanduser("
@@ -626,7 +623,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         lines.append("        sid = json.load(f).get('session_id', '')")
         lines.append("    if sid:")
         lines.append("        print(sid)")
-        lines.append(f'\" > {session_path} 2>/dev/null || true')
+        lines.append(f'" > {session_path} 2>/dev/null || true')
         lines.append("    }")
 
     # Git env vars and exec — with optional timeout (headless mode)
