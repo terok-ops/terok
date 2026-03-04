@@ -436,6 +436,44 @@ class BlabladorConfigSeparationTests(unittest.TestCase):
         self.assertIn("OPENCODE_CONFIG", env)
         self.assertEqual(env["OPENCODE_CONFIG"], str(Path(td) / "opencode" / "opencode.json"))
 
+    def test_options_refresh_when_fetch_fails(self) -> None:
+        """Config is rewritten with new credentials even when model fetch fails."""
+        blablador = load_blablador_module()
+
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "opencode" / "opencode.json"
+            # Seed an existing config with old credentials
+            old_config = blablador._build_config(
+                base_url="https://old-url/v1",
+                api_key="old-key",
+                model="alias-huge",
+                models=["alias-huge", "alias-code"],
+            )
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(old_config), encoding="utf-8")
+
+            with (
+                unittest.mock.patch.object(blablador, "_load_api_key", return_value="new-key"),
+                unittest.mock.patch(
+                    "blablador.request.urlopen",
+                    side_effect=blablador.error.URLError("unreachable"),
+                ),
+                unittest.mock.patch.object(
+                    blablador, "_opencode_config_path", return_value=config_path
+                ),
+                unittest.mock.patch("blablador.subprocess.call", return_value=0),
+                unittest.mock.patch("sys.argv", ["blablador"]),
+            ):
+                blablador.main()
+
+            # Config should have been rewritten with new credentials
+            updated = json.loads(config_path.read_text(encoding="utf-8"))
+            opts = updated["provider"]["blablador"]["options"]
+            self.assertEqual(opts["apiKey"], "new-key")
+            # Models should be preserved from the old config
+            self.assertIn("alias-huge", updated["provider"]["blablador"]["models"])
+            self.assertIn("alias-code", updated["provider"]["blablador"]["models"])
+
 
 class BlabladorConfigTests(unittest.TestCase):
     """Tests for Blablador configuration structure."""

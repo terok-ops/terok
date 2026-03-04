@@ -140,7 +140,8 @@ def _get_configured_options(config: dict | None) -> dict:
     if not config:
         return {}
     try:
-        return config.get("provider", {}).get("blablador", {}).get("options", {})
+        options = config.get("provider", {}).get("blablador", {}).get("options", {})
+        return options if isinstance(options, dict) else {}
     except (AttributeError, TypeError):
         return {}
 
@@ -210,23 +211,24 @@ def main() -> int:
         model = FALLBACK_MODEL
 
     # Update config if models, credentials, or base URL changed
+    stored_options = _get_configured_options(existing_config)
+    options_changed = (
+        stored_options.get("baseURL") != base_url
+        or stored_options.get("apiKey") != api_key
+    )
     if fetched_models:
         fetched_set = set(fetched_models)
-        stored_options = _get_configured_options(existing_config)
-        needs_update = (
-            fetched_set != configured_models
-            or stored_options.get("baseURL") != base_url
-            or stored_options.get("apiKey") != api_key
-        )
+        needs_update = fetched_set != configured_models or options_changed
         if needs_update:
             new_models = fetched_set - configured_models
             if new_models:
                 print(f"New models available: {', '.join(sorted(new_models))}")
             config = _build_config(base_url, api_key, model, fetched_models)
             _write_opencode_config(config)
-    elif not configured_models:
-        # No fetched models and no existing config - create minimal config
-        config = _build_config(base_url, api_key, model, [model])
+    elif options_changed or not configured_models:
+        # Fetch failed: preserve known models if available, refresh options
+        fallback_models = sorted(configured_models) if configured_models else [model]
+        config = _build_config(base_url, api_key, model, fallback_models)
         _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args

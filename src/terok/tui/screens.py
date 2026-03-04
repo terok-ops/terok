@@ -280,16 +280,16 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
         providers = list(AUTH_PROVIDERS.values())
         options: list[Option | None] = [
-            Option(f"\\[{i}] {p.label}", id=f"auth_{p.name}") for i, p in enumerate(providers, 1)
+            Option(f"\\[{i}] {p.label}", id=f"auth_{p.name}")
+            for i, p in enumerate(providers, 1)
+            if i <= 9
         ]
         next_num = len(providers) + 1
         options.append(None)
-        options.append(
-            Option(
-                f"\\[{next_num}] Import OpenCode config",
-                id="import_opencode_config",
-            )
+        import_label = (
+            f"\\[{next_num}] Import OpenCode config" if next_num <= 9 else "Import OpenCode config"
         )
+        options.append(Option(import_label, id="import_opencode_config"))
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(*options, id="auth-actions-list")
         dialog.border_title = "Authenticate agents and tools"
@@ -312,10 +312,10 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         if event.character and event.character.isdigit():
             idx = int(event.character) - 1
             providers = list(AUTH_PROVIDERS.values())
-            if 0 <= idx < len(providers):
+            if 0 <= idx < min(len(providers), 9):
                 self.dismiss(f"auth_{providers[idx].name}")
                 event.stop()
-            elif idx == len(providers):
+            elif idx == len(providers) and idx < 9:
                 self.dismiss("import_opencode_config")
                 event.stop()
 
