@@ -179,6 +179,47 @@ def _get_pep610_revision(dist_name: str = "terok") -> str | None:
     return None
 
 
+def base_version(version: str) -> str:
+    """Extract the base ``X.Y.Z`` segment from a PEP 440 version string.
+
+    Strips ``.post``, ``.dev``, ``+local`` and any other suffixes so that
+    only the release triple remains.
+
+    Examples::
+
+        >>> base_version("0.4.0")
+        '0.4.0'
+        >>> base_version("0.4.0.post3.dev0+gabcdef")
+        '0.4.0'
+        >>> base_version("1.2.3rc1")
+        '1.2.3'
+    """
+    import re
+
+    match = re.match(r"(\d+\.\d+\.\d+)", version)
+    return match.group(1) if match else version
+
+
+def short_version(version: str) -> str:
+    """Return a human-friendly short version for display.
+
+    At a tagged release the base version is returned as-is (e.g. ``"0.4.0"``).
+    When the full version string contains post/dev/local suffixes — indicating
+    that HEAD is past the last release tag — a trailing ``"+"`` is appended
+    (e.g. ``"0.4.0+"``).
+
+    Args:
+        version: Full PEP 440 version string.
+
+    Returns:
+        Short display version like ``"0.4.0"`` or ``"0.4.0+"``.
+    """
+    base = base_version(version)
+    if version != base:
+        return f"{base}+"
+    return base
+
+
 def format_version_string(version: str, branch: str | None) -> str:
     """Format version and branch into a display string.
 

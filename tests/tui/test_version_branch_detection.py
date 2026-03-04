@@ -30,6 +30,68 @@ class VersionDetectionTests(unittest.TestCase):
         self.assertNotEqual(pkg_version, "")
 
 
+class BaseVersionTests(unittest.TestCase):
+    """Test base_version() helper."""
+
+    def test_plain_release(self) -> None:
+        """Plain release version is returned as-is."""
+        from terok.lib.core.version import base_version
+
+        self.assertEqual(base_version("0.4.0"), "0.4.0")
+
+    def test_post_dev_local(self) -> None:
+        """Post/dev/local suffixes are stripped."""
+        from terok.lib.core.version import base_version
+
+        self.assertEqual(base_version("0.4.0.post3.dev0+gabcdef"), "0.4.0")
+
+    def test_pre_release(self) -> None:
+        """Pre-release suffix is stripped."""
+        from terok.lib.core.version import base_version
+
+        self.assertEqual(base_version("1.2.3rc1"), "1.2.3")
+
+    def test_non_semver_fallback(self) -> None:
+        """Non-semver string is returned unchanged."""
+        from terok.lib.core.version import base_version
+
+        self.assertEqual(base_version("unknown"), "unknown")
+
+    def test_two_segment(self) -> None:
+        """Two-segment version without patch is returned unchanged."""
+        from terok.lib.core.version import base_version
+
+        self.assertEqual(base_version("1.2"), "1.2")
+
+
+class ShortVersionTests(unittest.TestCase):
+    """Test short_version() helper."""
+
+    def test_at_release(self) -> None:
+        """At a tagged release, returns plain version."""
+        from terok.lib.core.version import short_version
+
+        self.assertEqual(short_version("0.4.0"), "0.4.0")
+
+    def test_past_release(self) -> None:
+        """Past a release, returns version with trailing +."""
+        from terok.lib.core.version import short_version
+
+        self.assertEqual(short_version("0.4.0.post3.dev0+gabcdef"), "0.4.0+")
+
+    def test_dev_version(self) -> None:
+        """Dev version gets trailing +."""
+        from terok.lib.core.version import short_version
+
+        self.assertEqual(short_version("1.0.0.dev1"), "1.0.0+")
+
+    def test_unknown_passthrough(self) -> None:
+        """Non-semver 'unknown' is returned unchanged."""
+        from terok.lib.core.version import short_version
+
+        self.assertEqual(short_version("unknown"), "unknown")
+
+
 class VersionModuleTests(unittest.TestCase):
     """Test terok.lib.core.version module."""
 

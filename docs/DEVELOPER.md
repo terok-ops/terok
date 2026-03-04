@@ -271,6 +271,32 @@ This pattern (config key for inheritance control + file for additive content) is
 
 ---
 
+## Making a Release
+
+Releases are created exclusively through the **GitHub Actions Release workflow**. Manual tag creation is blocked by a repository ruleset.
+
+### Steps
+
+1. Go to **Actions → Release → Run workflow**
+2. Enter the version number (e.g. `0.5.0`) — without the `v` prefix
+3. The workflow will:
+   - Bump `version` in `pyproject.toml`
+   - Commit the change
+   - Create the `v0.5.0` tag
+   - Push the commit and tag
+   - Build wheel and sdist
+   - Create a GitHub Release with the built artifacts
+
+### Troubleshooting
+
+If you see a "tag creation denied" error when trying to push a `v*` tag manually, that is by design. Go to **Actions → Release** and use the workflow instead.
+
+### Version Display
+
+Between releases, `poetry-dynamic-versioning` generates PEP 440 versions from git tags automatically (e.g. `0.4.0.post3.dev0+gabcdef`). The TUI title bar shows a shortened form: `v0.4.0+` when past a release, `v0.4.0` at a tagged release.
+
+---
+
 ## Packaging
 
 See [PACKAGING.md](PACKAGING.md) for details on:

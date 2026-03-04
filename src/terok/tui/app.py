@@ -48,7 +48,10 @@ if _HAS_TEXTUAL:
     from ..lib.core.projects import Project, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
-    from ..lib.core.version import get_version_info as _get_version_info
+    from ..lib.core.version import (
+        get_version_info as _get_version_info,
+        short_version as _short_version,
+    )
     from ..lib.facade import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
@@ -209,13 +212,12 @@ if _HAS_TEXTUAL:
         def _update_title(self):
             """Update the TUI title with version and branch information."""
             version, branch_name = _get_version_info()
+            display_ver = _short_version(version)
 
             if branch_name:
-                # Development version - show version and branch name
-                title = f"Terok TUI v{version} [{branch_name}]"
+                title = f"Terok TUI v{display_ver} [{branch_name}]"
             else:
-                # Release version - show just version
-                title = f"Terok TUI v{version}"
+                title = f"Terok TUI v{display_ver}"
 
             self.title = title
 
