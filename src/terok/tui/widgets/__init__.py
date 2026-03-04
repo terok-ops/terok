@@ -4,8 +4,7 @@
 
 """Reusable Textual widgets for the terok TUI.
 
-This package re-exports all widget classes and render helpers from
-focused submodules for backward-compatible imports.
+Re-exports widget classes and render helpers from focused submodules.
 """
 
 from ...lib.containers.tasks import TaskMeta  # noqa: F401 — re-exported public API

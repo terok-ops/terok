@@ -58,10 +58,11 @@ if _HAS_TEXTUAL:
         get_project_state,
         is_task_image_old,
     )
-    from .actions import ActionsMixin
     from .clipboard import get_clipboard_helper_status
     from .polling import PollingMixin
+    from .project_actions import ProjectActionsMixin
     from .screens import ProjectDetailsScreen, TaskDetailsScreen
+    from .task_actions import TaskActionsMixin
     from .widgets import (
         ProjectList,
         ProjectState,
@@ -107,7 +108,7 @@ if _HAS_TEXTUAL:
         "rename": "_action_rename_task",
     }
 
-    class TerokTUI(PollingMixin, ActionsMixin, App):
+    class TerokTUI(PollingMixin, ProjectActionsMixin, TaskActionsMixin, App):
         """Redesigned TUI frontend for terok core modules."""
 
         CSS_PATH = None
