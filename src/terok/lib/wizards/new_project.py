@@ -26,7 +26,7 @@ TEMPLATES: list[tuple[str, str]] = [
     ("Gatekeeping – NVIDIA CUDA (GPU)", "gatekeeping-nvidia.yml"),
 ]
 
-_PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+_PROJECT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 _TEMPLATE_DIR: Traversable = resources.files("terok") / "resources" / "templates" / "projects"
 
@@ -37,8 +37,8 @@ def _validate_project_id(project_id: str) -> str | None:
         return "Project ID cannot be empty."
     if not _PROJECT_ID_RE.match(project_id):
         return (
-            "Project ID must contain only alphanumeric characters, hyphens, "
-            "and underscores, and start with an alphanumeric character."
+            "Project ID must contain only lowercase alphanumeric characters, hyphens, "
+            "and underscores, and start with a lowercase alphanumeric character."
         )
     return None
 
@@ -131,6 +131,10 @@ def collect_wizard_inputs() -> dict | None:
         # Project ID
         while True:
             project_id = _prompt("\nProject ID")
+            lowered = project_id.lower()
+            if lowered != project_id:
+                print(f"Note: project ID lowercased to '{lowered}'")
+                project_id = lowered
             error = _validate_project_id(project_id)
             if error is None:
                 break

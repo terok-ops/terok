@@ -94,16 +94,17 @@ def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
 
 
 def validate_project_id(project_id: str) -> None:
-    """Ensure a project ID is safe for use as a directory name.
+    """Ensure a project ID is safe for use as a directory and OCI image name.
 
-    Raises SystemExit if the ID is empty, contains path separators or traversal
-    sequences, or uses characters outside ``[a-zA-Z0-9_-]``.
+    Raises SystemExit if the ID is empty, contains uppercase letters, path
+    separators or traversal sequences, or uses characters outside
+    ``[a-z0-9_-]``.
     """
     if not project_id:
         raise SystemExit("Project ID must not be empty")
-    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", project_id):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", project_id):
         raise SystemExit(
             f"Invalid project ID '{project_id}': "
-            "must start with a letter or digit, followed by letters, digits, hyphens, "
-            "or underscores"
+            "must start with a lowercase letter or digit, followed by lowercase letters, "
+            "digits, hyphens, or underscores"
         )

@@ -31,8 +31,11 @@ class ValidateProjectIdTests(unittest.TestCase):
     def test_valid_with_digits(self) -> None:
         self.assertIsNone(_validate_project_id("proj123"))
 
-    def test_valid_mixed(self) -> None:
-        self.assertIsNone(_validate_project_id("My-Project_2"))
+    def test_uppercase_rejected(self) -> None:
+        self.assertIsNotNone(_validate_project_id("My-Project_2"))
+
+    def test_valid_mixed_lowercase(self) -> None:
+        self.assertIsNone(_validate_project_id("my-project_2"))
 
     def test_empty_string(self) -> None:
         self.assertIsNotNone(_validate_project_id(""))
@@ -110,6 +113,15 @@ class CollectWizardInputsTests(unittest.TestCase):
     def test_eof_returns_none(self, _input: unittest.mock.Mock) -> None:
         result = collect_wizard_inputs()
         self.assertIsNone(result)
+
+    @unittest.mock.patch(
+        "builtins.input",
+        side_effect=["1", "MyProject", "https://x.com/r.git", "main", "n"],
+    )
+    def test_uppercase_auto_lowercased(self, _input: unittest.mock.Mock) -> None:
+        result = collect_wizard_inputs()
+        self.assertIsNotNone(result)
+        self.assertEqual(result["project_id"], "myproject")
 
     @unittest.mock.patch(
         "builtins.input",

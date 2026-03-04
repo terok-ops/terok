@@ -615,4 +615,12 @@ class ValidateProjectIdTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             validate_project_id("-bad")
         msg = str(ctx.exception)
-        self.assertIn("must start with a letter or digit", msg)
+        self.assertIn("must start with a lowercase letter or digit", msg)
+
+    def test_uppercase_rejected(self) -> None:
+        """Uppercase letters in project ID are rejected."""
+        from terok.lib.core.project_model import validate_project_id
+
+        with self.assertRaises(SystemExit) as ctx:
+            validate_project_id("MyProject")
+        self.assertIn("Invalid project ID", str(ctx.exception))
