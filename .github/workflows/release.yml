@@ -16,7 +16,11 @@ permissions:
   contents: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: ci
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
@@ -76,9 +80,6 @@ jobs:
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction
-
-      - name: Run checks
-        run: make check
 
       - name: Build distributions
         run: poetry build
