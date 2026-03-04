@@ -506,8 +506,10 @@ Every task container receives instructions explaining the workspace layout, avai
 1. **YAML `instructions` key** — controls the inheritance chain via config stack. Uses `_inherit` in list form to splice the bundled default at that position. Absent = bundled default.
 2. **Standalone `instructions.md` file** in the project root — always appended at the end of whatever the YAML chain resolved. Purely additive. If empty or absent, nothing is appended.
 
-- **Claude**: instructions are injected via `--append-system-prompt` (system-level context)
-- **Other providers**: instructions are prepended to the task prompt
+- **Claude**: injected via `--append-system-prompt` (system-level context)
+- **Codex**: loaded from `/home/dev/.terok/instructions.md` via `-c model_instructions_file=...`
+  in the wrapper (applies to both `terokctl run` and `terokctl task run-cli`)
+- **Other providers**: prepended to the task prompt (headless `terokctl run`)
 
 ### Scenarios
 

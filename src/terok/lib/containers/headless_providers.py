@@ -297,10 +297,11 @@ def apply_provider_config(
         model_override: Explicit ``--model`` from CLI (takes precedence).
         max_turns_override: Explicit ``--max-turns`` from CLI.
         timeout_override: Explicit ``--timeout`` from CLI.
-        instructions: Resolved instructions text.  For non-Claude providers,
-            prepended to ``prompt_extra`` so the agent receives them as part
-            of the prompt.  Claude receives instructions via the wrapper's
-            ``--append-system-prompt`` flag instead.
+        instructions: Resolved instructions text. Delivery is provider-aware:
+            Claude receives instructions via the wrapper's
+            ``--append-system-prompt`` flag; Codex loads them via
+            ``-c model_instructions_file=...`` in the wrapper; other providers
+            get instructions prepended to ``prompt_extra``.
     """
     from ..containers.agent_config import resolve_provider_value
 
@@ -341,10 +342,12 @@ def apply_provider_config(
             f"sub-agent definitions will be ignored"
         )
 
-    # --- Instructions (non-Claude: inject into prompt) ---
-    # Claude receives instructions via --append-system-prompt in the wrapper,
-    # so we only inject into the prompt for other providers.
-    if instructions and provider.name != "claude":
+    # --- Instructions ---
+    # Claude receives instructions via --append-system-prompt in the wrapper.
+    # Codex receives instructions via -c model_instructions_file=... in the
+    # wrapper so both interactive and headless runs get startup context.
+    # Other providers get best-effort prompt prepending.
+    if instructions and provider.name not in {"claude", "codex"}:
         prompt_parts.insert(0, instructions)
 
     return ProviderConfig(
@@ -552,6 +555,17 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         lines.append("    [ -f /home/dev/.terok/session-id.txt ] && \\")
         lines.append(f"        _resume_args+=({provider.continue_flag})")
 
+    # Codex supports model_instructions_file in config; this injects the
+    # mounted /home/dev/.terok/instructions.md into startup context for both
+    # interactive CLI and headless exec runs.
+    if provider.name == "codex":
+        lines.append("    local _instr_args=()")
+        lines.append("    [ -f /home/dev/.terok/instructions.md ] && \\")
+        lines.append(
+            "        _instr_args+=(-c "
+            "'model_instructions_file=\"/home/dev/.terok/instructions.md\"')"
+        )
+
     # Git env vars and exec — with optional timeout
     lines.append('    if [ -n "$_timeout" ]; then')
     lines.append(f"        GIT_AUTHOR_NAME={author_name} \\")
@@ -564,6 +578,8 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         # Write session marker so subsequent runs pass --continue.
         # Preserve the agent's exit code across the touch.
         lines.append("        local _rc=$?; touch /home/dev/.terok/session-id.txt; return $_rc")
+    elif provider.name == "codex":
+        lines.append(f'        timeout "$_timeout" {binary} "${{_instr_args[@]}}" "$@"')
     else:
         lines.append(f'        timeout "$_timeout" {binary} "$@"')
 
@@ -576,6 +592,8 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
     if provider.continue_flag:
         lines.append(f'        command {binary} "${{_resume_args[@]}}" "$@"')
         lines.append("        local _rc=$?; touch /home/dev/.terok/session-id.txt; return $_rc")
+    elif provider.name == "codex":
+        lines.append(f'        command {binary} "${{_instr_args[@]}}" "$@"')
     else:
         lines.append(f'        command {binary} "$@"')
 
