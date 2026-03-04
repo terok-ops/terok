@@ -277,3 +277,19 @@ def get_task_name_categories() -> list[str] | None:
 def get_global_agent_config() -> dict[str, Any]:
     """Return the ``agent:`` section from the global config, or ``{}``."""
     return get_global_section("agent")
+
+
+# ---------- Experimental feature flag ----------
+
+_experimental: bool = False
+
+
+def is_experimental() -> bool:
+    """Return whether experimental features are enabled."""
+    return _experimental
+
+
+def set_experimental(value: bool) -> None:
+    """Enable or disable experimental features globally."""
+    global _experimental  # noqa: PLW0603
+    _experimental = value

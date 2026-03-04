@@ -82,3 +82,20 @@ class ConfigTests(unittest.TestCase):
             cfg_path.write_text("tui:\n  default_tmux: false\n", encoding="utf-8")
             with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
                 self.assertFalse(cfg.get_tui_default_tmux())
+
+    def test_experimental_default_false(self) -> None:
+        cfg.set_experimental(False)
+        self.assertFalse(cfg.is_experimental())
+
+    def test_experimental_set_true(self) -> None:
+        cfg.set_experimental(True)
+        try:
+            self.assertTrue(cfg.is_experimental())
+        finally:
+            cfg.set_experimental(False)
+
+    def test_experimental_roundtrip(self) -> None:
+        cfg.set_experimental(True)
+        self.assertTrue(cfg.is_experimental())
+        cfg.set_experimental(False)
+        self.assertFalse(cfg.is_experimental())

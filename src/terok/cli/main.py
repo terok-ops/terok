@@ -13,6 +13,7 @@ argcomplete integration, and top-level dispatch loop.
 
 import argparse
 
+from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
 from .commands import info, project, setup, task
 
@@ -40,7 +41,6 @@ def main() -> None:
             "Quick start:\n"
             "  1. Setup:  terokctl project-init <project_id>\n"
             "  2. Work:   terokctl task start <project_id>         (new CLI task)\n"
-            "             terokctl task start <project_id> --web   (new web task)\n"
             "  3. Login:  terokctl login <project_id> <task_id>\n"
             "\n"
             "Step-by-step (order of operations):\n"
@@ -55,6 +55,12 @@ def main() -> None:
         "--version",
         action="version",
         version=f"terokctl {version_string}\nLicense: Apache-2.0\nCopyright: 2025-2026 Jiri Vyskocil",
+    )
+    parser.add_argument(
+        "--experimental",
+        action="store_true",
+        default=False,
+        help="Enable experimental features (e.g. web tasks)",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -72,6 +78,7 @@ def main() -> None:
             pass
 
     args = parser.parse_args()
+    set_experimental(args.experimental)
 
     for dispatch in _DISPATCHERS:
         if dispatch(args):

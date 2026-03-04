@@ -544,6 +544,8 @@ expose = [
     "get_global_agent_config",
     "get_task_name_categories",
     "get_prefix",
+    "is_experimental",
+    "set_experimental",
 ]
 from = ["terok.lib.core.config"]
 

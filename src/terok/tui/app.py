@@ -44,7 +44,7 @@ if _HAS_TEXTUAL:
     from textual.worker import Worker, WorkerState
 
     from ..lib.containers.tasks import get_tasks
-    from ..lib.core.config import get_tui_default_tmux, state_root
+    from ..lib.core.config import get_tui_default_tmux, set_experimental, state_root
     from ..lib.core.projects import Project, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
@@ -841,7 +841,14 @@ if _HAS_TEXTUAL:
             action="store_false",
             help="Launch TUI directly in current terminal (default if not configured)",
         )
+        parser.add_argument(
+            "--experimental",
+            action="store_true",
+            default=False,
+            help="Enable experimental features (e.g. web tasks)",
+        )
         args = parser.parse_args()
+        set_experimental(args.experimental)
 
         # Determine tmux mode: explicit flag > config default > False
         use_tmux = (

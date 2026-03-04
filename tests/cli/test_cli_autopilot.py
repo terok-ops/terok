@@ -224,7 +224,16 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["terok", "task", "run-web", "myproject", "1", "--agent", "reviewer"],
+                [
+                    "terok",
+                    "--experimental",
+                    "task",
+                    "run-web",
+                    "myproject",
+                    "1",
+                    "--agent",
+                    "reviewer",
+                ],
             ),
             unittest.mock.patch("terok.cli.commands.task.task_run_web") as mock_run,
         ):

@@ -18,6 +18,7 @@ from ..lib.containers.tasks import (
     get_workspace_git_diff,
     mark_task_deleting,
 )
+from ..lib.core.config import is_experimental
 from ..lib.core.projects import load_project
 from ..lib.facade import (
     task_delete,
@@ -154,6 +155,9 @@ class TaskActionsMixin:
 
     async def _action_run_web(self) -> None:
         """Run web UI for current task."""
+        if not is_experimental():
+            self.notify("Web tasks require --experimental flag.")
+            return
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return
@@ -197,6 +201,9 @@ class TaskActionsMixin:
 
     async def _action_task_start_web(self) -> None:
         """Create a new task and immediately run Web UI."""
+        if not is_experimental():
+            self.notify("Web tasks require --experimental flag.")
+            return
         if not self.current_project_id:
             self.notify("No project selected.")
             return
@@ -546,10 +553,6 @@ class TaskActionsMixin:
     async def action_run_cli_from_main(self) -> None:
         """Start a new CLI task from the main screen."""
         await self._action_task_start_cli()
-
-    async def action_run_web_from_main(self) -> None:
-        """Start a new web task from the main screen."""
-        await self._action_task_start_web()
 
     async def action_delete_task_from_main(self) -> None:
         """Delete the selected task from the main screen."""

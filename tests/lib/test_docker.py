@@ -6,12 +6,18 @@ import unittest
 import unittest.mock
 
 from terok.lib.containers.docker import build_images, generate_dockerfiles
-from terok.lib.core.config import build_root
+from terok.lib.core.config import build_root, set_experimental
 from terok.lib.core.images import base_dev_image
 from test_utils import project_env
 
 
 class DockerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        set_experimental(True)
+
+    def tearDown(self) -> None:
+        set_experimental(False)
+
     def test_generate_dockerfiles_outputs(self) -> None:
         project_id = "proj4"
         yaml = f"""\
@@ -252,3 +258,41 @@ git:
 
             # Should build all 5 images since L1 is missing
             self.assertEqual(len(build_commands), 5)
+
+    def test_generate_dockerfiles_no_ui_without_experimental(self) -> None:
+        """Without experimental, L1.ui.Dockerfile should not be generated."""
+        set_experimental(False)
+        project_id = "proj_no_ui"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+            out_dir = build_root() / project_id
+            self.assertTrue((out_dir / "L0.Dockerfile").is_file())
+            self.assertTrue((out_dir / "L1.cli.Dockerfile").is_file())
+            self.assertFalse((out_dir / "L1.ui.Dockerfile").is_file())
+            self.assertTrue((out_dir / "L2.Dockerfile").is_file())
+
+    def test_build_images_skips_web_without_experimental(self) -> None:
+        """Without experimental, build_images should only build CLI images (no web)."""
+        set_experimental(False)
+        project_id = "proj_build_noweb"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+            cmds = self._run_build(project_id, image_exists=True)
+
+            # Should only build 1 L2 image (CLI, no web)
+            self.assertEqual(len(cmds), 1)
+            self.assertIn("L2.Dockerfile", " ".join(cmds[0]))

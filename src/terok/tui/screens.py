@@ -44,6 +44,7 @@ except Exception:  # pragma: no cover - textual may be a stub module
     Input = None  # type: ignore[assignment,misc]
 
 from ..lib.containers.tasks import sanitize_task_name, validate_task_name
+from ..lib.core.config import is_experimental
 from ..lib.core.projects import Project
 from ..lib.facade import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
@@ -881,18 +882,20 @@ class TaskDetailsScreen(screen.Screen[str | None]):
 
         options: list[Option | None] = [
             Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
-            Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"),
-            Option(
-                "Start \\[A]utopilot task  (new task + run headless)", id="task_start_autopilot"
-            ),
         ]
+        if is_experimental():
+            options.append(Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"))
+        options.append(
+            Option("Start \\[A]utopilot task  (new task + run headless)", id="task_start_autopilot")
+        )
         if self._has_tasks:
             options.append(Option("\\[l]ogin to container", id="login"))
             if self._task_meta and self._task_meta.mode:
                 options.append(Option("view \\[f]ormatted logs", id="follow_logs"))
             options.append(None)
             options.append(Option("run \\[c]li agent", id="cli"))
-            options.append(Option("run \\[w]eb UI", id="web"))
+            if is_experimental():
+                options.append(Option("run \\[w]eb UI", id="web"))
             options.append(Option("\\[r]estart container", id="restart"))
             if (
                 self._task_meta
@@ -938,15 +941,16 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Shift keys (uppercase) — N/W/A/C always available, H/P require tasks
-        shift_map = {
+        # Shift keys (uppercase) — N/A/C always available, H/P require tasks
+        shift_map: dict[str, str] = {
             "N": "task_start_cli",
-            "W": "task_start_web",
             "A": "task_start_autopilot",
             "C": "new",
             "H": "diff_head",
             "P": "diff_prev",
         }
+        if is_experimental():
+            shift_map["W"] = "task_start_web"
         if key in shift_map:
             if key in ("H", "P") and not self._has_tasks:
                 return
@@ -955,15 +959,16 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             return
 
         # Lowercase keys — all require tasks to exist
-        lower_map = {
+        lower_map: dict[str, str] = {
             "d": "delete",
             "c": "cli",
-            "w": "web",
             "r": "restart",
             "l": "login",
             "u": "followup",
             "n": "rename",
         }
+        if is_experimental():
+            lower_map["w"] = "web"
         if key in lower_map:
             if not self._has_tasks:
                 return

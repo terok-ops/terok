@@ -291,12 +291,29 @@ class TaskScreenKeyBindingTests(TestCase):
         event.stop.assert_called_once()
 
     def test_shift_w_dismisses_task_start_web(self) -> None:
+        from terok.lib.core.config import set_experimental
+
+        set_experimental(True)
+        try:
+            screens, _ = import_screens()
+            screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
+            screen.dismiss = mock.Mock()
+            event = make_key_event("W")
+            screen.on_key(event)
+            screen.dismiss.assert_called_once_with("task_start_web")
+        finally:
+            set_experimental(False)
+
+    def test_shift_w_blocked_without_experimental(self) -> None:
+        from terok.lib.core.config import set_experimental
+
+        set_experimental(False)
         screens, _ = import_screens()
         screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
         screen.dismiss = mock.Mock()
         event = make_key_event("W")
         screen.on_key(event)
-        screen.dismiss.assert_called_once_with("task_start_web")
+        screen.dismiss.assert_not_called()
 
     def test_shift_c_dismisses_new_always(self) -> None:
         screens, _ = import_screens()
@@ -356,12 +373,29 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.dismiss.assert_called_once_with("cli")
 
     def test_lowercase_w_works_with_tasks(self) -> None:
+        from terok.lib.core.config import set_experimental
+
+        set_experimental(True)
+        try:
+            screens, _ = import_screens()
+            screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
+            screen.dismiss = mock.Mock()
+            event = make_key_event("w")
+            screen.on_key(event)
+            screen.dismiss.assert_called_once_with("web")
+        finally:
+            set_experimental(False)
+
+    def test_lowercase_w_blocked_without_experimental(self) -> None:
+        from terok.lib.core.config import set_experimental
+
+        set_experimental(False)
         screens, _ = import_screens()
         screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
         screen.dismiss = mock.Mock()
         event = make_key_event("w")
         screen.on_key(event)
-        screen.dismiss.assert_called_once_with("web")
+        screen.dismiss.assert_not_called()
 
     def test_lowercase_r_works_with_tasks(self) -> None:
         screens, _ = import_screens()
@@ -544,13 +578,6 @@ class ActionDispatchTests(TestCase):
         asyncio.run(coro)
         instance._action_task_start_cli.assert_called_once()
 
-    def test_action_run_web_from_main(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        coro = AppClass.action_run_web_from_main(instance)
-        asyncio.run(coro)
-        instance._action_task_start_web.assert_called_once()
-
     def test_action_delete_task_from_main(self) -> None:
         app_mod, AppClass = import_app()
         instance = mock.Mock(spec=AppClass)
@@ -682,43 +709,49 @@ class ActionSelectionTests(TestCase):
         instance.refresh_tasks.assert_awaited_once()
 
     def test_task_start_web_selects_created_task(self) -> None:
-        _, AppClass = import_app()
+        from terok.lib.core.config import set_experimental
 
-        instance = AppClass()
-        instance.current_project_id = "proj1"
-        instance._last_selected_tasks = {}
-        instance.notify = mock.Mock()
-        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
-        instance._save_selection_state = mock.Mock()
-        instance.refresh_tasks = mock.AsyncMock()
-        instance._prompt_ui_backend = mock.Mock(return_value="codex")
-        fake_task_new = mock.Mock(return_value="99")
-        fake_task_run_web = mock.Mock()
-        action_globals = AppClass._action_task_start_web.__globals__
+        set_experimental(True)
+        try:
+            _, AppClass = import_app()
 
-        async def fake_push_screen(screen, callback):
-            await callback("test-name")
+            instance = AppClass()
+            instance.current_project_id = "proj1"
+            instance._last_selected_tasks = {}
+            instance.notify = mock.Mock()
+            instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+            instance._save_selection_state = mock.Mock()
+            instance.refresh_tasks = mock.AsyncMock()
+            instance._prompt_ui_backend = mock.Mock(return_value="codex")
+            fake_task_new = mock.Mock(return_value="99")
+            fake_task_run_web = mock.Mock()
+            action_globals = AppClass._action_task_start_web.__globals__
 
-        instance.push_screen = fake_push_screen
+            async def fake_push_screen(screen, callback):
+                await callback("test-name")
 
-        with (
-            mock.patch.dict(
-                action_globals,
-                {
-                    "task_new": fake_task_new,
-                    "task_run_web": fake_task_run_web,
-                    "generate_task_name": lambda *a, **kw: "test-name",
-                },
-            ),
-            mock.patch("builtins.input", return_value=""),
-        ):
-            asyncio.run(AppClass._action_task_start_web(instance))
+            instance.push_screen = fake_push_screen
 
-        self.assertEqual(instance._last_selected_tasks.get("proj1"), "99")
-        fake_task_new.assert_called_once_with("proj1", name="test-name")
-        fake_task_run_web.assert_called_once_with("proj1", "99", backend="codex")
-        instance._save_selection_state.assert_called_once()
-        instance.refresh_tasks.assert_awaited_once()
+            with (
+                mock.patch.dict(
+                    action_globals,
+                    {
+                        "task_new": fake_task_new,
+                        "task_run_web": fake_task_run_web,
+                        "generate_task_name": lambda *a, **kw: "test-name",
+                    },
+                ),
+                mock.patch("builtins.input", return_value=""),
+            ):
+                asyncio.run(AppClass._action_task_start_web(instance))
+
+            self.assertEqual(instance._last_selected_tasks.get("proj1"), "99")
+            fake_task_new.assert_called_once_with("proj1", name="test-name")
+            fake_task_run_web.assert_called_once_with("proj1", "99", backend="codex")
+            instance._save_selection_state.assert_called_once()
+            instance.refresh_tasks.assert_awaited_once()
+        finally:
+            set_experimental(False)
 
     def test_autopilot_launch_selects_created_task(self) -> None:
         app_mod, AppClass = import_app()

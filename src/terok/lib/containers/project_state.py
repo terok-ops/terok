@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..core.config import build_root, get_envs_base_dir
+from ..core.config import build_root, get_envs_base_dir, is_experimental
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
 
@@ -46,18 +46,18 @@ def get_project_state(
     dockerfiles = [
         stage_dir / "L0.Dockerfile",
         stage_dir / "L1.cli.Dockerfile",
-        stage_dir / "L1.ui.Dockerfile",
         stage_dir / "L2.Dockerfile",
     ]
+    if is_experimental():
+        dockerfiles.append(stage_dir / "L1.ui.Dockerfile")
     has_dockerfiles = all(p.is_file() for p in dockerfiles)
 
     # Images: rely on podman image tags created by build_images().
     has_images = False
     try:
-        required_tags = [
-            project_cli_image(project.id),
-            project_web_image(project.id),
-        ]
+        required_tags = [project_cli_image(project.id)]
+        if is_experimental():
+            required_tags.append(project_web_image(project.id))
         ok = True
         for tag in required_tags:
             # ``podman image exists`` exits with 0 when the image is present.

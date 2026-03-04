@@ -138,7 +138,9 @@ class TaskStartTests(unittest.TestCase):
     def test_task_start_web_mode(self, mock_new, mock_run_web) -> None:
         from terok.cli.main import main
 
-        with unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj2", "--web"]):
+        with unittest.mock.patch(
+            "sys.argv", ["terok", "--experimental", "task", "start", "proj2", "--web"]
+        ):
             main()
 
         mock_new.assert_called_once_with("proj2", name=None)
@@ -151,7 +153,7 @@ class TaskStartTests(unittest.TestCase):
 
         with unittest.mock.patch(
             "sys.argv",
-            ["terok", "task", "start", "proj3", "--web", "--backend", "codex"],
+            ["terok", "--experimental", "task", "start", "proj3", "--web", "--backend", "codex"],
         ):
             main()
 
@@ -159,6 +161,31 @@ class TaskStartTests(unittest.TestCase):
         mock_run_web.assert_called_once_with(
             "proj3", "3", backend="codex", agents=None, preset=None
         )
+
+    def test_task_start_web_requires_experimental(self) -> None:
+        """task start --web without --experimental should exit."""
+        from terok.cli.main import main
+
+        with (
+            unittest.mock.patch("terok.cli.commands.task.task_new", return_value="1"),
+            unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1", "--web"]),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            main()
+        self.assertIn("--experimental", str(ctx.exception))
+
+    @unittest.mock.patch("terok.cli.commands.task.task_run_web")
+    def test_task_run_web_requires_experimental(self, mock_run_web) -> None:
+        """task run-web without --experimental should exit."""
+        from terok.cli.main import main
+
+        with (
+            unittest.mock.patch("sys.argv", ["terok", "task", "run-web", "proj1", "1"]),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            main()
+        self.assertIn("--experimental", str(ctx.exception))
+        mock_run_web.assert_not_called()
 
     @unittest.mock.patch("terok.cli.commands.setup.cmd_project_init")
     def test_project_init_dispatch(self, mock_init) -> None:

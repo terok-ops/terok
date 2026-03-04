@@ -9,7 +9,10 @@ from __future__ import annotations
 import argparse
 
 from ...lib.containers.headless_providers import PROVIDER_NAMES as _PROVIDER_NAMES
-from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
+from ...lib.core.config import (
+    get_logs_partial_streaming as _get_logs_partial_streaming,
+    is_experimental as _is_experimental,
+)
 from ...lib.facade import (
     WEB_BACKENDS,
     get_tasks as _get_tasks,
@@ -306,6 +309,8 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             preset=getattr(args, "preset", None),
         )
     elif args.task_cmd == "run-web":
+        if not _is_experimental():
+            raise SystemExit("run-web requires --experimental (feature is incomplete)")
         task_run_web(
             args.project_id,
             args.task_id,
@@ -332,6 +337,8 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         selected = getattr(args, "selected_agents", None)
         preset = getattr(args, "preset", None)
         if args.web:
+            if not _is_experimental():
+                raise SystemExit("--web requires --experimental (feature is incomplete)")
             task_run_web(
                 args.project_id,
                 task_id,

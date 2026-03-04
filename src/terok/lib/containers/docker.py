@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from ..core.config import build_root
+from ..core.config import build_root, is_experimental
 from ..core.images import (
     agent_cli_image,
     agent_ui_image,
@@ -144,9 +144,10 @@ def _render_dockerfiles(project) -> dict[str, str]:
     templates = {
         "L0.Dockerfile": (tmpl_pkg / "l0.dev.Dockerfile.template").read_text(),
         "L1.cli.Dockerfile": (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text(),
-        "L1.ui.Dockerfile": (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text(),
         "L2.Dockerfile": (tmpl_pkg / "l2.project.Dockerfile.template").read_text(),
     }
+    if is_experimental():
+        templates["L1.ui.Dockerfile"] = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
 
     # Read additional docker-related settings directly from the project.yml
     docker_cfg = _load_docker_config(project.root)
@@ -288,7 +289,10 @@ def build_images(
     l1_ui = stage_dir / "L1.ui.Dockerfile"
     l2 = stage_dir / "L2.Dockerfile"
 
-    if not l0.is_file() or not l1_cli.is_file() or not l1_ui.is_file() or not l2.is_file():
+    required = [l0, l1_cli, l2]
+    if is_experimental():
+        required.append(l1_ui)
+    if not all(f.is_file() for f in required):
         raise SystemExit("Dockerfiles are missing. Run 'terokctl generate <project>' first.")
 
     context_dir = str(stage_dir)
@@ -336,7 +340,9 @@ def build_images(
         if not _image_exists(l0_image):
             print(f"L0 image {l0_image} not found locally, will build all layers (L0+L1+L2).")
             need_base_layers = True
-        elif not _image_exists(l1_cli_image) or not _image_exists(l1_ui_image):
+        elif not _image_exists(l1_cli_image) or (
+            is_experimental() and not _image_exists(l1_ui_image)
+        ):
             print("L1 image(s) not found locally, will build all layers (L0+L1+L2).")
             need_base_layers = True
 
@@ -351,12 +357,14 @@ def build_images(
                 build_args={"AGENT_CACHE_BUST": cache_bust},
             )
         )
-        cmds.append(_build_cmd(l1_ui, l0_image, l1_ui_image))
+        if is_experimental():
+            cmds.append(_build_cmd(l1_ui, l0_image, l1_ui_image))
 
     # Always build L2 project images
     hash_label = {"terok.build_context_hash": context_hash}
     cmds.append(_build_cmd(l2, l1_cli_image, l2_cli_image, labels=hash_label))
-    cmds.append(_build_cmd(l2, l1_ui_image, l2_ui_image, labels=hash_label))
+    if is_experimental():
+        cmds.append(_build_cmd(l2, l1_ui_image, l2_ui_image, labels=hash_label))
 
     if include_dev:
         cmds.append(_build_cmd(l2, l0_image, l2_dev_image, labels=hash_label))
