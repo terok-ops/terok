@@ -54,8 +54,13 @@ def render_task_details(
     lines += [
         Text(f"Status:    {render_emoji(s_info)} {s_info.label}"),
         Text(f"Type:      {m_emoji} {mode_display}"),
-        Text(f"Workspace: {task.workspace}"),
     ]
+    if task.work_status:
+        work_text = task.work_status
+        if task.work_message:
+            work_text += f' \u2014 "{task.work_message}"'
+        lines.append(Text(f"Work:      {work_text}"))
+    lines.append(Text(f"Workspace: {task.workspace}"))
     if task.status == "running" and image_old:
         lines.append(Text.assemble("Image:     ", Text("old", style=warning_style)))
     if task.web_port:

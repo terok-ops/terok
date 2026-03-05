@@ -70,6 +70,8 @@ class TaskList(ListView):
         s_emoji = render_emoji(s_info)
 
         extra_parts: list[str] = []
+        if task.work_status:
+            extra_parts.append(f"work={task.work_status}")
         if task.web_port is not None:
             extra_parts.append(f"port={task.web_port}")
 

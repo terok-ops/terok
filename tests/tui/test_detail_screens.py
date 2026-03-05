@@ -120,6 +120,78 @@ class RenderHelpersTests(TestCase):
         text_str = str(result)
         self.assertIn("Exit code: 0", text_str)
 
+    def test_render_task_details_with_work_status(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="10",
+            mode="run",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            work_status="coding",
+            work_message="Implementing JWT validation",
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("Work:", text_str)
+        self.assertIn("coding", text_str)
+        self.assertIn("Implementing JWT validation", text_str)
+
+    def test_render_task_details_work_status_without_message(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="11",
+            mode="run",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            work_status="testing",
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("Work:", text_str)
+        self.assertIn("testing", text_str)
+
+    def test_render_task_details_no_work_status(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="12",
+            mode="cli",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertNotIn("Work:", text_str)
+
+    def test_format_task_label_with_work_status(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="13",
+            mode="run",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            work_status="debugging",
+        )
+        task_list = widgets.TaskList()
+        label = task_list._format_task_label(task)
+        self.assertIn("work=debugging", label)
+
+    def test_format_task_label_no_work_status(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="14",
+            mode="cli",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+        )
+        task_list = widgets.TaskList()
+        label = task_list._format_task_label(task)
+        self.assertNotIn("work=", label)
+
     def test_format_task_label_autopilot(self) -> None:
         widgets = import_widgets()
         task = widgets.TaskMeta(
