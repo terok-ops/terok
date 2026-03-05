@@ -178,7 +178,7 @@ def _render_dockerfiles(project) -> dict[str, str]:
         "PROJECT_ID": project.id,
         "SECURITY_CLASS": project.security_class,
         "UPSTREAM_URL": project.upstream_url or "",
-        "DEFAULT_BRANCH": project.default_branch,
+        "DEFAULT_BRANCH": project.default_branch or "",
         # Template-specific extras
         "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
         "SSH_KEY_NAME": ssh_key_name,

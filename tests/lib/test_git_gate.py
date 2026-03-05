@@ -132,9 +132,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock successful git ls-remote
@@ -169,9 +169,9 @@ project:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock failed git ls-remote
@@ -192,9 +192,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock empty output (branch not found)
@@ -215,9 +215,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock timeout
@@ -235,9 +235,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock successful git ls-remote for develop branch
@@ -261,9 +261,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock git rev-parse
@@ -284,9 +284,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             result = get_gate_branch_head(project_id)
@@ -298,9 +298,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock failed git rev-parse
@@ -322,9 +322,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             commit_hash = "abc123def456789"
@@ -357,9 +357,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             gate_hash = "old123"
@@ -400,9 +400,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             # Mock get_gate_branch_head to return None
@@ -424,9 +424,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             gate_hash = "abc123"
@@ -454,9 +454,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             gate_hash = "old123"
@@ -494,9 +494,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock successful git remote update
@@ -519,9 +519,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id):
             result = sync_gate_branches(project_id)
@@ -536,9 +536,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock failed git remote update
@@ -560,9 +560,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock timeout
@@ -581,9 +581,9 @@ git:
         yaml = f"""\
 project:
   id: {project_id}
-  default_branch: main
 git:
   upstream_url: https://example.com/repo.git
+  default_branch: main
 """
         with project_env(yaml, project_id=project_id, with_gate=True):
             # Mock successful git remote update

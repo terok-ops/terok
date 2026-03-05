@@ -20,7 +20,7 @@ class Project:
     id: str
     security_class: str  # "online" | "gatekeeping"
     upstream_url: str | None
-    default_branch: str
+    default_branch: str | None
     root: Path
 
     tasks_root: Path  # workspace dirs

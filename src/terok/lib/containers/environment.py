@@ -161,7 +161,8 @@ def _security_mode_env_and_volumes(
         gate_parent.mkdir(parents=True, exist_ok=True)
         volumes.append(f"{gate_repo}:{gate_mount_inside}:z")
         env["CODE_REPO"] = f"file://{gate_mount_inside}"
-        env["GIT_BRANCH"] = project.default_branch or "main"
+        if project.default_branch:
+            env["GIT_BRANCH"] = project.default_branch
         if project.expose_external_remote and project.upstream_url:
             env["EXTERNAL_REMOTE_URL"] = project.upstream_url
         if project.ssh_mount_in_gatekeeping and ssh_host_dir.is_dir():
@@ -174,7 +175,8 @@ def _security_mode_env_and_volumes(
             env["CLONE_FROM"] = f"file://{gate_mount_inside}"
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
-            env["GIT_BRANCH"] = project.default_branch or "main"
+            if project.default_branch:
+                env["GIT_BRANCH"] = project.default_branch
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
             ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:z")

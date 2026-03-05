@@ -43,6 +43,19 @@ if [[ -n "${SSH_KEY_NAME:-}" ]]; then
   fi
 fi
 
+# Reset current branch to its remote tracking counterpart.
+# Used when no specific branch is configured or the configured branch is missing.
+reset_to_current_remote() {
+  local current
+  current=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [[ -n "${current}" && "${current}" != "HEAD" ]]; then
+    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${current}" >/dev/null 2>&1; then
+      echo ">> resetting ${current} to origin/${current}"
+      git -C "${REPO_ROOT}" reset --hard "origin/${current}" || true
+    fi
+  fi
+}
+
 if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
   echo ">> syncing repo ${CODE_REPO} -> ${REPO_ROOT}"
 
@@ -82,11 +95,11 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     fi
 
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
-    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    TARGET_BRANCH="${GIT_BRANCH:-}"
 
     # Clone directly to the target branch if specified, avoiding an extra checkout step
     CLONE_OK=false
-    if [[ -n "${GIT_BRANCH:-}" ]]; then
+    if [[ -n "${TARGET_BRANCH}" ]]; then
       echo ">> initial clone from ${SRC_REPO} (branch: ${TARGET_BRANCH})"
       CLONE_ERR_FILE="$(mktemp)"
       if git clone --recurse-submodules -b "${TARGET_BRANCH}" "${SRC_REPO}" "${REPO_ROOT}" 2>"${CLONE_ERR_FILE}"; then
@@ -117,12 +130,14 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
       # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
-      # After repointing, checkout the target branch from the new origin
-      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-        echo ">> checking out branch ${TARGET_BRANCH}"
-        git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+      # After repointing, checkout the target branch from the new origin if specified
+      if [[ -n "${TARGET_BRANCH}" ]]; then
+        if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+          echo ">> checking out branch ${TARGET_BRANCH}"
+          git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+        fi
       fi
-    elif [[ "${CLONE_OK}" != "true" ]]; then
+    elif [[ "${CLONE_OK}" != "true" && -n "${TARGET_BRANCH}" ]]; then
       # We cloned with default branch, try to switch to target if it exists
       if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
         CURRENT=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
@@ -141,27 +156,25 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     # Reset to latest remote HEAD to ensure fresh state.
     echo ">> new task with existing .git - resetting to latest HEAD"
     git -C "${REPO_ROOT}" fetch --all --prune
-    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    TARGET_BRANCH="${GIT_BRANCH:-}"
 
     # Checkout and reset to the target branch. Use checkout -B to create/reset
     # the local branch to track the remote.
     reset_ok=true
-    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-      echo ">> checking out branch ${TARGET_BRANCH}"
-      if ! git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"; then
-        echo ">> WARNING: git checkout failed; preserving new task marker for retry"
-        reset_ok=false
+    if [[ -n "${TARGET_BRANCH}" ]]; then
+      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+        echo ">> checking out branch ${TARGET_BRANCH}"
+        if ! git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"; then
+          echo ">> WARNING: git checkout failed; preserving new task marker for retry"
+          reset_ok=false
+        fi
+      else
+        echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, staying on current branch"
+        reset_to_current_remote
       fi
     else
-      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, staying on current branch"
-      # Stay on current branch but reset to its remote tracking branch
-      CURRENT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-      if [[ -n "${CURRENT_BRANCH}" && "${CURRENT_BRANCH}" != "HEAD" ]]; then
-        if git -C "${REPO_ROOT}" rev-parse --verify "origin/${CURRENT_BRANCH}" >/dev/null 2>&1; then
-          echo ">> resetting ${CURRENT_BRANCH} to origin/${CURRENT_BRANCH}"
-          git -C "${REPO_ROOT}" reset --hard "origin/${CURRENT_BRANCH}" || true
-        fi
-      fi
+      # No branch configured - reset to remote HEAD of current branch
+      reset_to_current_remote
     fi
     git -C "${REPO_ROOT}" clean -fd || true
     # Remove marker only after successful checkout/reset
@@ -223,7 +236,11 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     LOCAL_HEAD=$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo "")
 
     # Get upstream HEAD using ls-remote (cheap, just queries refs)
-    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    # Use configured branch, or fall back to the current local branch
+    TARGET_BRANCH="${GIT_BRANCH:-}"
+    if [[ -z "${TARGET_BRANCH}" ]]; then
+      TARGET_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    fi
     UPSTREAM_HEAD=$(git ls-remote "${EXTERNAL_REMOTE_URL}" "refs/heads/${TARGET_BRANCH}" 2>/dev/null | cut -f1 || echo "")
 
     if [[ -n "${LOCAL_HEAD}" && -n "${UPSTREAM_HEAD}" ]]; then

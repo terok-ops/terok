@@ -21,7 +21,7 @@ from ..core.projects import effective_ssh_key_name, list_projects, load_project
 class GateStalenessInfo:
     """Result of comparing gate vs upstream."""
 
-    branch: str
+    branch: str | None
     gate_head: str | None
     upstream_head: str | None
     is_stale: bool
@@ -268,7 +268,7 @@ def sync_project_gate(
 # ---------- Upstream comparison functions ----------
 
 
-def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
+def get_upstream_head(project_id: str, branch: str | None = None) -> dict | None:
     """Query upstream HEAD ref using git ls-remote (cheap, no object download).
 
     Args:
@@ -285,6 +285,8 @@ def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
             return None
 
         branch = branch or project.default_branch
+        if not branch:
+            return None
         env = _git_env_with_ssh(project)
 
         # git ls-remote only queries refs, doesn't download objects
@@ -312,7 +314,7 @@ def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
         return None
 
 
-def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
+def get_gate_branch_head(project_id: str, branch: str | None = None) -> str | None:
     """Get the commit hash for a specific branch in the gate.
 
     Args:
@@ -330,6 +332,8 @@ def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
             return None
 
         branch = branch or project.default_branch
+        if not branch:
+            return None
         env = _git_env_with_ssh(project)
 
         # Query the ref in the bare mirror
@@ -344,7 +348,7 @@ def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
         return None
 
 
-def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalenessInfo:
+def compare_gate_vs_upstream(project_id: str, branch: str | None = None) -> GateStalenessInfo:
     """Compare gate HEAD vs upstream HEAD for a branch.
 
     Args:
@@ -357,6 +361,18 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
     project = load_project(project_id)
     branch = branch or project.default_branch
     now = datetime.now().isoformat()
+
+    if not branch:
+        return GateStalenessInfo(
+            branch=None,
+            gate_head=None,
+            upstream_head=None,
+            is_stale=False,
+            commits_behind=None,
+            commits_ahead=None,
+            last_checked=now,
+            error="No branch configured",
+        )
 
     # Get gate HEAD
     gate_head = get_gate_branch_head(project_id, branch)

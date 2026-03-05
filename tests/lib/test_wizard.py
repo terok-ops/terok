@@ -77,10 +77,10 @@ class CollectWizardInputsTests(unittest.TestCase):
     @unittest.mock.patch(
         "builtins.input", side_effect=["2", "proj", "https://x.com/r.git", "", "n"]
     )
-    def test_default_branch_defaults_to_main(self, _input: unittest.mock.Mock) -> None:
+    def test_default_branch_defaults_to_empty(self, _input: unittest.mock.Mock) -> None:
         result = collect_wizard_inputs()
         self.assertIsNotNone(result)
-        self.assertEqual(result["default_branch"], "main")
+        self.assertEqual(result["default_branch"], "")
 
     @unittest.mock.patch(
         "builtins.input", side_effect=["2", "proj", "https://x.com/r.git", "dev", "n"]

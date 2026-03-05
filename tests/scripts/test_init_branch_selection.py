@@ -336,22 +336,22 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             # Clone should succeed and workspace should become a git checkout.
             self.assertTrue((workspace_path / ".git").exists())
 
-    def test_initial_clone_defaults_to_main_if_git_branch_unset(self) -> None:
-        """Test that GIT_BRANCH defaults to 'main' when not set."""
+    def test_initial_clone_uses_remote_default_if_git_branch_unset(self) -> None:
+        """Test that remote's default branch is used when GIT_BRANCH is not set."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             gate_path = base / "gate.git"
             workspace_path = base / "workspace"
             workspace_path.mkdir()
 
-            # Create gate with 'master' as default but 'main' also exists
+            # Create gate with 'master' as default and 'main' also exists
             create_bare_repo_with_branches(
                 gate_path,
                 default_branch="master",  # Remote HEAD
-                other_branches=["main"],  # Script should default to this
+                other_branches=["main"],
             )
 
-            # GIT_BRANCH not set - should default to 'main'
+            # GIT_BRANCH not set - should clone remote's default HEAD
             result = run_init_script(
                 self.init_script,
                 base,
@@ -363,9 +363,9 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
-            # Should be on 'main' (the default), not 'master' (remote's HEAD)
+            # Should be on 'master' (the remote's default HEAD)
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "main")
+            self.assertEqual(current_branch, "master")
 
     def test_online_mode_with_clone_from_uses_git_branch(self) -> None:
         """Test online mode: clone from gate, repoint to upstream, use GIT_BRANCH.

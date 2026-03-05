@@ -247,7 +247,7 @@ def load_project(project_id: str) -> Project:
         staging_root = Path(gate_cfg.get("staging_root", build_root() / pid)).resolve()
 
     upstream_url = git_cfg.get("upstream_url")
-    default_branch = git_cfg.get("default_branch", "main")
+    default_branch = git_cfg.get("default_branch") or None
 
     ssh_key_name = ssh_cfg.get("key_name")
     ssh_host_dir = (

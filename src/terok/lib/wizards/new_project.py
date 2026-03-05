@@ -144,8 +144,8 @@ def collect_wizard_inputs() -> dict | None:
                 break
             print("Upstream URL is required.", file=sys.stderr)
 
-        # Default branch
-        default_branch = _prompt("Default branch", default="main")
+        # Default branch (empty = use remote's default branch)
+        default_branch = _prompt("Default branch (empty → remote default)")
 
         # Docker snippet
         user_snippet = _prompt_docker_snippet()
