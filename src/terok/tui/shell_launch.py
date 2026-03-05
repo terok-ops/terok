@@ -133,7 +133,7 @@ def spawn_terminal_with_command(command: list[str], title: str | None = None) ->
             args = ["--tab"]
             if title:
                 args.extend(["--title", title])
-            args.extend(["--", "bash", "-c", shell_cmd + "; exec bash"])
+            args.extend(["--", "bash", "-c", shell_cmd])
             subprocess.Popen(
                 ["gnome-terminal"] + args,
                 start_new_session=True,
@@ -143,7 +143,7 @@ def spawn_terminal_with_command(command: list[str], title: str | None = None) ->
             args = ["--new-tab"]
             if title:
                 args.extend(["--title", title])
-            args.extend(["-e", "bash", "-c", shell_cmd + "; exec bash"])
+            args.extend(["-e", "bash", "-c", shell_cmd])
             subprocess.Popen(
                 ["konsole"] + args,
                 start_new_session=True,
