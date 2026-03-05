@@ -268,7 +268,7 @@ def sync_project_gate(
 # ---------- Upstream comparison functions ----------
 
 
-def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
+def get_upstream_head(project_id: str, branch: str | None = None) -> dict | None:
     """Query upstream HEAD ref using git ls-remote (cheap, no object download).
 
     Args:
@@ -314,7 +314,7 @@ def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
         return None
 
 
-def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
+def get_gate_branch_head(project_id: str, branch: str | None = None) -> str | None:
     """Get the commit hash for a specific branch in the gate.
 
     Args:
@@ -348,7 +348,7 @@ def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
         return None
 
 
-def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalenessInfo:
+def compare_gate_vs_upstream(project_id: str, branch: str | None = None) -> GateStalenessInfo:
     """Compare gate HEAD vs upstream HEAD for a branch.
 
     Args:
