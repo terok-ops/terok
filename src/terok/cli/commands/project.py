@@ -117,7 +117,11 @@ def _cmd_project_delete(project_id: str, *, force: bool = False) -> None:
     print("This action cannot be undone.")
 
     if not force:
-        answer = input(f"\nType '{project_id}' to confirm deletion: ").strip()
+        try:
+            answer = input(f"\nType '{project_id}' to confirm deletion: ").strip()
+        except EOFError:
+            print("Deletion cancelled (no interactive stdin). Use --force to skip confirmation.")
+            return
         if answer != project_id:
             print("Deletion cancelled.")
             return

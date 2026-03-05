@@ -63,14 +63,15 @@ def delete_project(project_id: str) -> dict[str, list[str]]:
     (list of descriptions for items that were not removed).
     """
     project = load_project(project_id)
+    pid = project.id
     deleted: list[str] = []
     skipped: list[str] = []
 
     # 1. Delete all tasks (stops containers, removes workspaces + metadata)
-    tasks = get_tasks(project_id)
+    tasks = get_tasks(pid)
     for task in tasks:
         try:
-            task_delete(project_id, task.task_id)
+            task_delete(pid, task.task_id)
             _logger.debug("Deleted task %s", task.task_id)
         except Exception as exc:
             _logger.warning("Failed to delete task %s: %s", task.task_id, exc)
@@ -81,25 +82,25 @@ def delete_project(project_id: str) -> dict[str, list[str]]:
         deleted.append(str(project.tasks_root))
 
     # 3. Remove tasks metadata directory
-    meta_dir = state_root() / "projects" / project_id
+    meta_dir = state_root() / "projects" / pid
     if meta_dir.is_dir():
         shutil.rmtree(meta_dir)
         deleted.append(str(meta_dir))
 
     # 4. Remove build artifacts
-    build_dir = build_root() / project_id
+    build_dir = build_root() / pid
     if build_dir.is_dir():
         shutil.rmtree(build_dir)
         deleted.append(str(build_dir))
 
-    # 5. Remove SSH credentials
-    ssh_dir = get_envs_base_dir() / f"_ssh-config-{project_id}"
+    # 5. Remove SSH credentials (respect configured ssh.host_dir)
+    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{pid}")
     if ssh_dir.is_dir():
         shutil.rmtree(ssh_dir)
         deleted.append(str(ssh_dir))
 
     # 6. Remove git gate (only if not shared with other projects)
-    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
+    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=pid)
     if project.gate_path.exists():
         if sharing:
             names = ", ".join(pid for pid, _ in sharing)

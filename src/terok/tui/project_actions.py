@@ -475,7 +475,7 @@ class ProjectActionsMixin:
         pid = self.current_project_id
         try:
             project = load_project(pid)
-        except Exception as e:
+        except (SystemExit, Exception) as e:
             self.notify(f"Error loading project: {e}")
             return
 
@@ -515,7 +515,7 @@ class ProjectActionsMixin:
         pid = self.current_project_id
         try:
             result = delete_project(pid)
-        except Exception as e:
+        except (SystemExit, Exception) as e:
             self.notify(f"Delete failed: {e}")
             return
 
