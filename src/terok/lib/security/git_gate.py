@@ -370,7 +370,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
             is_stale=False,
             commits_behind=None,
             commits_ahead=None,
-            checked_at=now,
+            last_checked=now,
             error="No branch configured",
         )
 
