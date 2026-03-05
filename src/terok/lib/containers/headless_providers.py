@@ -580,8 +580,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         lines.append(f"    local _plugin_dir={plugin_dir}")
         lines.append('    if [ -f "$_plugin_src" ]; then')
         lines.append('        mkdir -p "$_plugin_dir"')
-        lines.append('        [ -e "$_plugin_dir/terok-session.mjs" ] || \\')
-        lines.append('            ln -sf "$_plugin_src" "$_plugin_dir/terok-session.mjs"')
+        lines.append('        ln -sf "$_plugin_src" "$_plugin_dir/terok-session.mjs"')
         lines.append("    fi")
 
     # Session resume support for providers with session_file.
