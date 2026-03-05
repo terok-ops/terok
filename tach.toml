@@ -460,6 +460,11 @@ expose = [
     "task_login",
     "task_list",
     "task_status",
+    "task_archive_list",
+    "task_archive_logs",
+    "capture_task_logs",
+    "list_archived_tasks",
+    "ArchivedTask",
     "get_tasks",
     "get_all_task_states",
     "get_login_command",
@@ -473,6 +478,7 @@ expose = [
     "TASK_NAME_MAX_LEN",
     "TaskMeta",
     "tasks_meta_dir",
+    "tasks_archive_dir",
 ]
 from = ["terok.lib.containers.tasks"]
 
@@ -618,6 +624,8 @@ expose = [
     "task_list",
     "task_status",
     "task_stop",
+    "task_archive_list",
+    "task_archive_logs",
     "get_tasks",
     "task_run_cli",
     "task_run_web",

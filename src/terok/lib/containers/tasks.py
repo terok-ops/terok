@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -204,6 +205,11 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
     return state_root() / "projects" / project_id / "tasks"
+
+
+def tasks_archive_dir(project_id: str) -> Path:
+    """Return the directory containing archived task data for *project_id*."""
+    return state_root() / "projects" / project_id / "archive"
 
 
 def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
@@ -493,8 +499,93 @@ def mark_task_deleting(project_id: str, task_id: str) -> None:
         _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
 
+def capture_task_logs(project_id: str, task_id: str, mode: str) -> Path | None:
+    """Capture container logs to the task's ``logs/`` directory on the host.
+
+    Writes stdout/stderr from ``podman logs`` to
+    ``<tasks_root>/<task_id>/logs/container.log``.  Returns the log file
+    path on success, or ``None`` if the container doesn't exist or podman
+    fails.
+    """
+    project = load_project(project_id)
+    task_dir = project.tasks_root / str(task_id)
+    logs_dir = task_dir / "logs"
+    ensure_dir(logs_dir)
+    log_file = logs_dir / "container.log"
+
+    cname = container_name(project.id, mode, task_id)
+    try:
+        result = subprocess.run(
+            ["podman", "logs", "--timestamps", cname],
+            capture_output=True,
+            timeout=60,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    # Write combined stdout + stderr with stream markers
+    with log_file.open("wb") as f:
+        if result.stdout:
+            f.write(result.stdout)
+        if result.stderr:
+            f.write(result.stderr)
+
+    return log_file
+
+
+def _archive_task(project: Project, task_id: str, meta: dict) -> Path | None:
+    """Archive task metadata and logs before deletion.
+
+    Creates an archive entry at
+    ``<state_root>/projects/<project_id>/archive/<timestamp>_<task_id>_<name>/``
+    containing the task metadata YAML and any captured logs.
+
+    The archive directory name uses the archival timestamp as the primary
+    identifier because task numbers and names are not globally unique —
+    they can be reused when tasks are deleted and recreated.
+
+    Returns the archive directory path, or ``None`` if archiving failed.
+    """
+    try:
+        task_name = meta.get("name", "")
+        ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
+        # Build archive dir name: timestamp_taskid_name (name may be empty)
+        dir_name = f"{ts}_{task_id}"
+        if task_name:
+            dir_name = f"{dir_name}_{task_name}"
+
+        archive_root = tasks_archive_dir(project.id)
+        ensure_dir(archive_root)
+        archive_dir = archive_root / dir_name
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save metadata snapshot
+        (archive_dir / "task.yml").write_text(yaml.safe_dump(meta))
+
+        # Copy logs if they exist
+        task_dir = project.tasks_root / str(task_id)
+        logs_dir = task_dir / "logs"
+        if logs_dir.is_dir():
+            archive_logs_dir = archive_dir / "logs"
+            shutil.copytree(logs_dir, archive_logs_dir, dirs_exist_ok=True)
+
+        _log_debug(f"_archive_task: archived task {task_id} to {archive_dir}")
+        return archive_dir
+    except Exception as e:
+        _log_debug(f"_archive_task: failed to archive task {task_id}: {e}")
+        return None
+
+
 def task_delete(project_id: str, task_id: str) -> None:
     """Delete a task's workspace, metadata, and any associated containers.
+
+    Before removing the task, captures container logs and archives the task
+    metadata and logs to ``<state_root>/projects/<project_id>/archive/``.
+    The archive directory is named by archival timestamp + task ID + name
+    for unique identification (task numbers and names can be reused).
 
     This mirrors the behavior used by the TUI when deleting a task, but is
     exposed here so both CLI and TUI share the same logic. Containers are
@@ -513,6 +604,22 @@ def task_delete(project_id: str, task_id: str) -> None:
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
+
+    # Load metadata for archival before we delete anything
+    meta = {}
+    if meta_path.is_file():
+        meta = yaml.safe_load(meta_path.read_text()) or {}
+
+    # Capture container logs before stopping containers
+    mode = meta.get("mode")
+    if mode:
+        _log_debug("task_delete: capturing container logs")
+        capture_task_logs(project_id, task_id, mode)
+
+    # Archive metadata + logs before cleanup
+    if meta:
+        _log_debug("task_delete: archiving task")
+        _archive_task(project, task_id, meta)
 
     # Stop any matching containers first to avoid name conflicts if a new
     # task is later created with the same ID.
@@ -718,3 +825,83 @@ def task_status(project_id: str, task_id: str) -> None:
         print(f"  Work status:     {ws.status}")
         if ws.message:
             print(f"  Work message:    {ws.message}")
+
+
+# ---------- Archive operations ----------
+
+
+@dataclass
+class ArchivedTask:
+    """Metadata snapshot of an archived (deleted) task."""
+
+    archive_dir: Path
+    archived_at: str
+    task_id: str
+    name: str
+    mode: str | None
+    exit_code: int | None
+
+
+def list_archived_tasks(project_id: str) -> list[ArchivedTask]:
+    """Return archived tasks for *project_id*, sorted newest-first."""
+    archive_root = tasks_archive_dir(project_id)
+    if not archive_root.is_dir():
+        return []
+    results: list[ArchivedTask] = []
+    for entry in sorted(archive_root.iterdir(), reverse=True):
+        if not entry.is_dir():
+            continue
+        meta_path = entry / "task.yml"
+        if not meta_path.is_file():
+            continue
+        try:
+            meta = yaml.safe_load(meta_path.read_text()) or {}
+        except Exception:
+            continue
+        # Parse archive timestamp from directory name: <timestamp>_<task_id>[_<name>]
+        parts = entry.name.split("_", 2)
+        archived_at = parts[0] if parts else entry.name
+        results.append(
+            ArchivedTask(
+                archive_dir=entry,
+                archived_at=archived_at,
+                task_id=str(meta.get("task_id", "")),
+                name=meta.get("name", ""),
+                mode=meta.get("mode"),
+                exit_code=meta.get("exit_code"),
+            )
+        )
+    return results
+
+
+def task_archive_list(project_id: str) -> None:
+    """Print archived tasks for *project_id*."""
+    archived = list_archived_tasks(project_id)
+    if not archived:
+        print("No archived tasks found")
+        return
+    for a in archived:
+        extra = []
+        if a.mode:
+            extra.append(f"mode={a.mode}")
+        if a.exit_code is not None:
+            extra.append(f"exit={a.exit_code}")
+        extra_s = f" [{'; '.join(extra)}]" if extra else ""
+        print(f"- {a.archived_at} #{a.task_id}: {a.name}{extra_s}")
+
+
+def task_archive_logs(project_id: str, archive_id: str) -> Path | None:
+    """Return the log file path for an archived task identified by *archive_id*.
+
+    *archive_id* is matched against archive directory names (prefix match).
+    Returns the log file path if found, or ``None``.
+    """
+    archive_root = tasks_archive_dir(project_id)
+    if not archive_root.is_dir():
+        return None
+    for entry in sorted(archive_root.iterdir(), reverse=True):
+        if entry.is_dir() and entry.name.startswith(archive_id):
+            log_file = entry / "logs" / "container.log"
+            if log_file.is_file():
+                return log_file
+    return None

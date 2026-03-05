@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 import yaml
 
@@ -78,8 +79,20 @@ def task_logs(
     # Verify container exists (running or exited)
     state = get_container_state(cname)
     if state is None:
+        # Fall back to persisted log files on the host
+        task_dir = project.tasks_root / str(task_id)
+        log_file = task_dir / "logs" / "container.log"
+        if log_file.is_file():
+            _show_persisted_logs(
+                log_file,
+                tail=options.tail,
+                streaming=options.streaming,
+                mode=mode,
+                provider=meta.get("provider"),
+            )
+            return
         raise SystemExit(
-            f"Container {cname} does not exist. "
+            f"Container {cname} does not exist and no persisted logs found. "
             f"Run 'terokctl task restart {project_id} {task_id}' first."
         )
 
@@ -180,3 +193,27 @@ def task_logs(
 
     if interrupted:
         print()
+
+
+def _show_persisted_logs(
+    log_file: Path,
+    *,
+    tail: int | None = None,
+    streaming: bool = True,
+    mode: str | None = None,
+    provider: str | None = None,
+) -> None:
+    """Display logs from a persisted log file on disk.
+
+    Applies the same formatter pipeline as live container logs so output
+    is consistent whether reading from podman or from the host filesystem.
+    """
+    formatter = auto_detect_formatter(mode, streaming=streaming, provider=provider)
+
+    lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    if tail is not None:
+        lines = lines[-tail:]
+
+    for line in lines:
+        formatter.feed_line(line)
+    formatter.finish()

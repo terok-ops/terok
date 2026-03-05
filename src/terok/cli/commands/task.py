@@ -18,6 +18,8 @@ from ...lib.facade import (
     HeadlessRunRequest,
     LogViewOptions,
     get_tasks as _get_tasks,
+    task_archive_list,
+    task_archive_logs,
     task_delete,
     task_followup_headless,
     task_list,
@@ -245,6 +247,19 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Disable partial streaming (show coalesced messages only)",
     )
 
+    t_archive = tsub.add_parser("archive", help="View archived (deleted) tasks")
+    archive_sub = t_archive.add_subparsers(dest="archive_cmd", required=True)
+
+    t_archive_list = archive_sub.add_parser("list", help="List archived tasks")
+    _add_project_arg(t_archive_list)
+
+    t_archive_logs = archive_sub.add_parser("logs", help="View logs from an archived task")
+    _add_project_arg(t_archive_logs)
+    t_archive_logs.add_argument(
+        "archive_id",
+        help="Archive ID prefix (timestamp, e.g. 20260305T143000Z)",
+    )
+
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle task-related commands.  Returns True if handled."""
@@ -376,6 +391,25 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
                 streaming=stream,
             ),
         )
+    elif args.task_cmd == "archive":
+        return _dispatch_archive_sub(args)
+    else:
+        return False
+    return True
+
+
+def _dispatch_archive_sub(args: argparse.Namespace) -> bool:
+    """Dispatch ``task archive <subcommand>``."""
+    if args.archive_cmd == "list":
+        task_archive_list(args.project_id)
+    elif args.archive_cmd == "logs":
+        log_file = task_archive_logs(args.project_id, args.archive_id)
+        if log_file is None:
+            raise SystemExit(
+                f"No archived logs found for prefix {args.archive_id!r}. "
+                f"Use 'terokctl task archive list {args.project_id}' to see available archives."
+            )
+        print(log_file.read_text(encoding="utf-8", errors="replace"), end="")
     else:
         return False
     return True

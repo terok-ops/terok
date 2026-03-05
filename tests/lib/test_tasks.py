@@ -1311,3 +1311,309 @@ class TaskLogsTests(unittest.TestCase):
                     with self.assertRaises(SystemExit) as cm:
                         task_logs("proj_logs8", task_id)
                     self.assertIn("podman not found", str(cm.exception))
+
+    def test_persisted_logs_fallback(self) -> None:
+        """task_logs falls back to persisted log file when container is gone."""
+        with project_env(
+            "project:\n  id: proj_logs_persist\n",
+            project_id="proj_logs_persist",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs_persist", "run")
+
+                # Create persisted log file
+                from terok.lib.core.config import state_root
+
+                task_dir = Path(state_root()) / "tasks" / "proj_logs_persist" / task_id
+                logs_dir = task_dir / "logs"
+                logs_dir.mkdir(parents=True, exist_ok=True)
+                log_file = logs_dir / "container.log"
+                log_file.write_text("line1\nline2\nline3\n", encoding="utf-8")
+
+                mock_formatter = unittest.mock.Mock()
+
+                with (
+                    unittest.mock.patch(
+                        "terok.lib.containers.task_logs.get_container_state",
+                        return_value=None,
+                    ),
+                    unittest.mock.patch(
+                        "terok.lib.containers.task_logs.auto_detect_formatter",
+                        return_value=mock_formatter,
+                    ),
+                ):
+                    buf = StringIO()
+                    with redirect_stdout(buf):
+                        task_logs("proj_logs_persist", task_id)
+
+                    # Formatter should have been fed 3 lines
+                    self.assertEqual(mock_formatter.feed_line.call_count, 3)
+                    mock_formatter.finish.assert_called_once()
+
+    def test_persisted_logs_fallback_with_tail(self) -> None:
+        """task_logs persisted fallback respects --tail option."""
+        with project_env(
+            "project:\n  id: proj_logs_tail\n",
+            project_id="proj_logs_tail",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs_tail", "run")
+
+                from terok.lib.core.config import state_root
+
+                task_dir = Path(state_root()) / "tasks" / "proj_logs_tail" / task_id
+                logs_dir = task_dir / "logs"
+                logs_dir.mkdir(parents=True, exist_ok=True)
+                log_file = logs_dir / "container.log"
+                log_file.write_text("a\nb\nc\nd\ne\n", encoding="utf-8")
+
+                mock_formatter = unittest.mock.Mock()
+
+                with (
+                    unittest.mock.patch(
+                        "terok.lib.containers.task_logs.get_container_state",
+                        return_value=None,
+                    ),
+                    unittest.mock.patch(
+                        "terok.lib.containers.task_logs.auto_detect_formatter",
+                        return_value=mock_formatter,
+                    ),
+                ):
+                    task_logs("proj_logs_tail", task_id, LogViewOptions(tail=2))
+                    self.assertEqual(mock_formatter.feed_line.call_count, 2)
+
+    def test_no_container_no_logs_raises(self) -> None:
+        """task_logs raises when container is gone and no persisted logs exist."""
+        with project_env(
+            "project:\n  id: proj_logs_nolog\n",
+            project_id="proj_logs_nolog",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs_nolog", "run")
+                with unittest.mock.patch(
+                    "terok.lib.containers.task_logs.get_container_state",
+                    return_value=None,
+                ):
+                    with self.assertRaises(SystemExit) as cm:
+                        task_logs("proj_logs_nolog", task_id)
+                    self.assertIn("no persisted logs found", str(cm.exception))
+
+
+class TaskArchiveTests(unittest.TestCase):
+    """Tests for task archival on deletion."""
+
+    def test_task_delete_creates_archive(self) -> None:
+        """task_delete archives metadata and logs before cleanup."""
+        project_id = "proj_archive1"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            with mock_git_config():
+                task_id = task_new(project_id)
+                meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+                meta_path = meta_dir / f"{task_id}.yml"
+
+                # Set mode in metadata (simulating a task that ran)
+                meta = yaml.safe_load(meta_path.read_text()) or {}
+                meta["mode"] = "run"
+                meta["name"] = "test-task"
+                meta["exit_code"] = 0
+                meta_path.write_text(yaml.safe_dump(meta))
+
+                # Create logs dir to simulate persisted logs
+                task_dir = ctx.state_dir / "tasks" / project_id / task_id
+                logs_dir = task_dir / "logs"
+                logs_dir.mkdir(parents=True, exist_ok=True)
+                (logs_dir / "container.log").write_text("log content\n")
+
+                with unittest.mock.patch(
+                    "terok.lib.containers.tasks.subprocess.run"
+                ) as run_mock:
+                    run_mock.return_value.returncode = 0
+                    run_mock.return_value.stdout = b"captured log output\n"
+                    run_mock.return_value.stderr = b""
+                    task_delete(project_id, task_id)
+
+                # Task should be deleted
+                self.assertFalse(meta_path.exists())
+
+                # Archive should exist
+                archive_dir = ctx.state_dir / "projects" / project_id / "archive"
+                self.assertTrue(archive_dir.is_dir())
+                archives = list(archive_dir.iterdir())
+                self.assertEqual(len(archives), 1)
+
+                archive_entry = archives[0]
+                # Archive dir name contains task_id and name
+                self.assertIn(task_id, archive_entry.name)
+                self.assertIn("test-task", archive_entry.name)
+
+                # Archive should contain task.yml
+                archived_meta = archive_entry / "task.yml"
+                self.assertTrue(archived_meta.is_file())
+                archived_data = yaml.safe_load(archived_meta.read_text())
+                self.assertEqual(archived_data["task_id"], task_id)
+                self.assertEqual(archived_data["name"], "test-task")
+
+                # Archive should contain logs (captured from podman)
+                archived_logs = archive_entry / "logs" / "container.log"
+                self.assertTrue(archived_logs.is_file())
+                self.assertEqual(archived_logs.read_text(), "captured log output\n")
+
+    def test_task_delete_archives_without_logs(self) -> None:
+        """task_delete still archives metadata even when no logs exist."""
+        project_id = "proj_archive2"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            with mock_git_config():
+                task_id = task_new(project_id)
+                meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+                meta_path = meta_dir / f"{task_id}.yml"
+
+                with unittest.mock.patch(
+                    "terok.lib.containers.tasks.subprocess.run"
+                ) as run_mock:
+                    run_mock.return_value.returncode = 0
+                    run_mock.return_value.stdout = b""
+                    run_mock.return_value.stderr = b""
+                    task_delete(project_id, task_id)
+
+                archive_dir = ctx.state_dir / "projects" / project_id / "archive"
+                self.assertTrue(archive_dir.is_dir())
+                archives = list(archive_dir.iterdir())
+                self.assertEqual(len(archives), 1)
+
+                # Should have task.yml but no logs subdir
+                archive_entry = archives[0]
+                self.assertTrue((archive_entry / "task.yml").is_file())
+                self.assertFalse((archive_entry / "logs").exists())
+
+    def test_list_archived_tasks(self) -> None:
+        """list_archived_tasks returns archived tasks sorted newest-first."""
+        from terok.lib.containers.tasks import list_archived_tasks, tasks_archive_dir
+
+        project_id = "proj_archive3"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            # Create archive entries manually
+            archive_root = tasks_archive_dir(project_id)
+            archive_root.mkdir(parents=True, exist_ok=True)
+
+            for i, ts in enumerate(
+                ["20260301T100000Z", "20260302T100000Z", "20260303T100000Z"]
+            ):
+                entry_dir = archive_root / f"{ts}_{i + 1}_task-{i + 1}"
+                entry_dir.mkdir()
+                (entry_dir / "task.yml").write_text(
+                    yaml.safe_dump(
+                        {
+                            "task_id": str(i + 1),
+                            "name": f"task-{i + 1}",
+                            "mode": "run",
+                            "exit_code": 0,
+                        }
+                    )
+                )
+
+            archived = list_archived_tasks(project_id)
+            self.assertEqual(len(archived), 3)
+            # Newest first
+            self.assertEqual(archived[0].task_id, "3")
+            self.assertEqual(archived[1].task_id, "2")
+            self.assertEqual(archived[2].task_id, "1")
+            self.assertEqual(archived[0].archived_at, "20260303T100000Z")
+
+    def test_task_archive_logs(self) -> None:
+        """task_archive_logs returns log file path for matching archive."""
+        from terok.lib.containers.tasks import task_archive_logs, tasks_archive_dir
+
+        project_id = "proj_archive4"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            archive_root = tasks_archive_dir(project_id)
+            entry_dir = archive_root / "20260305T120000Z_1_my-task"
+            logs_dir = entry_dir / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            (logs_dir / "container.log").write_text("archived log\n")
+
+            # Full match
+            result = task_archive_logs(project_id, "20260305T120000Z_1_my-task")
+            self.assertIsNotNone(result)
+            self.assertEqual(result.read_text(), "archived log\n")
+
+            # Prefix match
+            result = task_archive_logs(project_id, "20260305T120000Z")
+            self.assertIsNotNone(result)
+
+            # No match
+            result = task_archive_logs(project_id, "20990101")
+            self.assertIsNone(result)
+
+    def test_task_archive_list_empty(self) -> None:
+        """task_archive_list prints message when no archives exist."""
+        from terok.lib.containers.tasks import task_archive_list
+
+        project_id = "proj_archive5"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_archive_list(project_id)
+            self.assertIn("No archived tasks found", buf.getvalue())
+
+    def test_capture_task_logs(self) -> None:
+        """capture_task_logs writes podman logs to host filesystem."""
+        from terok.lib.containers.tasks import capture_task_logs
+
+        project_id = "proj_capture1"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            with mock_git_config():
+                task_id = task_new(project_id)
+
+                mock_result = unittest.mock.Mock()
+                mock_result.returncode = 0
+                mock_result.stdout = b"2026-03-05T12:00:00Z stdout line\n"
+                mock_result.stderr = b"2026-03-05T12:00:00Z stderr line\n"
+
+                with unittest.mock.patch(
+                    "terok.lib.containers.tasks.subprocess.run",
+                    return_value=mock_result,
+                ):
+                    log_file = capture_task_logs(project_id, task_id, "run")
+
+                self.assertIsNotNone(log_file)
+                content = log_file.read_text()
+                self.assertIn("stdout line", content)
+                self.assertIn("stderr line", content)
+
+    def test_capture_task_logs_podman_not_found(self) -> None:
+        """capture_task_logs returns None when podman is not available."""
+        from terok.lib.containers.tasks import capture_task_logs
+
+        project_id = "proj_capture2"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            with mock_git_config():
+                task_id = task_new(project_id)
+
+                with unittest.mock.patch(
+                    "terok.lib.containers.tasks.subprocess.run",
+                    side_effect=FileNotFoundError("podman"),
+                ):
+                    result = capture_task_logs(project_id, task_id, "run")
+
+                self.assertIsNone(result)

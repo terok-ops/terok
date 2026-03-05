@@ -26,6 +26,8 @@ from .containers.task_runners import (  # noqa: F401 — re-exported public API
 )
 from .containers.tasks import (  # noqa: F401 — re-exported public API
     get_tasks,
+    task_archive_list,
+    task_archive_logs,
     task_delete,
     task_list,
     task_login,
@@ -77,6 +79,8 @@ __all__ = [
     "task_list",
     "task_status",
     "task_stop",
+    "task_archive_list",
+    "task_archive_logs",
     "get_tasks",
     # Task runners
     "task_run_cli",
