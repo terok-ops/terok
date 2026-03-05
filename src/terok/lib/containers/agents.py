@@ -191,6 +191,16 @@ def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
     lines.append("    [ -s /home/dev/.terok/claude-session.txt ] && \\")
     lines.append('        _args+=(--resume "$(cat /home/dev/.terok/claude-session.txt)")')
 
+    # Route Claude's auto-memory to a project-specific directory so that
+    # different terok projects don't share a single "-workspace" bucket.
+    # SESSION logs remain in the default location (they are UUID-keyed and
+    # do not conflict), but memory files (MEMORY.md, etc.) carry cross-session
+    # knowledge that must be separated per project.
+    lines.append(
+        "    export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE="
+        '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"'
+    )
+
     # Git env vars and exec — with optional timeout
     lines.append('    if [ -n "$_timeout" ]; then')
     lines.append("        GIT_AUTHOR_NAME=Claude \\")

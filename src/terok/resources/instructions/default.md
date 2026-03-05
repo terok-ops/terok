@@ -34,6 +34,15 @@ Python 3 and Node.js are available. Use `sudo apt install` or `pip`/`npm` for an
 - Make focused, minimal changes; avoid unrelated modifications.
 - Run the project's test suite after making changes when possible.
 
+## Classifying internal files by project
+
+Your configuration and data directories (e.g. memory files, session notes, scratch
+data) may be shared across multiple projects. To keep things organized, derive a
+short, recognizable project identifier from the repository or codebase you are
+working on and use it as a prefix or subdirectory for any files you generate
+outside the workspace. This provides soft separation — you can still access
+cross-project data while keeping project-specific files easy to find.
+
 ## Work Status Reporting
 
 Report your current work phase by writing to `/home/dev/.terok/work-status.yml`:

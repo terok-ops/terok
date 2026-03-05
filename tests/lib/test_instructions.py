@@ -26,11 +26,12 @@ class BundledDefaultTests(unittest.TestCase):
         self.assertIn("terok", text)
 
     def test_bundled_default_contains_key_sections(self) -> None:
-        """Bundled default mentions workspace, git, and sudo."""
+        """Bundled default mentions workspace, git, sudo, and project classification."""
         text = bundled_default_instructions()
         self.assertIn("/workspace/", text)
         self.assertIn("sudo", text)
         self.assertIn("git", text.lower())
+        self.assertIn("Classifying internal files by project", text)
 
 
 class ResolveInstructionsTests(unittest.TestCase):

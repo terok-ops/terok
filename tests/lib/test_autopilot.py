@@ -331,6 +331,16 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertIn("claude-session.txt", wrapper)
         self.assertIn("--resume", wrapper)
 
+    def test_wrapper_sets_memory_override_with_project_id(self) -> None:
+        """Wrapper exports CLAUDE_COWORK_MEMORY_PATH_OVERRIDE using $PROJECT_ID."""
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        self.assertIn(
+            'export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE='
+            '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"',
+            wrapper,
+        )
+
 
 class WriteSessionHookTests(unittest.TestCase):
     """Tests for _write_session_hook."""
