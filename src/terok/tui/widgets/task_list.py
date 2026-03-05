@@ -9,9 +9,9 @@ from typing import Any
 from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
 
-from ...lib.containers.task_display import MODE_DISPLAY, STATUS_DISPLAY, mode_emoji
+from ...lib.containers.task_display import STATUS_DISPLAY, mode_info
 from ...lib.containers.tasks import TaskMeta
-from ...lib.util.emoji import draw_emoji
+from ...lib.util.emoji import render_emoji
 
 
 class TaskListItem(ListItem):
@@ -65,10 +65,9 @@ class TaskList(ListView):
 
     def _format_task_label(self, task: TaskMeta) -> str:
         """Build a human-readable label string for a task list entry."""
-        m_info = MODE_DISPLAY.get(task.mode, MODE_DISPLAY[None])
-        m_emoji = draw_emoji(mode_emoji(task), label=m_info.label)
+        m_emoji = render_emoji(mode_info(task))
         s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
-        s_emoji = draw_emoji(s_info.emoji, label=s_info.label)
+        s_emoji = render_emoji(s_info)
 
         extra_parts: list[str] = []
         if task.web_port is not None:

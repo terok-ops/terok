@@ -420,7 +420,10 @@ expose = [
     "WEB_BACKEND_DEFAULT_EMOJI",
     "SECURITY_CLASS_DISPLAY",
     "GPU_DISPLAY",
+    "WEB_BACKEND_DISPLAY",
+    "WEB_BACKEND_DEFAULT",
     "effective_status",
+    "mode_info",
     "mode_emoji",
     "has_gpu",
 ]
@@ -644,7 +647,7 @@ from = ["terok.lib.util.config_stack"]
 
 # Emoji utility interface
 [[interfaces]]
-expose = ["draw_emoji", "set_emoji_enabled", "is_emoji_enabled"]
+expose = ["render_emoji", "set_emoji_enabled", "is_emoji_enabled", "EmojiInfo"]
 from = ["terok.lib.util.emoji"]
 
 # Filesystem utility interface

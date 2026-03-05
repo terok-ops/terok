@@ -14,7 +14,7 @@ from textual.widgets import Button, ListItem, ListView, Static
 
 from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.core.projects import Project
-from ...lib.util.emoji import draw_emoji
+from ...lib.util.emoji import render_emoji
 
 
 class ProjectListItem(ListItem):
@@ -60,9 +60,7 @@ class ProjectList(ListView):
         for proj in projects:
             sec = SECURITY_CLASS_DISPLAY.get(proj.security_class, SECURITY_CLASS_DISPLAY["online"])
             gpu = GPU_DISPLAY[has_gpu(proj)]
-            sec_display = draw_emoji(sec.emoji, label=sec.label)
-            gpu_display = draw_emoji(gpu.emoji, label=gpu.label)
-            label = f"{sec_display}{gpu_display} {proj.id}"
+            label = f"{render_emoji(sec)}{render_emoji(gpu)} {proj.id}"
             self.append(ProjectListItem(proj.id, label, self._generation))
 
     def select_project(self, project_id: str) -> None:

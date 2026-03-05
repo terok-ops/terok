@@ -25,18 +25,21 @@ Solution
 --------
 All emojis used by terok must be natively wide (``East_Asian_Width=W``).
 This ensures Rich, Textual, and the terminal all agree on a 2-cell width.
-The ``draw_emoji`` helper pads any sub-2-cell characters with spaces for
-alignment, and the test suite includes guard tests that verify every emoji
-in the project is natively 2 cells wide.
-
-Emoji definitions are centralised in ``terok.lib.containers.task_display``
-(``STATUS_DISPLAY``, ``MODE_DISPLAY``, ``WEB_BACKEND_EMOJI``,
-``SECURITY_CLASS_DISPLAY``, ``GPU_DISPLAY``) and
-``terok.lib.containers.work_status`` (``WORK_STATUS_DISPLAY``).
 
 **Never use emoji literals directly in code.**  Always define them in a
-central dict with at least a ``label`` field, and render via ``draw_emoji``.
-This ensures ``--no-emoji`` mode can substitute ``[label]`` for every emoji.
+central dict whose values carry both an ``emoji`` and a ``label`` attribute
+(e.g. ``StatusInfo``, ``ModeInfo``, ``ProjectBadge``), then render via
+``render_emoji(info)``.  This ensures:
+
+1. ``--no-emoji`` mode can substitute ``[label]`` for every emoji.
+2. Width is auto-deduced from the emoji character — callers never pass it.
+3. Guard tests can verify every emoji in every dict is natively 2 cells wide
+   and has a non-empty label.
+
+Emoji definitions are centralised in ``terok.lib.containers.task_display``
+(``STATUS_DISPLAY``, ``MODE_DISPLAY``, ``WEB_BACKEND_DISPLAY``,
+``SECURITY_CLASS_DISPLAY``, ``GPU_DISPLAY``) and
+``terok.lib.containers.work_status`` (``WORK_STATUS_DISPLAY``).
 
 How to check a candidate emoji::
 
@@ -76,16 +79,33 @@ References:
   - Terminal emoji width survey: https://www.jeffquast.com/post/ucs-detect-test-results/
 """
 
-from rich.cells import cell_len
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
 
 _emoji_enabled: bool = True
+
+
+@runtime_checkable
+class EmojiInfo(Protocol):
+    """Protocol for objects that carry an emoji and its text label."""
+
+    @property
+    def emoji(self) -> str:
+        """The emoji character."""
+        ...  # pragma: no cover
+
+    @property
+    def label(self) -> str:
+        """Human-readable text label shown when emojis are disabled."""
+        ...  # pragma: no cover
 
 
 def set_emoji_enabled(enabled: bool) -> None:
     """Set global emoji rendering mode.
 
-    When *enabled* is ``False``, ``draw_emoji`` returns ``[label]`` instead
-    of the emoji character (when a *label* is supplied).
+    When *enabled* is ``False``, ``render_emoji`` returns ``[label]``
+    instead of the emoji character.
     """
     global _emoji_enabled  # noqa: PLW0603
     _emoji_enabled = enabled
@@ -96,27 +116,18 @@ def is_emoji_enabled() -> bool:
     return _emoji_enabled
 
 
-def draw_emoji(emoji: str, width: int = 2, *, label: str = "") -> str:
-    """Pad emojis to a consistent cell width for list alignment.
+def render_emoji(info: EmojiInfo) -> str:
+    """Render an emoji from a display info object.
 
-    When emoji mode is disabled (via ``set_emoji_enabled(False)``), returns
-    ``[label]`` (padded to *width*) if a *label* is provided, or an empty
-    string otherwise.
+    Accepts any object with ``emoji`` and ``label`` attributes (e.g.
+    ``StatusInfo``, ``ModeInfo``, ``ProjectBadge``, ``WorkStatusInfo``).
+
+    In normal mode the emoji character is returned (already 2 cells wide
+    by project convention).  When emoji mode is disabled via
+    ``set_emoji_enabled(False)``, returns ``[label]`` instead — or an
+    empty string if the label is empty.
     """
     if not _emoji_enabled:
-        if label:
-            tag = f"[{label}]"
-            tag_width = cell_len(tag)
-            if tag_width >= width:
-                return tag
-            return f"{tag}{' ' * (width - tag_width)}"
-        return ""
-    if not emoji:
-        return ""
-    try:
-        emoji_width = cell_len(emoji)
-    except (TypeError, ValueError):
-        return emoji
-    if emoji_width >= width:
-        return emoji
-    return f"{emoji}{' ' * (width - emoji_width)}"
+        label = info.label
+        return f"[{label}]" if label else ""
+    return info.emoji or ""

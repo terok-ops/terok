@@ -11,9 +11,10 @@ import unittest.mock
 from terok.lib.containers.runtime import get_project_container_states
 from terok.lib.containers.task_display import (
     STATUS_DISPLAY,
-    WEB_BACKEND_EMOJI,
+    WEB_BACKEND_DISPLAY,
     effective_status,
     mode_emoji,
+    mode_info,
 )
 from terok.lib.containers.tasks import TaskMeta, get_all_task_states
 
@@ -137,8 +138,20 @@ class ModeEmojiTests(unittest.TestCase):
         self.assertEqual(mode_emoji(_task(mode="web")), "🌍")
 
     def test_all_known_backends_covered(self) -> None:
-        for backend, emoji in WEB_BACKEND_EMOJI.items():
-            self.assertEqual(mode_emoji(_task(mode="web", backend=backend)), emoji)
+        for backend, info in WEB_BACKEND_DISPLAY.items():
+            self.assertEqual(mode_emoji(_task(mode="web", backend=backend)), info.emoji)
+
+    def test_mode_info_returns_mode_info(self) -> None:
+        """mode_info() returns a ModeInfo with both emoji and label."""
+        m = mode_info(_task(mode="cli"))
+        self.assertEqual(m.emoji, "\U0001f4bb")
+        self.assertEqual(m.label, "CLI")
+
+    def test_mode_info_web_backend(self) -> None:
+        """mode_info() resolves web backends to ModeInfo with label."""
+        m = mode_info(_task(mode="web", backend="claude"))
+        self.assertEqual(m.emoji, "\U0001f4a0")
+        self.assertEqual(m.label, "Claude")
 
 
 class BatchContainerStateTests(unittest.TestCase):

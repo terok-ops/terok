@@ -13,7 +13,7 @@ from textual.widgets import Static
 from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.core.projects import Project
 from ...lib.facade import GateStalenessInfo
-from ...lib.util.emoji import draw_emoji
+from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 
 
@@ -27,15 +27,14 @@ def render_project_loading(
 
     upstream = project.upstream_url or "-"
     sec = SECURITY_CLASS_DISPLAY.get(project.security_class, SECURITY_CLASS_DISPLAY["online"])
-    security_emoji = draw_emoji(sec.emoji, label=sec.label)
     gpu = GPU_DISPLAY[has_gpu(project)]
-    gpu_emoji = draw_emoji(gpu.emoji, label=gpu.label)
+    badges = f"{render_emoji(sec)}{render_emoji(gpu)}"
     tasks_line = (
         Text("Tasks:     loading") if task_count is None else Text(f"Tasks:     {task_count}")
     )
 
     lines = [
-        Text(f"Project:   {project.id} {security_emoji}{gpu_emoji}"),
+        Text(f"Project:   {project.id} {badges}"),
         Text(upstream),
         Text(""),
         Text("Loading details..."),
@@ -97,9 +96,8 @@ def render_project_details(
     )
     upstream = project.upstream_url or "-"
     sec = SECURITY_CLASS_DISPLAY.get(project.security_class, SECURITY_CLASS_DISPLAY["online"])
-    security_emoji = draw_emoji(sec.emoji, label=sec.label)
     gpu = GPU_DISPLAY[has_gpu(project)]
-    gpu_emoji = draw_emoji(gpu.emoji, label=gpu.label)
+    badges = f"{render_emoji(sec)}{render_emoji(gpu)}"
 
     dim_style = Style(dim=True)
     # Three-state badge based on YAML config + file existence
@@ -127,7 +125,7 @@ def render_project_details(
         instr_s = Text("default", style=dim_style)
 
     lines = [
-        Text(f"Project:   {project.id} {security_emoji}{gpu_emoji}"),
+        Text(f"Project:   {project.id} {badges}"),
         Text(upstream),
         Text(""),
         Text.assemble("Dockerfiles: ", docker_s),
