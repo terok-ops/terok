@@ -58,7 +58,7 @@ def render_task_details(
     if task.work_status:
         work_text = task.work_status
         if task.work_message:
-            work_text += f" \u2014 \u201c{task.work_message}\u201d"
+            work_text += f' \u2014 "{task.work_message}"'
         lines.append(Text(f"Work:      {work_text}"))
     lines.append(Text(f"Workspace: {task.workspace}"))
     if task.status == "running" and image_old:
