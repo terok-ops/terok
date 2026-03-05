@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 if TYPE_CHECKING:
     from .tasks import TaskMeta
 
@@ -93,22 +95,20 @@ def has_gpu(project: Any) -> bool:
 
     Accepts any object with a ``root`` attribute pointing to the project
     directory (typically a ``Project`` instance).  Returns ``False`` on
-    any error.
+    any I/O or parse error.
     """
+    root = getattr(project, "root", None)
+    if root is None:
+        return False
     try:
-        import yaml
-
-        root = getattr(project, "root", None)
-        if root is None:
-            return False
         cfg = yaml.safe_load((root / "project.yml").read_text()) or {}
-        gpus = (cfg.get("run") or {}).get("gpus")
-        if isinstance(gpus, str):
-            return gpus.lower() == "all"
-        if isinstance(gpus, bool):
-            return gpus
-    except Exception:
-        pass
+    except (OSError, TypeError, AttributeError, yaml.YAMLError):
+        return False
+    gpus = (cfg.get("run") or {}).get("gpus")
+    if isinstance(gpus, str):
+        return gpus.lower() == "all"
+    if isinstance(gpus, bool):
+        return gpus
     return False
 
 

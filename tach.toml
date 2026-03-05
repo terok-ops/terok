@@ -43,6 +43,7 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.facade",
+    "terok.lib.util.emoji",
     "terok.lib.wizards.new_project",
     "terok.ui_utils.terminal",
 ]
