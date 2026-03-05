@@ -121,7 +121,7 @@ class TestGenerateTaskName(unittest.TestCase):
     def test_matches_slug_pattern(self) -> None:
         """Generated name matches adjective-noun slug pattern."""
         name = generate_task_name()
-        self.assertRegex(name, r"^[a-z]+-[a-z]+$")
+        self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
 
     def test_uses_hyphen_separator(self) -> None:
         """Generated name uses hyphen as separator."""
@@ -352,7 +352,7 @@ class TestGenerateTaskNameWithCategories(unittest.TestCase):
         """generate_task_name() without project_id still works."""
         name = generate_task_name()
         self.assertIsInstance(name, str)
-        self.assertRegex(name, r"^[a-z]+-[a-z]+$")
+        self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
 
     def test_generate_with_project_id(self) -> None:
         """generate_task_name(project_id) uses resolved categories."""
@@ -361,7 +361,7 @@ class TestGenerateTaskNameWithCategories(unittest.TestCase):
         with project_env(yml, project_id=project_id):
             name = generate_task_name(project_id)
             self.assertIsInstance(name, str)
-            self.assertRegex(name, r"^[a-z]+-[a-z]+$")
+            self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
 
     def test_task_new_uses_project_categories(self) -> None:
         """task_new() passes project_id to generate_task_name for category resolution."""

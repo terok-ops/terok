@@ -33,6 +33,7 @@ from ...ui_utils.terminal import (
     yes_no as _yes_no,
 )
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
+from .completions import is_completion_installed as _is_completion_installed
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -261,3 +262,10 @@ def _print_config() -> None:
         val = os.environ.get(var)
         if val is not None:
             print(f"- {var}={_gray(val, color_enabled)}")
+
+    # Shell completions
+    comp_installed = _is_completion_installed()
+    print(
+        f"Shell completions: {_yes_no(comp_installed, color_enabled)}"
+        + ("" if comp_installed else "  (run: terokctl completions bash >> ~/.bashrc)")
+    )

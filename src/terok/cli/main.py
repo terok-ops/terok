@@ -15,7 +15,7 @@ import argparse
 
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
-from .commands import info, project, setup, task
+from .commands import completions, info, project, setup, task
 
 # Optional: bash completion via argcomplete
 try:
@@ -24,7 +24,13 @@ except ImportError:  # pragma: no cover - optional dep
     argcomplete = None  # type: ignore
 
 # Dispatch chain — tried in order; first True wins.
-_DISPATCHERS = [task.dispatch, project.dispatch, setup.dispatch, info.dispatch]
+_DISPATCHERS = [
+    task.dispatch,
+    project.dispatch,
+    setup.dispatch,
+    info.dispatch,
+    completions.dispatch,
+]
 
 
 def main() -> None:
@@ -44,11 +50,14 @@ def main() -> None:
             "  3. Login:  terokctl login <project_id> <task_id>\n"
             "\n"
             "Step-by-step (order of operations):\n"
-            "  Online (HTTPS): generate → build → gate-sync (optional) → task new → task run-*\n"
-            "  Online (SSH):   generate → build → ssh-init → gate-sync (recommended) "
-            "→ task new → task run-*\n"
-            "  Gatekeeping:    generate → build → ssh-init → gate-sync (required) "
-            "→ task new → task run-*\n"
+            "  Online (HTTPS): generate → build → gate-sync (optional)"
+            " → task new → task run-*\n"
+            "  Online (SSH):   generate → build → ssh-init"
+            " → gate-sync (recommended) → task new → task run-*\n"
+            "  Gatekeeping:    generate → build → ssh-init"
+            " → gate-sync (required) → task new → task run-*\n"
+            "\n"
+            "Tip: enable tab completion with: terokctl completions bash >> ~/.bashrc\n"
         ),
     )
     parser.add_argument(
@@ -75,6 +84,7 @@ def main() -> None:
     project.register(sub)
     setup.register(sub)
     info.register(sub)
+    completions.register(sub)
 
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration

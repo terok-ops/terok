@@ -35,20 +35,23 @@ pip install '.[tui]'
 
 After install, you should have console scripts: `terok`, `terok`
 
-### Bash Completion
+### Shell Completion
 
-Bash completion is powered by argcomplete.
+Tab completion is powered by [argcomplete](https://github.com/kislyuk/argcomplete).
+Use the built-in `completions` subcommand to generate the appropriate script:
 
-- If your system has bash-completion installed (common on most distros), completion is enabled automatically
-- Manual setup:
-  - One-time system-wide: `sudo activate-global-python-argcomplete`
-  - Per-shell: `eval "$(register-python-argcomplete terok)"`
-  - Per-user: add to `~/.bashrc`: `eval "$(register-python-argcomplete terok)"`
-- Zsh users:
-  ```bash
-  autoload -U bashcompinit && bashcompinit
-  eval "$(register-python-argcomplete --shell zsh terok)"
-  ```
+```bash
+# Bash — append to ~/.bashrc (permanent)
+terokctl completions bash >> ~/.bashrc
+
+# Zsh — append to ~/.zshrc
+terokctl completions zsh >> ~/.zshrc
+
+# Fish
+terokctl completions fish > ~/.config/fish/completions/terokctl.fish
+```
+
+Run `terokctl config` to check whether completions are detected as installed.
 
 ### Custom Install Paths
 
