@@ -19,6 +19,11 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends nodejs; \
     rm -rf /var/lib/apt/lists/*
 
+# Code exploration tools (fd-find, jq, wget are apt; yq and ast-grep need separate install)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      fd-find jq wget \
+    && rm -rf /var/lib/apt/lists/*
+
 # yq (YAML processor, like jq but for YAML)
 RUN set -eux; \
     ARCH=$(dpkg --print-architecture); \

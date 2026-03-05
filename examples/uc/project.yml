@@ -15,6 +15,13 @@ ssh:
   key_name: "id_ed25519_uc"
   host_key_dir: "/virt/podman/envs/_ssh-config-uc"
 
+agent:
+  instructions:
+    - _inherit
+    - |
+      ## Extra tools
+      - **ctags** (Universal Ctags) is installed. Run `ctags -R --languages=C,C++ /workspace/src` to index the codebase.
+
 # Default agent for this project (used for Web UI, and potentially CLI in the future).
 # Overrides the global config. Can also be set via DEFAULT_AGENT env var or --backend CLI flag.
 # Valid values: codex, claude, mistral

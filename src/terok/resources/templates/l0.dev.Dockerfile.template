@@ -14,9 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg git locales openssh-client sudo \
       ripgrep vim tmux \
-      fd-find jq wget \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -s "$(which fdfind)" /usr/local/bin/fd
+    && rm -rf /var/lib/apt/lists/*
 
 # Ensure en_US.UTF-8 exists so bash and agent-spawned shells can always set LC_ALL safely.
 RUN set -eux; \
