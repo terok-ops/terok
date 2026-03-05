@@ -218,12 +218,21 @@ panel edges misalign — and **cannot be fixed by padding alone**.
 1. All emojis must be **natively wide** (`East_Asian_Width=W`,
    `Emoji_Presentation=Yes`).  No VS16 (U+FE0F) sequences.
 2. Verify candidates: `python3 -c "import unicodedata; print(unicodedata.east_asian_width('🟢'))"` → must print `W`.
-3. Use `draw_emoji()` from `terok.lib.util.emoji` when rendering emojis in
-   list labels or aligned output (both TUI and CLI).
-4. Emoji definitions live in `terok.lib.containers.tasks` (`STATUS_DISPLAY`,
-   `MODE_DISPLAY`, `WEB_BACKEND_EMOJI`).
-5. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
-   natively 2 cells wide — adding a VS16 emoji will fail CI.
+3. **Never use emoji literals directly in code.** Always define emojis in a
+   central dict whose values carry both `emoji` and `label` attributes (e.g.
+   `StatusInfo`, `ModeInfo`, `ProjectBadge`, `WorkStatusInfo`).
+4. Always render via `render_emoji(info)` from `terok.lib.util.emoji`.
+   Pass the dict entry directly — the function reads `.emoji` and `.label`
+   itself.  No `width` or `label` parameter needed at the call site.
+5. Emoji definitions live in `terok.lib.containers.task_display`
+   (`STATUS_DISPLAY`, `MODE_DISPLAY`, `WEB_BACKEND_DISPLAY`,
+   `SECURITY_CLASS_DISPLAY`, `GPU_DISPLAY`) and
+   `terok.lib.containers.work_status` (`WORK_STATUS_DISPLAY`).
+6. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
+   natively 2 cells wide — adding a VS16 emoji will fail CI.  Tests also
+   verify that all emoji dicts have non-empty labels for `--no-emoji` mode.
+7. Emojis are **on by default**.  Pass `--no-emoji` to `terok` (TUI) or
+   `terokctl` (CLI) to replace all emojis with `[label]` text badges.
 
 See `src/terok/lib/util/emoji.py` module docstring for full background,
 references, and future terminal developments to watch (Kitty text sizing

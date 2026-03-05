@@ -27,7 +27,7 @@ from ..util.ansi import (
     supports_color as _supports_color,
     yellow as _yellow,
 )
-from ..util.emoji import draw_emoji
+from ..util.emoji import render_emoji
 from ..util.fs import ensure_dir
 from ..util.logging_utils import _log_debug
 from .runtime import (
@@ -37,10 +37,9 @@ from .runtime import (
     stop_task_containers,
 )
 from .task_display import (
-    MODE_DISPLAY,
     STATUS_DISPLAY,
     effective_status,
-    mode_emoji,
+    mode_info,
 )
 from .work_status import read_work_status
 
@@ -693,13 +692,13 @@ def task_status(project_id: str, task_id: str) -> None:
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
 
     status_color = {"green": _green, "yellow": _yellow, "red": _red}.get(info.color, _yellow)
-    m_emoji = draw_emoji(mode_emoji(task))
-    mode_info = MODE_DISPLAY.get(mode, MODE_DISPLAY[None])
+    m = mode_info(task)
+    m_emoji = render_emoji(m)
 
     print(f"Task {task_id}:")
     print(f"  Name:            {task.name}")
-    print(f"  Status:          {draw_emoji(info.emoji)} {status_color(info.label, color_enabled)}")
-    print(f"  Mode:            {m_emoji} {mode_info.label or 'not set'}")
+    print(f"  Status:          {render_emoji(info)} {status_color(info.label, color_enabled)}")
+    print(f"  Mode:            {m_emoji} {m.label or 'not set'}")
     if cname:
         print(f"  Container:       {cname}")
     if cs:

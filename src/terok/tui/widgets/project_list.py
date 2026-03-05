@@ -12,8 +12,9 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, ListItem, ListView, Static
 
+from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.core.projects import Project
-from ...lib.util.emoji import draw_emoji
+from ...lib.util.emoji import render_emoji
 
 
 class ProjectListItem(ListItem):
@@ -57,13 +58,9 @@ class ProjectList(ListView):
         self._generation += 1
         self.clear()
         for proj in projects:
-            # Use emojis instead of text labels
-            if proj.security_class == "gatekeeping":
-                security_emoji = "🚪"  # Door emoji for gatekeeping
-            else:
-                security_emoji = "🌐"  # Globe emoji for online
-            emoji_display = draw_emoji(security_emoji)
-            label = f"{emoji_display} {proj.id}"
+            sec = SECURITY_CLASS_DISPLAY.get(proj.security_class, SECURITY_CLASS_DISPLAY["online"])
+            gpu = GPU_DISPLAY[has_gpu(proj)]
+            label = f"{render_emoji(sec)}{render_emoji(gpu)} {proj.id}"
             self.append(ProjectListItem(proj.id, label, self._generation))
 
     def select_project(self, project_id: str) -> None:

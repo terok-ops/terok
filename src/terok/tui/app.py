@@ -848,8 +848,19 @@ if _HAS_TEXTUAL:
             default=False,
             help="Enable experimental features (e.g. web tasks)",
         )
+        parser.add_argument(
+            "--no-emoji",
+            action="store_true",
+            default=False,
+            help="Replace emojis with text labels (e.g. [gate] instead of \U0001f6aa)",
+        )
         args = parser.parse_args()
         set_experimental(args.experimental)
+
+        if args.no_emoji:
+            from ..lib.util.emoji import set_emoji_enabled
+
+            set_emoji_enabled(False)
 
         # Determine tmux mode: explicit flag > config default > False
         use_tmux = (
