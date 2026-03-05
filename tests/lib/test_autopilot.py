@@ -336,7 +336,7 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
         self.assertIn(
-            'export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE='
+            "export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE="
             '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"',
             wrapper,
         )
