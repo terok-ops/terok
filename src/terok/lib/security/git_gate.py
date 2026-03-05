@@ -21,7 +21,7 @@ from ..core.projects import effective_ssh_key_name, list_projects, load_project
 class GateStalenessInfo:
     """Result of comparing gate vs upstream."""
 
-    branch: str
+    branch: str | None
     gate_head: str | None
     upstream_head: str | None
     is_stale: bool
