@@ -16,7 +16,11 @@ from pathlib import Path
 from terok.gate.server import (
     _ROUTE,
     TokenStore,
+    _extract_basic_auth_token,
     _make_handler_class,
+    _parse_cgi_headers,
+    _parse_content_length,
+    _validate_token_data,
 )
 
 
@@ -68,6 +72,113 @@ class TestTokenStore(unittest.TestCase):
 
             self.assertIsNone(store.validate("t1"))
             self.assertEqual(store.validate("t2"), "p2")
+
+    def test_malformed_token_entry_skipped(self) -> None:
+        """Token entries with wrong structure are ignored."""
+        with tempfile.TemporaryDirectory() as td:
+            tf = Path(td) / "tokens.json"
+            tf.write_text(json.dumps({"bad": "not-a-dict", "ok": {"project": "p", "task": "1"}}))
+            store = TokenStore(tf)
+            self.assertIsNone(store.validate("bad"))
+            self.assertEqual(store.validate("ok"), "p")
+
+    def test_non_dict_json_returns_none(self) -> None:
+        """Non-dict top-level JSON is treated as empty."""
+        with tempfile.TemporaryDirectory() as td:
+            tf = Path(td) / "tokens.json"
+            tf.write_text(json.dumps(["a", "b"]))
+            store = TokenStore(tf)
+            self.assertIsNone(store.validate("a"))
+
+
+class TestValidateTokenData(unittest.TestCase):
+    """Tests for _validate_token_data."""
+
+    def test_valid_data(self) -> None:
+        data = {"t1": {"project": "p", "task": "1"}}
+        self.assertEqual(_validate_token_data(data), data)
+
+    def test_non_dict_returns_empty(self) -> None:
+        self.assertEqual(_validate_token_data([1, 2]), {})
+        self.assertEqual(_validate_token_data("string"), {})
+
+    def test_skips_non_dict_values(self) -> None:
+        data = {"good": {"project": "p", "task": "1"}, "bad": "string"}
+        result = _validate_token_data(data)
+        self.assertEqual(len(result), 1)
+        self.assertIn("good", result)
+
+    def test_skips_missing_fields(self) -> None:
+        data = {"no_task": {"project": "p"}, "no_proj": {"task": "1"}}
+        self.assertEqual(_validate_token_data(data), {})
+
+
+class TestExtractBasicAuthToken(unittest.TestCase):
+    """Tests for _extract_basic_auth_token."""
+
+    def test_valid_basic_auth(self) -> None:
+        creds = base64.b64encode(b"mytoken:password").decode()
+        self.assertEqual(_extract_basic_auth_token(f"Basic {creds}"), "mytoken")
+
+    def test_none_header(self) -> None:
+        self.assertIsNone(_extract_basic_auth_token(None))
+
+    def test_non_basic_scheme(self) -> None:
+        self.assertIsNone(_extract_basic_auth_token("Bearer xyz"))
+
+    def test_invalid_base64(self) -> None:
+        self.assertIsNone(_extract_basic_auth_token("Basic !!!"))
+
+    def test_no_colon(self) -> None:
+        creds = base64.b64encode(b"nocolon").decode()
+        self.assertIsNone(_extract_basic_auth_token(f"Basic {creds}"))
+
+    def test_empty_username(self) -> None:
+        creds = base64.b64encode(b":password").decode()
+        self.assertIsNone(_extract_basic_auth_token(f"Basic {creds}"))
+
+
+class TestParseContentLength(unittest.TestCase):
+    """Tests for _parse_content_length."""
+
+    def test_valid_length(self) -> None:
+        length, err = _parse_content_length("42")
+        self.assertEqual(length, 42)
+        self.assertIsNone(err)
+
+    def test_none_header(self) -> None:
+        length, err = _parse_content_length(None)
+        self.assertEqual(length, 0)
+        self.assertIsNone(err)
+
+    def test_negative(self) -> None:
+        length, err = _parse_content_length("-5")
+        self.assertIsNotNone(err)
+
+    def test_non_numeric(self) -> None:
+        length, err = _parse_content_length("abc")
+        self.assertIsNotNone(err)
+
+
+class TestParseCgiHeaders(unittest.TestCase):
+    """Tests for _parse_cgi_headers."""
+
+    def test_parses_status_and_headers(self) -> None:
+        stdout = io.BytesIO(b"Status: 404 Not Found\r\nContent-Type: text/plain\r\n\r\nbody")
+        status, headers = _parse_cgi_headers(stdout)
+        self.assertEqual(status, 404)
+        self.assertEqual(headers, [("Content-Type", "text/plain")])
+
+    def test_defaults_to_200(self) -> None:
+        stdout = io.BytesIO(b"Content-Type: text/html\r\n\r\n")
+        status, headers = _parse_cgi_headers(stdout)
+        self.assertEqual(status, 200)
+
+    def test_empty_response(self) -> None:
+        stdout = io.BytesIO(b"\r\n")
+        status, headers = _parse_cgi_headers(stdout)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers, [])
 
 
 class TestRouting(unittest.TestCase):
@@ -195,7 +306,6 @@ class TestAuth(unittest.TestCase):
         mock_proc = unittest.mock.Mock()
         mock_proc.stdin = io.BytesIO()
         mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\nContent-Type: text/plain\r\n\r\nok")
-        mock_proc.stderr = io.BytesIO()
         mock_proc.wait.return_value = 0
         mock_popen.return_value = mock_proc
 

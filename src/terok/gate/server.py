@@ -34,13 +34,29 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 # ---------------------------------------------------------------------------
-# Token store — inlined read-only logic (~15 lines), no terok imports
+# Token store — inlined read-only logic, no terok imports
 # ---------------------------------------------------------------------------
 
 _ROUTE = re.compile(
     r"^/(?P<repo>[A-Za-z0-9._-]+\.git)"
     r"(?P<path>/info/refs|/git-upload-pack|/git-receive-pack|/HEAD)$"
 )
+
+_CGI_WAIT_TIMEOUT = 30
+
+
+def _validate_token_data(data: object) -> dict[str, dict[str, str]]:
+    """Filter parsed JSON to only valid ``{token: {project, task}}`` entries."""
+    if not isinstance(data, dict):
+        return {}
+    return {
+        tok: info
+        for tok, info in data.items()
+        if isinstance(tok, str)
+        and isinstance(info, dict)
+        and isinstance(info.get("project"), str)
+        and isinstance(info.get("task"), str)
+    }
 
 
 class TokenStore:
@@ -62,9 +78,10 @@ class TokenStore:
             return
         if st.st_mtime != self._mtime:
             try:
-                self._tokens = json.loads(self._path.read_text(encoding="utf-8"))
+                data = json.loads(self._path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
-                self._tokens = {}
+                data = None
+            self._tokens = _validate_token_data(data)
             self._mtime = st.st_mtime
 
     def validate(self, token: str) -> str | None:
@@ -76,7 +93,119 @@ class TokenStore:
         info = self._tokens.get(token)
         if info is None:
             return None
-        return info.get("project")
+        project = info.get("project")
+        return project if isinstance(project, str) else None
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers — extracted to reduce handler cognitive complexity
+# ---------------------------------------------------------------------------
+
+
+def _extract_basic_auth_token(auth_header: str | None) -> str | None:
+    """Parse ``Authorization: Basic`` header, return username (token)."""
+    if not auth_header or not auth_header.startswith("Basic "):
+        return None
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+    except Exception:
+        return None
+    if ":" not in decoded:
+        return None
+    username, _password = decoded.split(":", 1)
+    return username or None
+
+
+def _parse_content_length(header: str | None) -> tuple[int, str | None]:
+    """Validate a Content-Length header value.
+
+    Returns ``(length, None)`` on success or ``(0, error_message)`` on failure.
+    """
+    if not header:
+        return 0, None
+    try:
+        length = int(header)
+        if length < 0:
+            raise ValueError("negative")
+    except ValueError:
+        return 0, "Invalid Content-Length"
+    return length, None
+
+
+def _build_cgi_env(
+    base_path: Path,
+    path_info: str,
+    query_string: str,
+    method: str,
+    content_type: str,
+    protocol: str,
+    content_length: int,
+) -> dict[str, str]:
+    """Build the CGI environment for ``git http-backend``."""
+    env = {
+        "GIT_PROJECT_ROOT": str(base_path),
+        "GIT_HTTP_EXPORT_ALL": "1",
+        "PATH_INFO": path_info,
+        "QUERY_STRING": query_string,
+        "REQUEST_METHOD": method,
+        "CONTENT_TYPE": content_type,
+        "SERVER_PROTOCOL": protocol,
+        "REMOTE_USER": "token",
+        # Defense in depth: disable hooks
+        "GIT_CONFIG_KEY_0": "core.hooksPath",
+        "GIT_CONFIG_VALUE_0": "/dev/null",
+        "GIT_CONFIG_COUNT": "1",
+    }
+    if content_length:
+        env["CONTENT_LENGTH"] = str(content_length)
+    return env
+
+
+def _stream_request_body(rfile: object, stdin: object, remaining: int) -> None:
+    """Stream *remaining* bytes from *rfile* to CGI *stdin*."""
+    if remaining <= 0:
+        return
+    try:
+        while remaining > 0:
+            chunk = rfile.read(min(remaining, 8192))
+            if not chunk:
+                break
+            stdin.write(chunk)
+            remaining -= len(chunk)
+    except BrokenPipeError:
+        pass  # CGI process closed stdin early
+
+
+def _parse_cgi_headers(stdout: object) -> tuple[int, list[tuple[str, str]]]:
+    """Read CGI response headers from *stdout*.
+
+    Returns ``(status_code, [(header_name, header_value), ...])``.
+    """
+    status_code = 200
+    headers: list[tuple[str, str]] = []
+    while True:
+        line = stdout.readline()
+        if not line or line in (b"\r\n", b"\n"):
+            break
+        header_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
+        if header_line.startswith("Status:"):
+            try:
+                status_code = int(header_line.split(":", 1)[1].strip().split()[0])
+            except (ValueError, IndexError):
+                pass
+        elif ":" in header_line:
+            key, val = header_line.split(":", 1)
+            headers.append((key.strip(), val.strip()))
+    return status_code, headers
+
+
+def _stream_response_body(stdout: object, wfile: object) -> None:
+    """Stream CGI response body from *stdout* to *wfile*."""
+    while True:
+        chunk = stdout.read(8192)
+        if not chunk:
+            break
+        wfile.write(chunk)
 
 
 # ---------------------------------------------------------------------------
@@ -102,13 +231,8 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
 
         def _handle(self) -> None:
             """Route, authenticate, and delegate to CGI."""
-            # Parse path and query string
-            path = self.path
-            query_string = ""
-            if "?" in path:
-                path, query_string = path.split("?", 1)
+            path, query_string = self._split_path()
 
-            # 1. Route match
             m = _ROUTE.match(path)
             if not m:
                 self.send_error(404, "Not Found")
@@ -117,132 +241,76 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
             repo = m.group("repo")
             path_info = f"/{repo}{m.group('path')}"
 
-            # 2. Extract token from Basic Auth
-            token = self._extract_token()
+            token = _extract_basic_auth_token(self.headers.get("Authorization"))
             if token is None:
-                self.send_response(401)
-                self.send_header("WWW-Authenticate", 'Basic realm="terok gate"')
-                self.send_header("Content-Type", "text/plain")
-                self.end_headers()
-                self.wfile.write(b"Authentication required\n")
+                self._send_auth_required()
                 return
 
-            # 3. Validate token → project
             project_id = token_store.validate(token)
-            if project_id is None:
+            if project_id is None or repo != f"{project_id}.git":
                 self.send_error(403, "Forbidden")
                 return
 
-            # 4. Check project matches requested repo
-            expected_repo = f"{project_id}.git"
-            if repo != expected_repo:
-                self.send_error(403, "Forbidden")
-                return
+            self._run_cgi(path_info, query_string)
 
-            # 5. Delegate to git http-backend
-            self._run_cgi(repo, path_info, query_string)
+        def _split_path(self) -> tuple[str, str]:
+            """Split request path into path and query string."""
+            if "?" in self.path:
+                return self.path.split("?", 1)
+            return self.path, ""
 
-        def _extract_token(self) -> str | None:
-            """Parse ``Authorization: Basic`` header, return username (token)."""
-            auth = self.headers.get("Authorization")
-            if not auth:
-                return None
-            if not auth.startswith("Basic "):
-                return None
-            try:
-                decoded = base64.b64decode(auth[6:]).decode("utf-8")
-            except Exception:
-                return None
-            # username:password — token is the username
-            if ":" not in decoded:
-                return None
-            username, _password = decoded.split(":", 1)
-            return username or None
+        def _send_auth_required(self) -> None:
+            """Send a 401 response with WWW-Authenticate header."""
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="terok gate"')
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"Authentication required\n")
 
-        def _run_cgi(self, repo: str, path_info: str, query_string: str) -> None:
+        def _run_cgi(self, path_info: str, query_string: str) -> None:
             """Execute ``git http-backend`` and stream the response."""
-            cgi_env = {
-                "GIT_PROJECT_ROOT": str(base_path),
-                "GIT_HTTP_EXPORT_ALL": "1",
-                "PATH_INFO": path_info,
-                "QUERY_STRING": query_string,
-                "REQUEST_METHOD": self.command,
-                "CONTENT_TYPE": self.headers.get("Content-Type", ""),
-                "SERVER_PROTOCOL": self.request_version,
-                "REMOTE_USER": "token",
-                # Defense in depth: disable hooks
-                "GIT_CONFIG_KEY_0": "core.hooksPath",
-                "GIT_CONFIG_VALUE_0": "/dev/null",
-                "GIT_CONFIG_COUNT": "1",
-            }
-            content_length = self.headers.get("Content-Length")
-            remaining = 0
-            if content_length:
-                try:
-                    remaining = int(content_length)
-                    if remaining < 0:
-                        raise ValueError("negative")
-                except ValueError:
-                    self.send_error(400, "Invalid Content-Length")
-                    return
-                cgi_env["CONTENT_LENGTH"] = str(remaining)
+            content_length, err = _parse_content_length(self.headers.get("Content-Length"))
+            if err:
+                self.send_error(400, err)
+                return
+
+            cgi_env = _build_cgi_env(
+                base_path,
+                path_info,
+                query_string,
+                self.command,
+                self.headers.get("Content-Type", ""),
+                self.request_version,
+                content_length,
+            )
 
             try:
                 proc = subprocess.Popen(
                     ["git", "http-backend"],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
                     env=cgi_env,
                 )
             except FileNotFoundError:
                 self.send_error(500, "git not found")
                 return
 
-            # Stream request body to CGI stdin
-            if remaining > 0:
-                try:
-                    while remaining > 0:
-                        chunk = self.rfile.read(min(remaining, 8192))
-                        if not chunk:
-                            break
-                        proc.stdin.write(chunk)
-                        remaining -= len(chunk)
-                except BrokenPipeError:
-                    pass  # CGI process closed stdin early
+            _stream_request_body(self.rfile, proc.stdin, content_length)
             proc.stdin.close()
 
-            # Parse CGI response headers
-            stdout = proc.stdout
-            status_code = 200
-            headers: list[tuple[str, str]] = []
-            while True:
-                line = stdout.readline()
-                if not line or line in (b"\r\n", b"\n"):
-                    break
-                header_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
-                if header_line.startswith("Status:"):
-                    try:
-                        status_code = int(header_line.split(":", 1)[1].strip().split()[0])
-                    except (ValueError, IndexError):
-                        pass
-                elif ":" in header_line:
-                    key, val = header_line.split(":", 1)
-                    headers.append((key.strip(), val.strip()))
-
+            status_code, headers = _parse_cgi_headers(proc.stdout)
             self.send_response(status_code)
             for key, val in headers:
                 self.send_header(key, val)
             self.end_headers()
 
-            # Stream CGI body
-            while True:
-                chunk = stdout.read(8192)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
+            _stream_response_body(proc.stdout, self.wfile)
 
-            proc.wait()
+            try:
+                proc.wait(timeout=_CGI_WAIT_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
         def log_message(self, _format: str, *args: object) -> None:
             """Suppress default stderr logging."""
