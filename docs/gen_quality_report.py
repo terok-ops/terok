@@ -90,26 +90,53 @@ def _section_complexity() -> str:
 
     # Summary stats
     total = len(functions)
+    scores = [int(f["complexity"]) for f in functions]
     over_threshold = [f for f in functions if f["complexity"] > COMPLEXITY_THRESHOLD]
     max_c = functions[0]["complexity"] if functions else 0
-    avg_c = sum(f["complexity"] for f in functions) / total if total else 0
+    avg_c = sum(scores) / total if total else 0
+    median_c = sorted(scores)[total // 2] if total else 0
+    pct_within = (total - len(over_threshold)) / total * 100 if total else 0
 
     lines = [
         f"- **Functions analyzed:** {total}\n",
-        f"- **Average complexity:** {avg_c:.1f}\n",
-        f"- **Max complexity:** {max_c}\n",
-        f"- **Exceeding threshold ({COMPLEXITY_THRESHOLD}):** {len(over_threshold)}\n",
+        f"- **Median complexity:** {median_c} · **Average:** {avg_c:.1f} · **Max:** {max_c}\n",
+        f"- **Within threshold ({COMPLEXITY_THRESHOLD}):** {pct_within:.0f}%"
+        f" ({total - len(over_threshold)}/{total})\n",
         "\n",
     ]
 
+    # Histogram
+    buckets = [(0, 5), (6, 10), (11, 15), (16, 20), (21, 25), (26, 30), (31, 50), (51, 999)]
+    bar_max = 30  # max bar width in characters
+    bucket_counts = []
+    for lo, hi in buckets:
+        count = sum(1 for s in scores if lo <= s <= hi)
+        bucket_counts.append((lo, hi, count))
+
+    peak = max(c for _, _, c in bucket_counts) if bucket_counts else 1
+
+    lines.append("```\n")
+    for lo, hi, count in bucket_counts:
+        if count == 0 and lo > max(scores):
+            continue
+        label = f"{lo:>3d}–{hi:>3d}" if hi < 999 else f"{lo:>3d}+   "
+        bar_len = round(count / peak * bar_max) if peak else 0
+        bar = "█" * bar_len
+        pct = count / total * 100 if total else 0
+        marker = " ◄ threshold" if lo <= COMPLEXITY_THRESHOLD <= hi else ""
+        lines.append(f"  {label} │ {bar:<{bar_max}} {count:>3d} ({pct:4.1f}%){marker}\n")
+    lines.append("```\n\n")
+
     if over_threshold:
+        lines.append(f"**{len(over_threshold)} functions exceeding threshold:**\n\n")
         lines.append("| Complexity | Function | File |\n")
         lines.append("|---:|---|---|\n")
         for f in over_threshold:
             lines.append(f"| {f['complexity']} | `{f['function_name']}` | `{f['path']}` |\n")
     else:
         lines.append(
-            f"All functions are within the cognitive complexity threshold of {COMPLEXITY_THRESHOLD}.\n"
+            f"All functions are within the cognitive complexity threshold of"
+            f" {COMPLEXITY_THRESHOLD}.\n"
         )
 
     return "".join(lines)
