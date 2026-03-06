@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=terok git gate socket
+
+[Socket]
+ListenStream=0.0.0.0:{{PORT}}
+Accept=yes
+
+[Install]
+WantedBy=sockets.target

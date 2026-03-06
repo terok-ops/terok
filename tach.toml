@@ -82,6 +82,7 @@ depends_on = [
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.security.auth",
+    "terok.lib.security.gate_server",
     "terok.lib.security.git_gate",
     "terok.lib.security.ssh",
     "terok.lib.util.fs",
@@ -196,7 +197,7 @@ depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils"]
 [[modules]]
 path = "terok.lib.containers.environment"
 layer = "services"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.util.fs"]
 
 # Task port allocation
 [[modules]]
@@ -253,6 +254,12 @@ depends_on = [
     "terok.lib.util.fs",
     "terok.lib.util.template_utils",
 ]
+
+# Gate server lifecycle management
+[[modules]]
+path = "terok.lib.security.gate_server"
+layer = "services"
+depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.util.template_utils"]
 
 # Git gate sync & validation
 [[modules]]
@@ -529,6 +536,22 @@ expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", 
 from = ["terok.lib.containers.image_cleanup"]
 
 [[interfaces]]
+expose = [
+    "GateServerStatus",
+    "get_server_status",
+    "get_gate_base_path",
+    "get_gate_server_port",
+    "install_systemd_units",
+    "uninstall_systemd_units",
+    "start_daemon",
+    "stop_daemon",
+    "is_daemon_running",
+    "is_systemd_available",
+    "ensure_server_reachable",
+]
+from = ["terok.lib.security.gate_server"]
+
+[[interfaces]]
 expose = ["init_project_ssh"]
 from = ["terok.lib.security.ssh"]
 
@@ -570,6 +593,8 @@ expose = [
     "load_global_config",
     "get_global_section",
     "get_global_agent_config",
+    "get_gate_server_port",
+    "get_gate_server_suppress_warning",
     "get_task_name_categories",
     "get_prefix",
     "is_experimental",
@@ -658,6 +683,16 @@ expose = [
     "AUTH_PROVIDERS",
     "AuthProvider",
     "authenticate",
+    "GateServerStatus",
+    "get_server_status",
+    "get_gate_base_path",
+    "get_gate_server_port",
+    "install_systemd_units",
+    "uninstall_systemd_units",
+    "start_daemon",
+    "stop_daemon",
+    "is_daemon_running",
+    "is_systemd_available",
     "compare_gate_vs_upstream",
     "sync_gate_branches",
     "get_gate_last_commit",

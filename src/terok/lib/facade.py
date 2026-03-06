@@ -50,6 +50,18 @@ from .containers.tasks import (  # noqa: F401 — re-exported public API
 from .core.config import build_root, deleted_projects_dir, get_envs_base_dir, state_root
 from .core.projects import load_project
 from .security.auth import AUTH_PROVIDERS, AuthProvider, authenticate
+from .security.gate_server import (  # noqa: F401 — re-exported public API
+    GateServerStatus,
+    get_gate_base_path,
+    get_gate_server_port,
+    get_server_status,
+    install_systemd_units,
+    is_daemon_running,
+    is_systemd_available,
+    start_daemon,
+    stop_daemon,
+    uninstall_systemd_units,
+)
 from .security.git_gate import (
     GateStalenessInfo,
     compare_gate_vs_upstream,
@@ -267,6 +279,16 @@ __all__ = [
     "AUTH_PROVIDERS",
     "AuthProvider",
     "authenticate",
+    # Gate server
+    "GateServerStatus",
+    "get_server_status",
+    "get_gate_base_path",
+    "get_gate_server_port",
+    "install_systemd_units",
+    "uninstall_systemd_units",
+    "start_daemon",
+    "stop_daemon",
+    "is_daemon_running",
     # Git gate
     "compare_gate_vs_upstream",
     "sync_gate_branches",

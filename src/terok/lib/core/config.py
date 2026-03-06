@@ -279,6 +279,16 @@ def get_task_name_categories() -> list[str] | None:
     return None
 
 
+def get_gate_server_port() -> int:
+    """Return the gate server port from global config (default 9418)."""
+    return int(get_global_section("gate_server").get("port", 9418))
+
+
+def get_gate_server_suppress_warning() -> bool:
+    """Return whether to suppress the systemd suggestion warning."""
+    return bool(get_global_section("gate_server").get("suppress_systemd_warning", False))
+
+
 def get_global_agent_config() -> dict[str, Any]:
     """Return the ``agent:`` section from the global config, or ``{}``."""
     return get_global_section("agent")
