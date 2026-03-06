@@ -142,12 +142,16 @@ def _build_cgi_env(
     content_type: str,
     protocol: str,
     content_length: int,
+    http_headers: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Build the CGI environment for ``git http-backend``.
 
     Inherits ``PATH`` and ``HOME`` from the parent process so that
     ``git http-backend`` can locate git sub-commands (e.g. ``git-upload-pack``)
     and read user config.
+
+    *http_headers* maps CGI variable names (e.g. ``HTTP_CONTENT_ENCODING``) to
+    their values.  Only non-empty values are included.
     """
     env: dict[str, str] = {}
     # Inherit essential system variables
@@ -173,6 +177,10 @@ def _build_cgi_env(
     )
     if content_length:
         env["CONTENT_LENGTH"] = str(content_length)
+    if http_headers:
+        for cgi_key, val in http_headers.items():
+            if val:
+                env[cgi_key] = val
     return env
 
 
@@ -289,6 +297,18 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 self.send_error(400, err)
                 return
 
+            # Forward HTTP headers that git http-backend needs as CGI variables.
+            # Content-Encoding: git client gzip-compresses POST bodies;
+            # http-backend uses HTTP_CONTENT_ENCODING to know when to inflate.
+            # Git-Protocol: protocol v2 negotiation header.
+            http_headers: dict[str, str] = {}
+            content_encoding = self.headers.get("Content-Encoding")
+            if content_encoding:
+                http_headers["HTTP_CONTENT_ENCODING"] = content_encoding
+            git_protocol = self.headers.get("Git-Protocol")
+            if git_protocol:
+                http_headers["HTTP_GIT_PROTOCOL"] = git_protocol
+
             cgi_env = _build_cgi_env(
                 base_path,
                 path_info,
@@ -297,6 +317,7 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 self.headers.get("Content-Type", ""),
                 self.request_version,
                 content_length,
+                http_headers=http_headers,
             )
 
             try:
@@ -462,6 +483,8 @@ def main() -> None:
     parser.add_argument("--pid-file", default=None, help="PID file path (daemon mode)")
 
     args = parser.parse_args()
+    if args.inetd and args.detach:
+        parser.error("--inetd and --detach are mutually exclusive")
     _configure_logging(daemon=args.detach)
 
     base_path = Path(args.base_path)

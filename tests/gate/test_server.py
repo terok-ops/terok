@@ -364,6 +364,63 @@ class TestAuth(unittest.TestCase):
         )
         self.assertEqual(code, 400)
 
+    @unittest.mock.patch("subprocess.Popen")
+    def test_content_encoding_forwarded(self, mock_popen: unittest.mock.Mock) -> None:
+        """Content-Encoding header is forwarded as HTTP_CONTENT_ENCODING."""
+        mock_proc = unittest.mock.Mock()
+        mock_proc.stdin = io.BytesIO()
+        mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\n\r\n")
+        mock_proc.stderr = io.BytesIO(b"")
+        mock_proc.wait.return_value = 0
+        mock_popen.return_value = mock_proc
+
+        code, _ = self._make_request(
+            "/proj-a.git/git-upload-pack",
+            token="validtoken",
+            method="POST",
+            extra_headers="Content-Encoding: gzip\r\nContent-Length: 0\r\n",
+        )
+        self.assertEqual(code, 200)
+        cgi_env = mock_popen.call_args[1]["env"]
+        self.assertEqual(cgi_env["HTTP_CONTENT_ENCODING"], "gzip")
+
+    @unittest.mock.patch("subprocess.Popen")
+    def test_git_protocol_forwarded(self, mock_popen: unittest.mock.Mock) -> None:
+        """Git-Protocol header is forwarded as HTTP_GIT_PROTOCOL."""
+        mock_proc = unittest.mock.Mock()
+        mock_proc.stdin = io.BytesIO()
+        mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\n\r\n")
+        mock_proc.stderr = io.BytesIO(b"")
+        mock_proc.wait.return_value = 0
+        mock_popen.return_value = mock_proc
+
+        code, _ = self._make_request(
+            "/proj-a.git/info/refs?service=git-upload-pack",
+            token="validtoken",
+            extra_headers="Git-Protocol: version=2\r\n",
+        )
+        self.assertEqual(code, 200)
+        cgi_env = mock_popen.call_args[1]["env"]
+        self.assertEqual(cgi_env["HTTP_GIT_PROTOCOL"], "version=2")
+
+    @unittest.mock.patch("subprocess.Popen")
+    def test_absent_headers_not_in_env(self, mock_popen: unittest.mock.Mock) -> None:
+        """Absent Content-Encoding/Git-Protocol headers are not set in CGI env."""
+        mock_proc = unittest.mock.Mock()
+        mock_proc.stdin = io.BytesIO()
+        mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\n\r\n")
+        mock_proc.stderr = io.BytesIO(b"")
+        mock_proc.wait.return_value = 0
+        mock_popen.return_value = mock_proc
+
+        code, _ = self._make_request(
+            "/proj-a.git/info/refs?service=git-upload-pack", token="validtoken"
+        )
+        self.assertEqual(code, 200)
+        cgi_env = mock_popen.call_args[1]["env"]
+        self.assertNotIn("HTTP_CONTENT_ENCODING", cgi_env)
+        self.assertNotIn("HTTP_GIT_PROTOCOL", cgi_env)
+
 
 class TestDetach(unittest.TestCase):
     """Tests for daemon (detach) mode."""
