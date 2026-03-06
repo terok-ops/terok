@@ -305,6 +305,7 @@ class TestAuth(unittest.TestCase):
         mock_proc = unittest.mock.Mock()
         mock_proc.stdin = io.BytesIO()
         mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\nContent-Type: text/plain\r\n\r\nok")
+        mock_proc.stderr = io.BytesIO(b"")
         mock_proc.wait.return_value = 0
         mock_popen.return_value = mock_proc
 
@@ -321,6 +322,27 @@ class TestAuth(unittest.TestCase):
         # Defense in depth: hooks disabled
         self.assertEqual(cgi_env["GIT_CONFIG_KEY_0"], "core.hooksPath")
         self.assertEqual(cgi_env["GIT_CONFIG_VALUE_0"], "/dev/null")
+
+    @unittest.mock.patch("terok.gate.server._logger")
+    @unittest.mock.patch("subprocess.Popen")
+    def test_cgi_stderr_is_logged(
+        self, mock_popen: unittest.mock.Mock, mock_logger: unittest.mock.Mock
+    ) -> None:
+        """CGI stderr output is logged via the module logger."""
+        mock_proc = unittest.mock.Mock()
+        mock_proc.stdin = io.BytesIO()
+        mock_proc.stdout = io.BytesIO(b"Status: 200 OK\r\n\r\n")
+        mock_proc.stderr = io.BytesIO(b"warning: something happened")
+        mock_proc.wait.return_value = 0
+        mock_popen.return_value = mock_proc
+
+        code, _ = self._make_request(
+            "/proj-a.git/info/refs?service=git-upload-pack", token="validtoken"
+        )
+        self.assertEqual(code, 200)
+        mock_logger.warning.assert_called_once()
+        logged_msg = mock_logger.warning.call_args[0][1]
+        self.assertIn("something happened", logged_msg)
 
     def test_invalid_content_length_returns_400(self) -> None:
         """Malformed Content-Length header returns 400."""

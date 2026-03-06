@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import logging
 import os
 import re
 import signal
@@ -31,6 +32,8 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
+
+_logger = logging.getLogger("terok-gate")
 
 # ---------------------------------------------------------------------------
 # Token store — inlined read-only logic, no terok imports
@@ -140,21 +143,34 @@ def _build_cgi_env(
     protocol: str,
     content_length: int,
 ) -> dict[str, str]:
-    """Build the CGI environment for ``git http-backend``."""
-    env = {
-        "GIT_PROJECT_ROOT": str(base_path),
-        "GIT_HTTP_EXPORT_ALL": "1",
-        "PATH_INFO": path_info,
-        "QUERY_STRING": query_string,
-        "REQUEST_METHOD": method,
-        "CONTENT_TYPE": content_type,
-        "SERVER_PROTOCOL": protocol,
-        "REMOTE_USER": "token",
-        # Defense in depth: disable hooks
-        "GIT_CONFIG_KEY_0": "core.hooksPath",
-        "GIT_CONFIG_VALUE_0": "/dev/null",
-        "GIT_CONFIG_COUNT": "1",
-    }
+    """Build the CGI environment for ``git http-backend``.
+
+    Inherits ``PATH`` and ``HOME`` from the parent process so that
+    ``git http-backend`` can locate git sub-commands (e.g. ``git-upload-pack``)
+    and read user config.
+    """
+    env: dict[str, str] = {}
+    # Inherit essential system variables
+    for key in ("PATH", "HOME", "GIT_EXEC_PATH"):
+        val = os.environ.get(key)
+        if val is not None:
+            env[key] = val
+    env.update(
+        {
+            "GIT_PROJECT_ROOT": str(base_path),
+            "GIT_HTTP_EXPORT_ALL": "1",
+            "PATH_INFO": path_info,
+            "QUERY_STRING": query_string,
+            "REQUEST_METHOD": method,
+            "CONTENT_TYPE": content_type,
+            "SERVER_PROTOCOL": protocol,
+            "REMOTE_USER": "token",
+            # Defense in depth: disable hooks
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": "/dev/null",
+            "GIT_CONFIG_COUNT": "1",
+        }
+    )
     if content_length:
         env["CONTENT_LENGTH"] = str(content_length)
     return env
@@ -288,7 +304,7 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                     ["git", "http-backend"],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     env=cgi_env,
                 )
             except FileNotFoundError:
@@ -309,11 +325,20 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
 
             _stream_response_body(proc.stdout, self.wfile)
 
+            # Safe to read stderr after stdout is fully consumed — no deadlock
+            # risk because git http-backend closes stdout before/with stderr,
+            # and git error messages are always small (well under pipe capacity).
+            stderr_output = proc.stderr.read()
             try:
                 proc.wait(timeout=_CGI_WAIT_TIMEOUT)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
+            if stderr_output:
+                _logger.warning(
+                    "git http-backend: %s",
+                    stderr_output.decode("utf-8", errors="replace").rstrip(),
+                )
 
         def log_message(self, _format: str, *args: object) -> None:
             """Suppress default stderr logging."""
@@ -405,6 +430,24 @@ def _serve_daemon(
 # ---------------------------------------------------------------------------
 
 
+def _configure_logging(*, daemon: bool) -> None:
+    """Set up logging for the gate server.
+
+    In inetd mode, logs go to stderr (captured by systemd journal).
+    In daemon mode, logs go to syslog so they survive the stdio redirect.
+    """
+    if daemon:
+        from logging.handlers import SysLogHandler
+
+        handler: logging.Handler = SysLogHandler(address="/dev/log")
+        handler.setFormatter(logging.Formatter("terok-gate: %(message)s"))
+    else:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+    _logger.addHandler(handler)
+    _logger.setLevel(logging.WARNING)
+
+
 def main() -> None:
     """Parse CLI args and run the gate server in the selected mode."""
     parser = argparse.ArgumentParser(
@@ -419,6 +462,8 @@ def main() -> None:
     parser.add_argument("--pid-file", default=None, help="PID file path (daemon mode)")
 
     args = parser.parse_args()
+    _configure_logging(daemon=args.detach)
+
     base_path = Path(args.base_path)
     token_store = TokenStore(Path(args.token_file))
 
