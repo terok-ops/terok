@@ -58,7 +58,7 @@ make spdx NAME="Your Name" FILES="src/terok/new_file.py"  # Add SPDX header
 ## Coding Standards
 
 - **Style**: Follow ruff configuration in `pyproject.toml`
-- **Line length**: 100 characters (enforced by ruff)
+- **Line length**: 100 characters (ruff formatter target; `E501` is disabled so long strings that cannot be auto-wrapped are tolerated)
 - **Imports**: Sorted with isort (part of ruff)
 - **Type hints**: Use Python 3.12+ type hints
 - **Docstrings**: Required for all public functions, classes, and modules (enforced by `docstr-coverage` at 95% minimum in CI)

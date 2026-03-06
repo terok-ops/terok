@@ -94,7 +94,13 @@ def _section_complexity() -> str:
     over_threshold = [f for f in functions if f["complexity"] > COMPLEXITY_THRESHOLD]
     max_c = functions[0]["complexity"] if functions else 0
     avg_c = sum(scores) / total if total else 0
-    median_c = sorted(scores)[total // 2] if total else 0
+    sorted_scores = sorted(scores)
+    if total == 0:
+        median_c = 0
+    elif total % 2 == 1:
+        median_c = sorted_scores[total // 2]
+    else:
+        median_c = (sorted_scores[total // 2 - 1] + sorted_scores[total // 2]) / 2
     pct_within = (total - len(over_threshold)) / total * 100 if total else 0
 
     lines = [
@@ -274,11 +280,11 @@ def _section_dependency_report() -> str:
     raw_lines = raw.splitlines()
     for i, line in enumerate(raw_lines):
         if line.strip() == "[[modules]]":
-            desc = ""
-            j = i - 1
-            while j >= 0 and raw_lines[j].startswith("#"):
-                desc = raw_lines[j].lstrip("# ").strip()
-                j -= 1
+            desc = (
+                raw_lines[i - 1].lstrip("# ").strip()
+                if i > 0 and raw_lines[i - 1].startswith("#")
+                else ""
+            )
             descriptions.append(desc)
 
     try:
@@ -333,6 +339,8 @@ def _scc_totals(path: Path) -> dict[str, int]:
         return dict(_EMPTY_TOTALS)
     totals = dict(_EMPTY_TOTALS)
     for lang in data:
+        if lang.get("Name", "") in ("Total", "SUM"):
+            continue
         totals["lines"] += lang.get("Lines", 0)
         totals["code"] += lang.get("Code", 0)
         totals["comment"] += lang.get("Comment", 0)
