@@ -105,7 +105,7 @@ terokctl task delete <project> <task_id>   # Delete a task
 terokctl image list [project]              # List terok images
 terokctl image cleanup [--dry-run]         # Remove orphaned images
 terokctl project-delete <project>          # Delete a project
-terokctl completions bash                  # Generate shell completions
+terokctl completions install               # Install shell completions
 ```
 
 ## Tips

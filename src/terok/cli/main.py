@@ -58,7 +58,7 @@ def main() -> None:
             "  Gatekeeping:    generate → build → ssh-init"
             " → gate-sync (required) → task new → task run-*\n"
             "\n"
-            "Tip: enable tab completion with: terokctl completions bash >> ~/.bashrc\n"
+            "Tip: enable tab completion with: terokctl completions install\n"
         ),
     )
     parser.add_argument(

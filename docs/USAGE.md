@@ -48,17 +48,31 @@ Both `terok` and `terokctl` support:
 ### Shell Completion
 
 Tab completion is powered by [argcomplete](https://github.com/kislyuk/argcomplete).
-Use the built-in `completions` subcommand to generate the appropriate script:
+
+**Recommended: auto-install to your shell's completion directory**
 
 ```bash
-# Bash — append to ~/.bashrc (permanent)
-terokctl completions bash >> ~/.bashrc
+# Auto-detect shell from $SHELL and install
+terokctl completions install
 
-# Zsh — append to ~/.zshrc
-terokctl completions zsh >> ~/.zshrc
+# Or specify the shell explicitly
+terokctl completions install --shell bash
+```
 
-# Fish
-terokctl completions fish > ~/.config/fish/completions/terokctl.fish
+Install locations (auto-loaded, no RC file edits needed):
+
+| Shell | Path |
+|-------|------|
+| bash  | `~/.local/share/bash-completion/completions/terokctl` |
+| zsh   | `~/.local/share/zsh/site-functions/_terokctl` |
+| fish  | `~/.config/fish/completions/terokctl.fish` |
+
+**Alternative: print raw completion script**
+
+```bash
+terokctl completions bash   # Print bash completion script to stdout
+terokctl completions zsh    # Print zsh completion script to stdout
+terokctl completions fish   # Print fish completion script to stdout
 ```
 
 Run `terokctl config` to check whether completions are detected as installed.
