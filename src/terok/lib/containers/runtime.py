@@ -191,7 +191,7 @@ def stream_initial_logs(
             proc = subprocess.Popen(
                 ["podman", "logs", "-f", container_name],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
             )
             proc_holder[0] = proc
 
