@@ -152,11 +152,11 @@ class TestParseContentLength(unittest.TestCase):
         self.assertIsNone(err)
 
     def test_negative(self) -> None:
-        length, err = _parse_content_length("-5")
+        _, err = _parse_content_length("-5")
         self.assertIsNotNone(err)
 
     def test_non_numeric(self) -> None:
-        length, err = _parse_content_length("abc")
+        _, err = _parse_content_length("abc")
         self.assertIsNotNone(err)
 
 
@@ -171,7 +171,7 @@ class TestParseCgiHeaders(unittest.TestCase):
 
     def test_defaults_to_200(self) -> None:
         stdout = io.BytesIO(b"Content-Type: text/html\r\n\r\n")
-        status, headers = _parse_cgi_headers(stdout)
+        status, _ = _parse_cgi_headers(stdout)
         self.assertEqual(status, 200)
 
     def test_empty_response(self) -> None:
@@ -360,6 +360,7 @@ class TestDetach(unittest.TestCase):
                     "terok.gate.server._ThreadingHTTPServer", return_value=mock_server
                 ),
                 unittest.mock.patch("terok.gate.server.os.fork", return_value=0),
+                unittest.mock.patch("terok.gate.server.signal.signal") as mock_signal,
                 unittest.mock.patch("terok.gate.server.os.setsid") as mock_setsid,
                 unittest.mock.patch("terok.gate.server.os.open", return_value=3),
                 unittest.mock.patch("terok.gate.server.os.dup2"),
@@ -370,6 +371,7 @@ class TestDetach(unittest.TestCase):
                     _serve_daemon(Path(td), store, 9418, None)
 
                 mock_setsid.assert_called_once()
+                mock_signal.assert_called_once()
                 mock_server.serve_forever.assert_called_once()
 
     @unittest.mock.patch("terok.gate.server._ThreadingHTTPServer")

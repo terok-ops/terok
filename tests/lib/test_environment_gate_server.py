@@ -150,7 +150,7 @@ class TestOnlineMode(unittest.TestCase):
             project_env(_ONLINE_YAML, project_id="online-proj", with_gate=False) as ctx,
         ):
             project = load_project("online-proj")
-            env, volumes = _security_mode_env_and_volumes(project, Path(ctx.base / "ssh"), "1")
+            env, _ = _security_mode_env_and_volumes(project, Path(ctx.base / "ssh"), "1")
 
         self.assertNotIn("CLONE_FROM", env)
         self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")

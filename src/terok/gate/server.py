@@ -65,7 +65,7 @@ class TokenStore:
     def __init__(self, token_file: Path) -> None:
         """Initialize with the path to the tokens JSON file."""
         self._path = token_file
-        self._mtime: float = 0
+        self._mtime_ns: int = 0
         self._tokens: dict[str, dict[str, str]] = {}
 
     def _maybe_reload(self) -> None:
@@ -74,15 +74,15 @@ class TokenStore:
             st = self._path.stat()
         except OSError:
             self._tokens = {}
-            self._mtime = 0
+            self._mtime_ns = 0
             return
-        if st.st_mtime != self._mtime:
+        if st.st_mtime_ns != self._mtime_ns:
             try:
                 data = json.loads(self._path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 data = None
             self._tokens = _validate_token_data(data)
-            self._mtime = st.st_mtime
+            self._mtime_ns = st.st_mtime_ns
 
     def validate(self, token: str) -> str | None:
         """Return project_id if *token* is valid, else ``None``.
@@ -295,6 +295,9 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
             except FileNotFoundError:
                 self.send_error(500, "git not found")
                 return
+            except OSError:
+                self.send_error(500, "git http-backend unavailable")
+                return
 
             _stream_request_body(self.rfile, proc.stdin, content_length)
             proc.stdin.close()
@@ -311,6 +314,7 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 proc.wait(timeout=_CGI_WAIT_TIMEOUT)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
 
         def log_message(self, _format: str, *args: object) -> None:
             """Suppress default stderr logging."""
@@ -353,13 +357,12 @@ def _serve_inetd(base_path: Path, token_store: TokenStore) -> None:
         handler.rfile = rfile
         handler.wfile = wfile
         handler.raw_requestline = rfile.readline(65537)
-        if handler.raw_requestline:
-            if handler.parse_request():
-                method = getattr(handler, f"do_{handler.command}", None)
-                if method:
-                    method()
-                else:
-                    handler.send_error(501, "Unsupported method")
+        if handler.raw_requestline and handler.parse_request():
+            method = getattr(handler, f"do_{handler.command}", None)
+            if method:
+                method()
+            else:
+                handler.send_error(501, "Unsupported method")
         wfile.flush()
     finally:
         conn.close()
