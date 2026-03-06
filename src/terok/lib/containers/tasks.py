@@ -619,7 +619,10 @@ def task_delete(project_id: str, task_id: str) -> None:
     _log_debug("task_delete: revoking gate tokens")
     from ..security.gate_tokens import revoke_token_for_task
 
-    revoke_token_for_task(project_id, task_id)
+    try:
+        revoke_token_for_task(project_id, task_id)
+    except Exception as exc:
+        _log_debug(f"task_delete: token revoke failed: {exc}")
 
     # Stop any matching containers first to avoid name conflicts if a new
     # task is later created with the same ID.

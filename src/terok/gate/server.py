@@ -176,8 +176,16 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 "GIT_CONFIG_COUNT": "1",
             }
             content_length = self.headers.get("Content-Length")
+            remaining = 0
             if content_length:
-                cgi_env["CONTENT_LENGTH"] = content_length
+                try:
+                    remaining = int(content_length)
+                    if remaining < 0:
+                        raise ValueError("negative")
+                except ValueError:
+                    self.send_error(400, "Invalid Content-Length")
+                    return
+                cgi_env["CONTENT_LENGTH"] = str(remaining)
 
             try:
                 proc = subprocess.Popen(
@@ -192,8 +200,7 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 return
 
             # Stream request body to CGI stdin
-            if content_length:
-                remaining = int(content_length)
+            if remaining > 0:
                 while remaining > 0:
                     chunk = self.rfile.read(min(remaining, 8192))
                     if not chunk:

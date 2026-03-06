@@ -93,6 +93,10 @@ def _cmd_start(port: int | None) -> None:
 
 def _cmd_stop() -> None:
     """Stop the managed gate server."""
+    status = get_server_status()
+    if status.mode == "systemd" and status.running:
+        print("Gate server is managed by systemd. Use 'terokctl gate-server uninstall'.")
+        return
     if not is_daemon_running():
         print("Gate server is not running.")
         return

@@ -129,6 +129,30 @@ class TestAtomicWrite(unittest.TestCase):
             result = _read_tokens(tf)
             self.assertEqual(result, {})
 
+    def test_read_non_dict_json_returns_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tf = Path(td) / "tokens.json"
+            tf.write_text(json.dumps(["not", "a", "dict"]))
+            result = _read_tokens(tf)
+            self.assertEqual(result, {})
+
+    def test_read_skips_malformed_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tf = Path(td) / "tokens.json"
+            tf.write_text(
+                json.dumps(
+                    {
+                        "good": {"project": "p", "task": "1"},
+                        "bad_info": "not a dict",
+                        "missing_task": {"project": "p"},
+                        "int_project": {"project": 123, "task": "1"},
+                    }
+                )
+            )
+            result = _read_tokens(tf)
+            self.assertEqual(len(result), 1)
+            self.assertIn("good", result)
+
     def test_atomic_write_uses_replace(self) -> None:
         """Verify that _write_tokens uses os.replace for atomicity."""
         with tempfile.TemporaryDirectory() as td:

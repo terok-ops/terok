@@ -125,7 +125,11 @@ class TestAuth(unittest.TestCase):
     """Tests for authentication handling."""
 
     def _make_request(
-        self, path: str, token: str | None = None
+        self,
+        path: str,
+        token: str | None = None,
+        method: str = "GET",
+        extra_headers: str = "",
     ) -> tuple[int, BaseHTTPRequestHandler]:
         """Build a fake HTTP request and return (status_code, handler)."""
         with tempfile.TemporaryDirectory() as td:
@@ -138,8 +142,9 @@ class TestAuth(unittest.TestCase):
             if token is not None:
                 creds = base64.b64encode(f"{token}:x".encode()).decode()
                 headers += f"Authorization: Basic {creds}\r\n"
+            headers += extra_headers
 
-            raw_request = f"GET {path} HTTP/1.1\r\n{headers}\r\n".encode()
+            raw_request = f"{method} {path} HTTP/1.1\r\n{headers}\r\n".encode()
 
             # Create a mock handler to capture the response
             handler = handler_class.__new__(handler_class)
@@ -207,6 +212,26 @@ class TestAuth(unittest.TestCase):
         # Defense in depth: hooks disabled
         self.assertEqual(cgi_env["GIT_CONFIG_KEY_0"], "core.hooksPath")
         self.assertEqual(cgi_env["GIT_CONFIG_VALUE_0"], "/dev/null")
+
+    def test_invalid_content_length_returns_400(self) -> None:
+        """Malformed Content-Length header returns 400."""
+        code, _ = self._make_request(
+            "/proj-a.git/git-receive-pack",
+            token="validtoken",
+            method="POST",
+            extra_headers="Content-Length: notanumber\r\n",
+        )
+        self.assertEqual(code, 400)
+
+    def test_negative_content_length_returns_400(self) -> None:
+        """Negative Content-Length header returns 400."""
+        code, _ = self._make_request(
+            "/proj-a.git/git-receive-pack",
+            token="validtoken",
+            method="POST",
+            extra_headers="Content-Length: -5\r\n",
+        )
+        self.assertEqual(code, 400)
 
 
 class TestDetach(unittest.TestCase):
