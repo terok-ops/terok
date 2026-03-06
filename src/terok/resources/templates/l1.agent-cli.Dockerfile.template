@@ -32,7 +32,8 @@ RUN set -eux; \
     chmod +x /usr/local/bin/yq
 
 # ast-grep (structural code search/rewrite using AST patterns)
-RUN npm install -g @ast-grep/cli
+# Installed via pip to avoid /usr/bin/sg name conflict with coreutils sg(1).
+RUN pip install --break-system-packages ast-grep-cli
 
 # Install mistral-vibe and mistralai SDK using pipx as root, ensuring PATH is set up
 RUN set -eux; \
