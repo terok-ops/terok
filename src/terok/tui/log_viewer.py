@@ -454,7 +454,7 @@ class LogViewerScreen(screen.Screen[None]):
                     ready, _, _ = select.select([stdout], [], [], 0.2)
                     if not ready:
                         continue
-                    chunk = stdout.read1(4096) if hasattr(stdout, "read1") else b""
+                    chunk = stdout.read1(4096) if hasattr(stdout, "read1") else stdout.read(4096)
                     if not chunk:
                         continue
                     buf += chunk

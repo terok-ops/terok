@@ -5,7 +5,7 @@
 """Tests for the TUI log viewer screen and formatters."""
 
 import json
-from unittest import TestCase, main
+from unittest import TestCase, main, mock
 
 from tui_test_helpers import import_log_viewer
 
@@ -388,6 +388,252 @@ class LogViewerScreenConstructionTests(TestCase):
         screen = mod.LogViewerScreen(ref)
         self.assertFalse(screen._stop_event.is_set())
         self.assertIsNone(screen._process)
+
+
+class StreamLogsTests(TestCase):
+    """Tests for LogViewerScreen._stream_logs (binary I/O with manual line splitting)."""
+
+    def _make_screen(self, mode="cli", follow=True, provider=None):
+        mod = import_log_viewer()
+        ref = mod.TaskContainerRef(
+            project_id="p",
+            task_id="1",
+            mode=mode,
+            container_name="p-cli-1",
+            provider=provider,
+        )
+        screen = mod.LogViewerScreen(ref, follow=follow)
+        # Collect posted Text objects instead of calling into Textual
+        screen._posted: list[object] = []
+        screen._post_text = lambda t: screen._posted.append(t)
+        screen._update_footer_static = lambda: None
+        return screen
+
+    def _make_mock_stdout(self, data: bytes):
+        """Create a mock stdout that returns data via read1(), then empty."""
+        import io
+
+        buf = io.BytesIO(data)
+        # Wrap so it has read1 like a real BufferedReader
+        stdout = mock.MagicMock(wraps=buf)
+        stdout.read1 = buf.read1 if hasattr(buf, "read1") else buf.read
+        stdout.read = buf.read
+        stdout.fileno = mock.MagicMock(return_value=99)
+        return stdout
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_streams_lines_from_process(self, mock_select, mock_popen):
+        """Lines produced by the subprocess are posted via _post_text."""
+        screen = self._make_screen()
+
+        data = b"line one\nline two\nline three\n"
+        stdout = self._make_mock_stdout(data)
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        # First poll: None (running), then 0 (exited) for all subsequent calls
+        proc.poll = mock.MagicMock(side_effect=[None, 0, 0, 0])
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        # select returns ready on first call, then process exits on next poll
+        mock_select.return_value = ([stdout], [], [])
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertIn("line one", texts)
+        self.assertIn("line two", texts)
+        self.assertIn("line three", texts)
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_drains_remaining_on_process_exit(self, mock_select, mock_popen):
+        """When the process exits, remaining buffered data is drained."""
+        screen = self._make_screen()
+
+        # Process exits immediately with data still in pipe
+        stdout = self._make_mock_stdout(b"drained line\n")
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)  # Already exited
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertIn("drained line", texts)
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_trailing_partial_line_flushed(self, mock_select, mock_popen):
+        """A trailing line without newline is still processed."""
+        screen = self._make_screen()
+
+        stdout = self._make_mock_stdout(b"complete\npartial")
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertIn("complete", texts)
+        self.assertIn("partial", texts)
+
+    @mock.patch("subprocess.Popen")
+    def test_stop_event_skips_drain(self, mock_popen):
+        """When stop_event is set, the drain loop is skipped."""
+        screen = self._make_screen()
+
+        stdout = self._make_mock_stdout(b"line1\nline2\nline3\n")
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        # Pre-set the stop event so the while loop exits immediately
+        screen._stop_event.set()
+
+        screen._stream_logs()
+
+        # Nothing should be posted (stop_event was set before entering the loop)
+        content_texts = [str(t) for t in screen._posted if "Log stream ended" not in str(t)]
+        self.assertEqual(content_texts, [])
+
+    @mock.patch("subprocess.Popen", side_effect=FileNotFoundError)
+    def test_podman_not_found(self, mock_popen):
+        """FileNotFoundError is caught and an error message is posted."""
+        screen = self._make_screen()
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertTrue(any("podman not found" in t for t in texts))
+
+    @mock.patch("subprocess.Popen", side_effect=OSError("connection refused"))
+    def test_oserror_on_launch(self, mock_popen):
+        """OSError on Popen is caught and an error message is posted."""
+        screen = self._make_screen()
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertTrue(any("connection refused" in t for t in texts))
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_oserror_during_read_breaks_loop(self, mock_select, mock_popen):
+        """OSError during select/read breaks the loop cleanly."""
+        screen = self._make_screen()
+
+        stdout = mock.MagicMock()
+        stdout.read = mock.MagicMock(return_value=b"")
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=None)
+        proc.returncode = -1
+        mock_popen.return_value = proc
+
+        mock_select.side_effect = OSError("broken pipe")
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertTrue(any("Log stream ended" in t for t in texts))
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_uses_claude_formatter_for_run_mode(self, mock_select, mock_popen):
+        """Run mode with claude provider uses the structured formatter."""
+        screen = self._make_screen(mode="run", provider="claude")
+
+        log_line = json.dumps(
+            {"type": "system", "subtype": "init", "session_id": "sess1", "model": "claude-4"}
+        )
+        stdout = self._make_mock_stdout(log_line.encode() + b"\n")
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        screen._stream_logs()
+
+        texts = [str(t) for t in screen._posted]
+        self.assertTrue(any("sess1" in t for t in texts))
+        self.assertTrue(any("claude-4" in t for t in texts))
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_follow_flag_in_command(self, mock_select, mock_popen):
+        """Follow mode appends -f to the podman logs command."""
+        screen = self._make_screen(follow=True)
+
+        stdout = self._make_mock_stdout(b"")
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        screen._stream_logs()
+
+        cmd = mock_popen.call_args[0][0]
+        self.assertIn("-f", cmd)
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_no_follow_flag_when_static(self, mock_select, mock_popen):
+        """Static mode (follow=False) does not include -f."""
+        screen = self._make_screen(follow=False)
+
+        stdout = self._make_mock_stdout(b"")
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        proc.poll = mock.MagicMock(return_value=0)
+        proc.returncode = 0
+        mock_popen.return_value = proc
+
+        screen._stream_logs()
+
+        cmd = mock_popen.call_args[0][0]
+        self.assertNotIn("-f", cmd)
+
+    @mock.patch("subprocess.Popen")
+    @mock.patch("select.select")
+    def test_process_terminated_in_finally(self, mock_select, mock_popen):
+        """If the process is still running when an exception occurs, it gets terminated."""
+        screen = self._make_screen()
+
+        stdout = mock.MagicMock()
+        # Make read1 raise to trigger the except→break path
+        stdout.read1 = mock.MagicMock(side_effect=ValueError("closed"))
+
+        proc = mock.MagicMock()
+        proc.stdout = stdout
+        # Process still running
+        proc.poll = mock.MagicMock(return_value=None)
+        proc.returncode = None
+        proc.wait = mock.MagicMock()
+        mock_popen.return_value = proc
+
+        # select says data is ready, then read1 raises ValueError
+        mock_select.return_value = ([stdout], [], [])
+
+        screen._stream_logs()
+
+        proc.terminate.assert_called_once()
 
 
 if __name__ == "__main__":
