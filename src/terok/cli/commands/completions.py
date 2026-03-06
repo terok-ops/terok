@@ -14,26 +14,29 @@ from argcomplete import shellcode
 
 _SHELLS = ("bash", "zsh", "fish")
 
+_XDG_DATA_HOME = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
+_XDG_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+
 _INSTALL_TARGETS: dict[str, Path] = {
-    "bash": Path.home() / ".local" / "share" / "bash-completion" / "completions" / "terokctl",
-    "zsh": Path.home() / ".local" / "share" / "zsh" / "site-functions" / "_terokctl",
-    "fish": Path.home() / ".config" / "fish" / "completions" / "terokctl.fish",
+    "bash": _XDG_DATA_HOME / "bash-completion" / "completions" / "terokctl",
+    "zsh": _XDG_DATA_HOME / "zsh" / "site-functions" / "_terokctl",
+    "fish": _XDG_CONFIG_HOME / "fish" / "completions" / "terokctl.fish",
 }
 
 _BASH_COMPLETION_DIRS = (
-    Path.home() / ".local" / "share" / "bash-completion" / "completions",
+    _XDG_DATA_HOME / "bash-completion" / "completions",
     Path("/usr") / "share" / "bash-completion" / "completions",
     Path("/etc") / "bash_completion.d",
 )
 
-_ZSH_COMPLETION_DIRS = (Path.home() / ".local" / "share" / "zsh" / "site-functions",)
+_ZSH_COMPLETION_DIRS = (_XDG_DATA_HOME / "zsh" / "site-functions",)
 
-_FISH_COMPLETION_DIRS = (Path.home() / ".config" / "fish" / "completions",)
+_FISH_COMPLETION_DIRS = (_XDG_CONFIG_HOME / "fish" / "completions",)
 
 _SHELL_RC_FILES = (
     Path.home() / ".bashrc",
     Path.home() / ".zshrc",
-    Path.home() / ".config" / "fish" / "config.fish",
+    _XDG_CONFIG_HOME / "fish" / "config.fish",
 )
 
 _RC_MARKERS = (
