@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ..core.config import get_envs_base_dir
 from ..core.projects import Project
+from ..security.gate_server import ensure_server_reachable, get_gate_base_path, get_gate_server_port
 from ..util.fs import ensure_dir_writable
 
 # ---------- Constants ----------
@@ -140,6 +141,25 @@ def _shared_volume_mounts(host_dirs: dict[str, Path]) -> list[str]:
     return [f"{host_dirs[m.key]}:{m.container_path}:z" for m in SHARED_MOUNTS]
 
 
+def _gate_url(gate_repo: Path, gate_base: Path, port: int, project_id: str) -> str:
+    """Build the ``git://`` URL for a gate repo served by ``git daemon``.
+
+    Derives the path relative to the gate base directory so that custom
+    ``gate.path`` settings produce correct URLs.  Raises ``SystemExit`` if
+    the gate repo is outside the configured gate base path.
+    """
+    try:
+        rel = gate_repo.relative_to(gate_base).as_posix()
+    except ValueError as exc:
+        raise SystemExit(
+            f"Gate repo for project '{project_id}' is outside gate base.\n"
+            f"Repo: {gate_repo}\n"
+            f"Gate base: {gate_base}\n"
+            "Adjust gate.path or gate server base path so the repo is servable."
+        ) from exc
+    return f"git://host.containers.internal:{port}/{rel}"
+
+
 def _security_mode_env_and_volumes(
     project: Project, ssh_host_dir: Path
 ) -> tuple[dict[str, str], list[str]]:
@@ -148,8 +168,6 @@ def _security_mode_env_and_volumes(
     volumes: list[str] = []
 
     gate_repo = project.gate_path
-    gate_parent = gate_repo.parent
-    gate_mount_inside = "/git-gate/gate.git"
 
     if project.security_class == "gatekeeping":
         if not gate_repo.exists():
@@ -158,9 +176,11 @@ def _security_mode_env_and_volumes(
                 f"Expected at: {gate_repo}\n"
                 f"Run 'terokctl gate-sync {project.id}' to create/update the local mirror."
             )
-        gate_parent.mkdir(parents=True, exist_ok=True)
-        volumes.append(f"{gate_repo}:{gate_mount_inside}:z")
-        env["CODE_REPO"] = f"file://{gate_mount_inside}"
+        ensure_server_reachable()
+        port = get_gate_server_port()
+        gate_base = get_gate_base_path()
+        gate_url = _gate_url(gate_repo, gate_base, port, project.id)
+        env["CODE_REPO"] = gate_url
         if project.default_branch:
             env["GIT_BRANCH"] = project.default_branch
         if project.expose_external_remote and project.upstream_url:
@@ -170,9 +190,15 @@ def _security_mode_env_and_volumes(
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:z")
     else:
         if gate_repo.exists():
-            gate_parent.mkdir(parents=True, exist_ok=True)
-            volumes.append(f"{gate_repo}:{gate_mount_inside}:z,ro")
-            env["CLONE_FROM"] = f"file://{gate_mount_inside}"
+            try:
+                ensure_server_reachable()
+            except SystemExit:
+                pass  # gate server down; skip CLONE_FROM, fall back to upstream
+            else:
+                port = get_gate_server_port()
+                gate_base = get_gate_base_path()
+                gate_url = _gate_url(gate_repo, gate_base, port, project.id)
+                env["CLONE_FROM"] = gate_url
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
             if project.default_branch:

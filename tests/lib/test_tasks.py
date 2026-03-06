@@ -347,26 +347,35 @@ class TaskTests(unittest.TestCase):
                     task_list(project_id, status="running")
             self.assertIn("No tasks found", buf.getvalue())
 
-    def test_build_task_env_gatekeeping(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_gatekeeping(self, *_mocks) -> None:
         project_id = "proj9"
         with project_env(
             f"project:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  default_branch: main\n",
             project_id=project_id,
             with_config_file=True,
             with_gate=True,
-        ) as ctx:
+        ):
             env, volumes = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="7",
             )
 
-            self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            self.assertEqual(
+                env["CODE_REPO"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
+            # No gate volume mount (served via git daemon)
+            gate_mounts = [v for v in volumes if "gate" in v.split(":")[0]]
+            self.assertEqual(gate_mounts, [])
             # Verify SSH is NOT mounted by default in gatekeeping mode
             ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
             self.assertEqual(ssh_mounts, [])
 
-    def test_build_task_env_gatekeeping_with_ssh(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_gatekeeping_with_ssh(self, *_mocks) -> None:
         """Gatekeeping mode with mount_in_gatekeeping enabled should mount SSH."""
         project_id = "proj_gatekeeping_ssh"
         with project_env(
@@ -389,13 +398,17 @@ class TaskTests(unittest.TestCase):
                 task_id="9",
             )
 
-            # Verify gatekeeping behavior: CODE_REPO is file-based gate
-            self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            # Verify gatekeeping behavior: CODE_REPO is git:// URL
+            self.assertEqual(
+                env["CODE_REPO"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
             # Verify SSH IS mounted when mount_in_gatekeeping is true
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
-    def test_build_task_env_online(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_online(self, *_mocks) -> None:
         project_id = "proj10"
         with project_env(
             "placeholder",
@@ -415,7 +428,10 @@ class TaskTests(unittest.TestCase):
             env, volumes = build_task_env_and_volumes(load_project(project_id), task_id="8")
             self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
             self.assertEqual(env["GIT_BRANCH"], "main")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            self.assertEqual(
+                env["CLONE_FROM"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
@@ -1055,7 +1071,9 @@ class TaskTests(unittest.TestCase):
                 self.assertIsNotNone(status.hint)
                 self.assertIn("xclip", status.hint)
 
-    def test_build_task_env_gatekeeping_expose_external_remote_enabled(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_gatekeeping_expose_external_remote_enabled(self, *_mocks) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_enabled"
         upstream_url = "https://github.com/example/repo.git"
@@ -1064,7 +1082,7 @@ class TaskTests(unittest.TestCase):
             project_id=project_id,
             with_config_file=True,
             with_gate=True,
-        ) as ctx:
+        ):
             env, volumes = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="10",
@@ -1073,10 +1091,14 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is set when expose_external_remote is enabled
             self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            self.assertEqual(
+                env["CODE_REPO"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
 
-    def test_build_task_env_gatekeeping_expose_external_remote_disabled(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_gatekeeping_expose_external_remote_disabled(self, *_mocks) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_disabled"
         upstream_url = "https://github.com/example/repo.git"
@@ -1085,7 +1107,7 @@ class TaskTests(unittest.TestCase):
             project_id=project_id,
             with_config_file=True,
             with_gate=True,
-        ) as ctx:
+        ):
             env, volumes = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="11",
@@ -1094,10 +1116,14 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is NOT set when expose_external_remote is false
             self.assertNotIn("EXTERNAL_REMOTE_URL", env)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            self.assertEqual(
+                env["CODE_REPO"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
 
-    def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self) -> None:
+    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self, *_mocks) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_no_upstream"
         with project_env(
@@ -1105,7 +1131,7 @@ class TaskTests(unittest.TestCase):
             project_id=project_id,
             with_config_file=True,
             with_gate=True,
-        ) as ctx:
+        ):
             env, volumes = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="12",
@@ -1114,8 +1140,10 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is NOT set when upstream_url is missing
             self.assertNotIn("EXTERNAL_REMOTE_URL", env)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-            _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+            self.assertEqual(
+                env["CODE_REPO"],
+                f"git://host.containers.internal:9418/{project_id}.git",
+            )
 
 
 class TaskLogsTests(unittest.TestCase):

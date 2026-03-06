@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# terok-gate-version: {{UNIT_VERSION}}
+
+[Unit]
+Description=terok git gate connection handler
+
+[Service]
+Type=simple
+StandardInput=socket
+ExecStart=/usr/bin/env git daemon --inetd --export-all --enable=receive-pack --base-path={{GATE_BASE_PATH}}
