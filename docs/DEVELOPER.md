@@ -69,7 +69,7 @@ When a task container starts, terok mounts:
 
 | Container Path | Host Source | Purpose |
 |----------------|-------------|---------|
-| `/workspace` | `<state_root>/tasks/<project>/<task>/workspace` | Per-task workspace |
+| `/workspace` | `<state_root>/tasks/<project>/<task>/workspace-dangerous` | Per-task workspace |
 | `/home/dev/.codex` | `<envs_base>/_codex-config` | Codex credentials |
 | `/home/dev/.claude` | `<envs_base>/_claude-config` | Claude Code credentials |
 | `/home/dev/.vibe` | `<envs_base>/_vibe-config` | Mistral Vibe credentials |

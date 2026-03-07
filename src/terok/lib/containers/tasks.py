@@ -312,6 +312,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
     # when it sees this marker, then remove it. See docstring above.
     workspace_dir = ws / "workspace-dangerous"
     ensure_dir(workspace_dir)
+    workspace_dir.chmod(0o700)
     marker_path = workspace_dir / ".new-task-marker"
     marker_path.write_text(
         "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"

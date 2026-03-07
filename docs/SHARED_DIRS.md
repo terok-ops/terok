@@ -2,7 +2,7 @@
 
 ## Overview
 - When you run a task (CLI or UI), terok starts a container and mounts a small set of host directories into it. This enables:
-  - A host-visible workspace where the project repository is cloned (`/workspace`)
+  - A host-visible workspace where the project repository is cloned (`/workspace` inside the container, `workspace-dangerous/` on the host)
   - Shared credentials/config for Codex under `/home/dev/.codex`
   - Shared credentials/config for Claude Code under `/home/dev/.claude`
   - Shared credentials/config for Mistral Vibe under `/home/dev/.vibe`
@@ -13,10 +13,17 @@
   - Optional per-project SSH configuration under `/home/dev/.ssh` (read-write)
 
 ## Per-task workspace (required)
-- Host path: `<state_root>/tasks/<project_id>/<task_id>/workspace`
+- Host path: `<state_root>/tasks/<project_id>/<task_id>/workspace-dangerous`
   - Created automatically by terok when the task runs
   - Mounted as: `<host_dir>:/workspace:Z`
-- Purpose: The project repository is cloned or synced here by `init-ssh-and-repo.sh`. Because this path lives under the task's directory on the host, you can inspect, edit, or back it up from the host.
+  - Permissions: `700` (owner-only access)
+- Purpose: The project repository is cloned or synced here by `init-ssh-and-repo.sh`.
+
+> **Security warning:** The container has full write access to this directory and
+> could have rewritten git hooks, checked in malicious scripts, or otherwise
+> poisoned the repository. **Do not execute code or run `git` commands in this
+> directory from the host.** The safe way to interact with agent work is through
+> the **git gate** — a host-controlled bare repo that agents push to.
 
 ## Shared envs base directory (configurable)
 - Base dir (default): `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if running as root)
@@ -114,7 +121,7 @@ terokctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--for
 - This approach ensures commits show both the AI agent (author) and the human supervisor (committer).
 
 ## Quick reference (runtime mounts)
-- `/workspace` <- `<state_root>/tasks/<project>/<task>/workspace:Z`
+- `/workspace` <- `<state_root>/tasks/<project>/<task>/workspace-dangerous:Z`
 - `/home/dev/.codex` <- `<envs_base>/_codex-config:z`
 - `/home/dev/.claude` <- `<envs_base>/_claude-config:z`
 - `/home/dev/.vibe` <- `<envs_base>/_vibe-config:z`

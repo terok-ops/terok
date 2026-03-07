@@ -35,7 +35,7 @@ A task consists of three persistent components:
 
 ```
 Task #1
-├── Workspace    ~/.local/share/terok/tasks/<project>/1/workspace/
+├── Workspace    ~/.local/share/terok/tasks/<project>/1/workspace-dangerous/
 ├── Metadata     ~/.local/share/terok/projects/<project>/tasks/1.yml
 └── Container    <project>-cli-1  (or <project>-web-1)
 ```
