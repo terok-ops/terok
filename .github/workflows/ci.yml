@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   pull_request:
-    branches: [master, main]
+    branches: [master]
 
 jobs:
   reuse:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -15,6 +16,7 @@ jobs:
         uses: fsfe/reuse-action@v6
 
   lint:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -30,6 +32,7 @@ jobs:
           args: format --check
 
   boundary-check:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -46,6 +49,7 @@ jobs:
         run: tach check
 
   docstring-coverage:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -62,6 +66,7 @@ jobs:
         run: docstr-coverage src/terok/ --fail-under=95
 
   dead-code:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -78,6 +83,7 @@ jobs:
         run: vulture src/terok/ vulture_whitelist.py --min-confidence 80
 
   test:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'terok-ops/terok'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
