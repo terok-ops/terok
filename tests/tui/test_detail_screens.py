@@ -983,7 +983,7 @@ class CommandPaletteTests(TestCase):
         from tui_test_helpers import build_textual_stubs
 
         stubs = build_textual_stubs()
-        app_mod, AppClass = import_app(stubs)
+        _, AppClass = import_app(stubs)
         instance = AppClass()
         # get_system_commands imports SystemCommand at call time, so we need
         # textual.app in sys.modules during the call.
@@ -1058,7 +1058,7 @@ class CombinedGateStatusTests(TestCase):
             project, state, task_count=5, gate_server_status=gate_status
         )
         text_str = str(result)
-        self.assertIn("server down", text_str)
+        self.assertIn("gate down", text_str)
 
     def test_render_project_details_gate_server_ok(self) -> None:
         widgets = import_widgets()
@@ -1074,7 +1074,7 @@ class CombinedGateStatusTests(TestCase):
             project, state, task_count=5, gate_server_status=gate_status
         )
         text_str = str(result)
-        self.assertNotIn("server down", text_str)
+        self.assertNotIn("gate down", text_str)
         self.assertIn("yes", text_str)
 
     def test_render_project_details_gate_server_none_fallback(self) -> None:
@@ -1088,7 +1088,7 @@ class CombinedGateStatusTests(TestCase):
 
         result = widgets.render_project_details(project, state, task_count=5)
         text_str = str(result)
-        self.assertNotIn("server down", text_str)
+        self.assertNotIn("gate down", text_str)
 
 
 class GateServerActionDispatchTests(TestCase):

@@ -86,7 +86,7 @@ def render_project_details(
 
     # Gate line: server status overrides repo status when server is down
     if gate_server_status is not None and not gate_server_status.running:
-        gate_s = Text("server down", style=Style(color=error_color))
+        gate_s = Text("gate down", style=Style(color=error_color))
     else:
         gate_value = "yes" if state.get("gate") else "no"
         if (

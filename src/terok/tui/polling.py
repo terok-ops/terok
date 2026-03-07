@@ -103,6 +103,7 @@ class PollingMixin:
     def _start_gate_server_polling(self) -> None:
         """Start background polling for gate server status every 60 seconds."""
         self._stop_gate_server_polling()
+        self._poll_gate_server()
         self._gate_server_timer = self.set_interval(
             60, self._poll_gate_server, name="gate_server_polling"
         )
