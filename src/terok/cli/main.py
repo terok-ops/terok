@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """CLI entry point and argument parser for terok.
@@ -65,7 +65,7 @@ def main() -> None:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"terokctl {version_string}\nLicense: Apache-2.0\nCopyright: 2025-2026 Jiri Vyskocil",
+        version=f"terokctl {version_string}\nLicense: Apache-2.0\nCopyright: 2025 Jiri Vyskocil",
     )
     parser.add_argument(
         "--experimental",

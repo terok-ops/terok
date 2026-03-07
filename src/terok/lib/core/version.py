@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Version and branch information for terok.

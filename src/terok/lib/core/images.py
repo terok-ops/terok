@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Container image tag conventions for the terok layer system (L0/L1/L2)."""

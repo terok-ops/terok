@@ -52,7 +52,7 @@ make install-dev          # Apply the updated lockfile to your local environment
 make install-dev  # Install all development dependencies
 make docs         # Serve documentation locally
 make clean        # Remove build artifacts
-make spdx NAME="Your Name" FILES="src/terok/new_file.py"  # Add SPDX header
+make spdx NAME="Real Human Name" FILES="src/terok/new_file.py"  # Add SPDX header
 ```
 
 ## Coding Standards
@@ -63,12 +63,22 @@ make spdx NAME="Your Name" FILES="src/terok/new_file.py"  # Add SPDX header
 - **Type hints**: Use Python 3.12+ type hints
 - **Docstrings**: Required for all public functions, classes, and modules (enforced by `docstr-coverage` at 95% minimum in CI)
 - **Testing**: Add tests for new functionality; maintain coverage
-- **SPDX headers**: Every source file (`.py`, `.sh`, etc.) must start with a compact two-line SPDX header — no blank line between them:
-  ```python
-  # SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil
-  # SPDX-License-Identifier: Apache-2.0
+- **SPDX headers**: Every source file (`.py`, `.sh`, etc.) must have an SPDX header. Use `make spdx` to add or update it — it handles both new files and existing files correctly:
+  ```bash
+  make spdx NAME="Real Human Name" FILES="path/to/file.py"
   ```
-  Use `make spdx NAME="Your Name" FILES="path/to/file.py"` to add headers (uses the compact template in `.reuse/templates/`). For files that already have a header, this adds a second copyright line — it does not replace the existing one. Files covered by `REUSE.toml` glob patterns (`.md`, `.yml`, `.toml`, `.json`, etc.) do not need inline headers. `make reuse` checks compliance but does not generate headers.
+  - **New file** → creates the header:
+    ```python
+    # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+    # SPDX-License-Identifier: Apache-2.0
+    ```
+  - **Existing file** → adds an additional copyright line (preserves the original):
+    ```python
+    # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+    # SPDX-FileCopyrightText: 2026 New Contributor
+    # SPDX-License-Identifier: Apache-2.0
+    ```
+  When modifying an existing file, always run `make spdx` with the contributor's name to add their copyright line. NAME must be a real person's name (ASCII-only), not a project name. Use a single year (year of first contribution), not a range. Ask the user for their name if unknown. Files covered by `REUSE.toml` glob patterns (`.md`, `.yml`, `.toml`, `.json`, etc.) do not need inline headers. `make reuse` checks compliance but does not generate headers.
 - **Emojis**: Must be natively wide (`East_Asian_Width=W`) — no VS16 (U+FE0F) sequences. Use `draw_emoji()` from `terok.lib.util.emoji` for aligned output. See `docs/DEVELOPER.md` → "Emoji width constraints" for details
 
 ## Development Workflow
