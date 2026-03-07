@@ -187,6 +187,8 @@ def _section_dead_code() -> str:
     )
     output = (result.stdout + result.stderr).strip()
     if not output:
+        if result.returncode != 0:
+            return f"!!! warning\n    vulture failed (exit {result.returncode}).\n"
         return "No dead code found at 80% confidence threshold.\n"
 
     def _md_cell(value: str) -> str:
