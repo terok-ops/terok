@@ -61,7 +61,7 @@ docs:
 
 # Build documentation for deployment
 docs-build:
-	poetry run mkdocs build
+	poetry run mkdocs build --strict
 
 # Clean build artifacts
 clean:
