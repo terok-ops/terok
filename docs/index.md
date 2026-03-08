@@ -23,7 +23,7 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:terok-ops/terok.git
+git clone git@github.com:terok-ai/terok.git
 cd terok
 pip install .
 
@@ -64,4 +64,4 @@ terokctl task run-cli myproj 1
 
 ## License
 
-See [LICENSE](https://github.com/terok-ops/terok/blob/master/LICENSE) file.
+See [LICENSE](https://github.com/terok-ai/terok/blob/master/LICENSE) file.

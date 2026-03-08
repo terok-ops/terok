@@ -1,8 +1,8 @@
 # terok
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![REUSE compliant](https://api.reuse.software/badge/github.com/terok-ops/terok)](https://api.reuse.software/info/github.com/terok-ops/terok)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ops_terok&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ops_terok)
+[![REUSE compliant](https://api.reuse.software/badge/github.com/terok-ai/terok)](https://api.reuse.software/info/github.com/terok-ai/terok)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok)
 
 A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terokctl`) and a Textual TUI (`terok`).
 
@@ -31,7 +31,7 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:terok-ops/terok.git
+git clone git@github.com:terok-ai/terok.git
 cd terok
 pip install .
 
@@ -149,7 +149,7 @@ git:
 
 ```bash
 # Setup
-git clone git@github.com:terok-ops/terok.git && cd terok
+git clone git@github.com:terok-ai/terok.git && cd terok
 make install-dev
 
 # Before committing

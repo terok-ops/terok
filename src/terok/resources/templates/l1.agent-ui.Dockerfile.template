@@ -8,7 +8,7 @@ ENV HOST="0.0.0.0" \
     PORT="7860" \
     TEROK_UI_DIR="/opt/terok-web-ui" \
     TEROK_UI_DIST_TAG="${TEROK_UI_DIST_TAG}" \
-    TEROK_UI_DIST_URL="https://github.com/terok-ops/terok-web-ui/releases/download/${TEROK_UI_DIST_TAG}/terok-web-ui-dist.tar.gz"
+    TEROK_UI_DIST_URL="https://github.com/terok-ai/terok-web-ui/releases/download/${TEROK_UI_DIST_TAG}/terok-web-ui-dist.tar.gz"
 
 # === Root operations ===
 USER root

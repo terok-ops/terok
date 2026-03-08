@@ -132,7 +132,7 @@ See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md) for detai
 
 ```bash
 # Clone the repository
-git clone git@github.com:terok-ops/terok.git
+git clone git@github.com:terok-ai/terok.git
 cd terok
 
 # Install all development dependencies

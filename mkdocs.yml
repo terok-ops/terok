@@ -1,8 +1,8 @@
 site_name: terok
 site_description: A tool for managing containerized AI coding agent projects using Podman
-site_url: https://terok-ops.github.io/terok
-repo_url: https://github.com/terok-ops/terok
-repo_name: terok-ops/terok
+site_url: https://terok-ai.github.io/terok
+repo_url: https://github.com/terok-ai/terok
+repo_name: terok-ai/terok
 
 theme:
   name: material
@@ -95,7 +95,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/terok-ops/terok
+      link: https://github.com/terok-ai/terok
 
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap

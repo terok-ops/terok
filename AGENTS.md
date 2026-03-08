@@ -110,11 +110,11 @@ The project uses [tach](https://github.com/gauge-sh/tach) to enforce module boun
 
 ## SonarCloud
 
-The project is analyzed by [SonarCloud](https://sonarcloud.io/summary/new_code?id=terok-ops_terok) on every push to master. Unlike CodeRabbit (which posts actionable PR comments), SonarCloud findings often require triage — many are low-priority style issues or false positives rather than real bugs. Treat them as input for decisions, not as a checklist.
+The project is analyzed by [SonarCloud](https://sonarcloud.io/summary/new_code?id=terok-ai_terok) on every push to master. Unlike CodeRabbit (which posts actionable PR comments), SonarCloud findings often require triage — many are low-priority style issues or false positives rather than real bugs. Treat them as input for decisions, not as a checklist.
 
 **Fetching new issues for a PR** (replace `PR_NUMBER`):
 ```bash
-curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ops_terok&pullRequest=PR_NUMBER&issueStatuses=OPEN&ps=100' \
+curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ai_terok&pullRequest=PR_NUMBER&issueStatuses=OPEN&ps=100' \
   | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -128,7 +128,7 @@ for i in d.get('issues',[]):
 
 **Fetching recent issues on the main branch** (replace date as needed):
 ```bash
-curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ops_terok&issueStatuses=OPEN&createdAfter=2026-03-01&ps=100&s=CREATION_DATE&asc=false' \
+curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ai_terok&issueStatuses=OPEN&createdAfter=2026-03-01&ps=100&s=CREATION_DATE&asc=false' \
   | python3 -c "import json,sys; [print(f'[{i[\"severity\"]}] {i[\"rule\"]}: {i.get(\"message\",\"\")}\n  {i[\"component\"].split(\":\",1)[-1]}:{i.get(\"textRange\",{}).get(\"startLine\",\"?\")}') for i in json.load(sys.stdin).get('issues',[])]"
 ```
 
