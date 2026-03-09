@@ -14,7 +14,7 @@ import argparse
 
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
-from .commands import completions, gate_server, image, info, project, setup, sickbay, task
+from .commands import completions, gate_server, image, info, project, setup, shield, sickbay, task
 
 # Optional: bash completion via argcomplete
 try:
@@ -29,6 +29,7 @@ _DISPATCHERS = [
     setup.dispatch,
     image.dispatch,
     gate_server.dispatch,
+    shield.dispatch,
     sickbay.dispatch,
     info.dispatch,
     completions.dispatch,
@@ -87,6 +88,7 @@ def main() -> None:
     setup.register(sub)
     image.register(sub)
     gate_server.register(sub)
+    shield.register(sub)
     sickbay.register(sub)
     info.register(sub)
     completions.register(sub)

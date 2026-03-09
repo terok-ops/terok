@@ -100,12 +100,19 @@ def stop_task_containers(project: Any, task_id: str) -> None:
     container. The task itself is already being deleted at this point, so
     a forceful remove is acceptable and keeps state consistent.
     """
+    from ..security.shield import pre_stop as _shield_pre_stop
     from ..util.logging_utils import _log_debug
 
     # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
     names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
 
     for name in names:
+        # Shield cleanup (bridge mode nft teardown) — best-effort.
+        try:
+            _shield_pre_stop(name)
+        except Exception:
+            pass
+
         try:
             _log_debug(f"stop_containers: podman rm -f {name} (start)")
             # "podman rm -f" force-removes the container even if it is

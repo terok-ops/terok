@@ -36,6 +36,7 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
 PyYAML = ">=6.0"
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.1.1/terok_shield-0.1.1-py3-none-any.whl"}
 textual = "8.0.2"
 argcomplete = ">=3.1"
 requests = ">=2.31"

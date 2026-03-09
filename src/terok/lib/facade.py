@@ -70,6 +70,11 @@ from .security.git_gate import (
     sync_gate_branches,
     sync_project_gate,
 )
+from .security.shield import (  # noqa: F401 — re-exported public API
+    get_shield_config,
+    setup as shield_setup,
+    status as shield_status,
+)
 from .security.ssh import init_project_ssh
 from .util.fs import archive_timestamp, create_archive_file
 
@@ -300,4 +305,8 @@ __all__ = [
     # Project state
     "get_project_state",
     "is_task_image_old",
+    # Shield
+    "get_shield_config",
+    "shield_setup",
+    "shield_status",
 ]
