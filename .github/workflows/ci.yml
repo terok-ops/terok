@@ -116,10 +116,11 @@ jobs:
         run: poetry install --with test --no-interaction
 
       - name: Run tests
-        run: poetry run pytest --cov=terok --cov-report=xml --cov-report=term-missing
+        run: poetry run pytest --cov=terok --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
