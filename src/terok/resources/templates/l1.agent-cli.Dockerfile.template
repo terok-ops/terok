@@ -80,6 +80,11 @@ COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
 RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
 
+# update-all-the-things: refresh all packages without full image rebuild
+COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
+COPY scripts/update-all-the-things /usr/local/bin/update-all-the-things
+RUN chmod +x /usr/local/bin/allthethings.sh /usr/local/bin/update-all-the-things
+
 # Configure shell environment and PATH for agent CLIs
 RUN set -eux; \
     printf '%s\n' \
