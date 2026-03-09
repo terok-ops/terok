@@ -43,6 +43,7 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.facade",
+    "terok.lib.security.shield",
     "terok.lib.util.emoji",
     "terok.lib.wizards.new_project",
     "terok.ui_utils.terminal",
@@ -84,6 +85,7 @@ depends_on = [
     "terok.lib.security.auth",
     "terok.lib.security.gate_server",
     "terok.lib.security.git_gate",
+    "terok.lib.security.shield",
     "terok.lib.security.ssh",
     "terok.lib.util.fs",
 ]
@@ -182,9 +184,9 @@ depends_on = [
     "terok.lib.containers.ports",
     "terok.lib.containers.runtime",
     "terok.lib.containers.tasks",
-    "terok.lib.core.config",
     "terok.lib.core.images",
     "terok.lib.core.projects",
+    "terok.lib.security.shield",
     "terok.lib.util.ansi",
     "terok.lib.util.podman",
 ]
@@ -275,6 +277,12 @@ path = "terok.gate"
 layer = "services"
 depends_on = []
 utility = true
+
+# Shield egress firewall adapter
+[[modules]]
+path = "terok.lib.security.shield"
+layer = "services"
+depends_on = ["terok.lib.core.config"]
 
 # Git gate sync & validation
 [[modules]]
@@ -588,6 +596,22 @@ from = ["terok.lib.security.ssh"]
 
 [[interfaces]]
 expose = [
+    "get_shield_config",
+    "pre_start",
+    "setup",
+    "status",
+    "allow",
+    "deny",
+    "rules",
+    "resolve",
+    "logs",
+    "get_log_containers",
+    "get_profiles",
+]
+from = ["terok.lib.security.shield"]
+
+[[interfaces]]
+expose = [
     "sync_project_gate",
     "compare_gate_vs_upstream",
     "sync_gate_branches",
@@ -733,6 +757,9 @@ expose = [
     "get_project_state",
     "is_task_image_old",
     "maybe_pause_for_ssh_key_registration",
+    "get_shield_config",
+    "shield_setup",
+    "shield_status",
 ]
 from = ["terok.lib.facade"]
 

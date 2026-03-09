@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ..core.config import get_gate_server_port
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
+from ..security.shield import pre_start as _shield_pre_start
 from ..util.ansi import (
     blue as _blue,
     green as _green,
@@ -27,7 +27,7 @@ from ..util.ansi import (
     supports_color as _supports_color,
     yellow as _yellow,
 )
-from ..util.podman import _podman_network_args, _podman_userns_args
+from ..util.podman import _podman_userns_args
 from .agent_config import resolve_agent_config
 from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import (
@@ -207,7 +207,7 @@ def _run_container(
     """
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
-    cmd += _podman_network_args(gate_port=get_gate_server_port())
+    cmd += _shield_pre_start(cname)
     cmd += gpu_run_args(project)
     if extra_args:
         cmd += extra_args
