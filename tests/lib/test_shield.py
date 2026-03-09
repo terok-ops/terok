@@ -23,6 +23,9 @@ from terok.lib.security.shield import (
 )
 
 
+TEST_IP = "1.2.3.4"
+
+
 class TestGetShieldConfig(unittest.TestCase):
     """Tests for get_shield_config()."""
 
@@ -121,8 +124,8 @@ class TestManagementWrappers(unittest.TestCase):
         """allow() delegates to shield_allow."""
         cfg = MagicMock(spec=ShieldConfig)
         mock_cfg.return_value = cfg
-        result = allow("ctr", "1.2.3.4")
-        mock_allow.assert_called_once_with("ctr", "1.2.3.4", config=cfg)
+        result = allow("ctr", TEST_IP)
+        mock_allow.assert_called_once_with("ctr", TEST_IP, config=cfg)
         assert result == ["allowed 1.2.3.4"]
 
     @patch("terok.lib.security.shield.shield_deny", return_value=["denied 1.2.3.4"])
@@ -131,8 +134,8 @@ class TestManagementWrappers(unittest.TestCase):
         """deny() delegates to shield_deny."""
         cfg = MagicMock(spec=ShieldConfig)
         mock_cfg.return_value = cfg
-        result = deny("ctr", "1.2.3.4")
-        mock_deny.assert_called_once_with("ctr", "1.2.3.4", config=cfg)
+        result = deny("ctr", TEST_IP)
+        mock_deny.assert_called_once_with("ctr", TEST_IP, config=cfg)
         assert result == ["denied 1.2.3.4"]
 
     @patch("terok.lib.security.shield.shield_rules", return_value="table inet shield {}")
@@ -145,7 +148,7 @@ class TestManagementWrappers(unittest.TestCase):
         mock_rules.assert_called_once_with("ctr", config=cfg)
         assert result == "table inet shield {}"
 
-    @patch("terok.lib.security.shield.shield_resolve", return_value=["1.2.3.4"])
+    @patch("terok.lib.security.shield.shield_resolve", return_value=[TEST_IP])
     @patch("terok.lib.security.shield.get_shield_config")
     def test_resolve(self, mock_cfg: MagicMock, mock_resolve: MagicMock) -> None:
         """resolve() delegates to shield_resolve."""
@@ -153,7 +156,7 @@ class TestManagementWrappers(unittest.TestCase):
         mock_cfg.return_value = cfg
         result = resolve("ctr")
         mock_resolve.assert_called_once_with("ctr", config=cfg)
-        assert result == ["1.2.3.4"]
+        assert result == [TEST_IP]
 
     @patch("terok.lib.security.shield.tail_log", return_value=iter([{"action": "allow"}]))
     def test_logs(self, mock_tail: MagicMock) -> None:
