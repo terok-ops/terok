@@ -10,16 +10,9 @@ escape vector.
 
 Networking across Podman versions:
 
-- **pasta** (Podman 5+) sets ``host.containers.internal`` to a link-local
-  address (``169.254.1.2``) that does *not* reach the host's loopback.
-  The task runner injects ``--network pasta:-T,<port>`` (namespace-to-host
-  TCP forwarding) and ``--add-host host.containers.internal:127.0.0.1``
-  so the ``http://`` URL is forwarded to the host's loopback.
-- **slirp4netns** (Podman 4.x) routes the container gateway ``10.0.2.2`` to
-  ``127.0.0.1`` when ``allow_host_loopback=true`` is set.  The task runner
-  injects ``--network slirp4netns:allow_host_loopback=true`` and
-  ``--add-host host.containers.internal:10.0.2.2`` automatically (see
-  ``_podman_network_args`` in ``terok.lib.util.podman``).
+- **terok-shield** handles container networking via its OCI hook.  The gate
+  server port is passed as ``loopback_ports`` in :class:`ShieldConfig` so that
+  shield's nftables rules allow containers to reach host loopback on that port.
 
 **Deployment modes (ordered by preference):**
 

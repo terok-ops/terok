@@ -58,7 +58,7 @@ def get_shield_config() -> ShieldConfig:
     return ShieldConfig(
         mode=ShieldMode.HOOK,
         default_profiles=profiles,
-        gate_port=get_gate_server_port(),
+        loopback_ports=(get_gate_server_port(),),
         audit_enabled=bool(sec.get("audit", True)),
         audit_log_allowed=bool(sec.get("audit_log_allowed", True)),
     )

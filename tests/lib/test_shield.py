@@ -35,7 +35,7 @@ class TestGetShieldConfig(unittest.TestCase):
         cfg = get_shield_config()
         assert cfg.mode == ShieldMode.HOOK
         assert cfg.default_profiles == ("dev-standard",)
-        assert cfg.gate_port == 9418
+        assert cfg.loopback_ports == (9418,)
         assert cfg.audit_enabled is True
         assert cfg.audit_log_allowed is True
 
@@ -52,7 +52,7 @@ class TestGetShieldConfig(unittest.TestCase):
         """Custom config values are mapped correctly."""
         cfg = get_shield_config()
         assert cfg.default_profiles == ("custom-a", "custom-b")
-        assert cfg.gate_port == 7777
+        assert cfg.loopback_ports == (7777,)
         assert cfg.audit_enabled is False
         assert cfg.audit_log_allowed is False
 
@@ -87,7 +87,7 @@ class TestPreStart(unittest.TestCase):
         cfg = ShieldConfig(
             mode=ShieldMode.HOOK,
             default_profiles=("dev-standard",),
-            gate_port=9418,
+            loopback_ports=(9418,),
         )
         mock_cfg.return_value = cfg
         result = pre_start("my-container")
