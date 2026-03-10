@@ -137,7 +137,7 @@ accept permission flags — behave consistently.
 
 ### Decision flow
 
-```
+```text
 CLI flag (--unrestricted / --restricted)
   │  ↓ if not given
 Config stack: global → project → preset  (resolve_provider_value)
@@ -188,7 +188,7 @@ provider-agnostic: it doesn't need to know *which* flags each agent needs.
 | Config resolution | `agent_config.py` → `resolve_provider_value()` | Walks global → project → preset; supports flat values and per-provider dicts |
 | Host-side env injection | `task_runners.py` → `task_run_*()` | Sets `env["TEROK_UNRESTRICTED"] = "1"` before container start |
 | Meta persistence | `task_runners.py` | `meta["unrestricted"]` written to `meta.yml` (headless: always; CLI: on start; web: only on new container creation) |
-| CLI flag wiring | `cli/commands/task.py` | Mutually exclusive `--unrestricted` / `--restricted` mapped to tri-state `bool | None` |
+| CLI flag wiring | `cli/commands/task.py` | Mutually exclusive `--unrestricted` / `--restricted` mapped to tri-state `bool \| None` |
 | Claude wrapper | `agents.py` → `_generate_claude_wrapper()` | `if [ "$TEROK_UNRESTRICTED" = "1" ]; then _args+=(--dangerously-skip-permissions); fi` |
 | Generic wrappers | `headless_providers.py` → `_generate_generic_wrapper()` | Builds `_approve_args` array from `auto_approve_flags`; exports `auto_approve_env` vars |
 | Provider flag registry | `headless_providers.py` → `HeadlessProvider` dataclass | `auto_approve_flags: tuple[str, ...]` + `auto_approve_env: dict[str, str]` |
