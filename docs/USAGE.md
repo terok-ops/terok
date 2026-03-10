@@ -439,6 +439,69 @@ feature, terok applies an analogue where possible.  For example, `max_turns`
 for providers without `--max-turns` support is injected as guidance text in the
 prompt.  Features with no analogue produce a warning but don't block the run.
 
+### Permission Mode (Unrestricted / Restricted)
+
+By default, terok starts agents in **unrestricted** mode — all safety prompts
+are auto-approved so the agent can work fully autonomously.  You can switch to
+**restricted** mode, which launches the agent with its vendor-default permission
+settings (the agent will ask for confirmation before dangerous operations like
+file writes or shell commands).
+
+#### CLI flags
+
+```bash
+# Run restricted (agent uses vendor defaults — asks before dangerous ops)
+terokctl run myproj "Fix the bug" --restricted
+
+# Explicitly unrestricted (default behavior)
+terokctl run myproj "Fix the bug" --unrestricted
+```
+
+The flags are mutually exclusive.  When neither is given, the value comes from
+config (see below), defaulting to unrestricted.
+
+#### Config
+
+Like other config keys, `unrestricted` follows the resolution stack:
+global config → project config → preset → CLI flag.
+
+```yaml
+# Flat value — same for all providers
+unrestricted: false  # all agents start restricted
+```
+
+Per-provider dict syntax is supported:
+
+```yaml
+# Per-provider values
+unrestricted:
+  claude: true
+  codex: false
+  _default: true
+```
+
+Providers not listed in the dict (and without `_default`) default to
+unrestricted (`true`).
+
+#### What each mode does per agent
+
+| Provider | Unrestricted | Restricted (vendor default) |
+|----------|-------------|---------------------------|
+| claude | `--dangerously-skip-permissions` | Normal interactive prompts |
+| codex | `--dangerously-bypass-approvals-and-sandbox` | Sandboxed with approval prompts |
+| copilot | `--allow-all-tools` | Tool confirmation prompts |
+| vibe | `--auto-approve` | Approval prompts |
+| opencode / blablador | `OPENCODE_PERMISSION='{"*":"allow"}'` | Default permission policy |
+
+#### Checking the current mode
+
+```bash
+terokctl task status myproj 1
+# Output includes: Permissions: unrestricted
+```
+
+The TUI task detail panel also shows the permission mode.
+
 ### Sub-Agent Configuration
 
 Define sub-agents in your `project.yml` under the `agent:` section. Each
