@@ -29,6 +29,11 @@ _VENV_BIN = Path(sys.executable).parent
 # 3 → terok.lib.containers, terok.lib.core, etc.
 _GRAPH_DEPTH = 3
 
+_CODECOV_TREEMAP_LOCAL = ROOT / "docs" / "assets" / "coverage_treemap.svg"
+_CODECOV_TREEMAP_REMOTE = (
+    "https://codecov.io/gh/terok-ai/terok/graphs/tree.svg?token=zfJUmuTAqG"
+)
+
 
 def _run(
     *cmd: str, cwd: Path = ROOT, timeout_seconds: float = 120.0
@@ -493,6 +498,23 @@ def _section_docstring_coverage() -> str:
     return "".join(summary_lines)
 
 
+def _section_coverage_treemap() -> str:
+    """Generate the Codecov coverage treemap embed.
+
+    If CI downloaded the SVG to ``docs/assets/``, write it as a sibling of the
+    generated page and reference it locally via ``<object>``.  Otherwise fall
+    back to the remote Codecov URL.
+    """
+    if _CODECOV_TREEMAP_LOCAL.is_file():
+        svg = _CODECOV_TREEMAP_LOCAL.read_text(encoding="utf-8")
+        with mkdocs_gen_files.open("coverage_treemap.svg", "w") as f:
+            f.write(svg)
+        src = "coverage_treemap.svg"
+    else:
+        src = _CODECOV_TREEMAP_REMOTE
+    return f'<object id="codecov-treemap-img" type="image/svg+xml" data="{src}"></object>\n\n'
+
+
 def generate_report() -> str:
     """Assemble the full quality report."""
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -518,7 +540,7 @@ def generate_report() -> str:
         _section_dependency_report(),
         "\n",
         "## Test Coverage\n\n",
-        "![Codecov Coverage Treemap](https://codecov.io/gh/terok-ai/terok/graphs/tree.svg?token=zfJUmuTAqG)\n\n",
+        _section_coverage_treemap(),
         "\n",
         "## Cognitive Complexity\n\n",
         f"Threshold: **{COMPLEXITY_THRESHOLD}** (functions above this are listed below)\n\n",

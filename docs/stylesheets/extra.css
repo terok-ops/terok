@@ -81,6 +81,13 @@ samp {
   font-weight: 700;
 }
 
+#codecov-treemap-img {
+  display: block;
+  min-width: 300px;
+  width: 60%;
+  margin: 0 auto;
+}
+
 [data-md-color-scheme="default"] {
   --md-primary-fg-color: var(--terok-red-dark);
   --md-primary-fg-color--light: #8f1117;
