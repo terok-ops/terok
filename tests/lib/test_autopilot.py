@@ -280,9 +280,7 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
     def test_wrapper_uses_terok_unrestricted_env(self) -> None:
         """Wrapper conditionally injects --dangerously-skip-permissions via TEROK_UNRESTRICTED."""
         project = self._make_project()
-        wrapper = _generate_claude_wrapper(
-            WrapperConfig(has_agents=False, project=project)
-        )
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
         # The flag is gated by the env var check, not unconditionally injected
         self.assertIn('if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then', wrapper)
         self.assertIn("_args+=(--dangerously-skip-permissions)", wrapper)

@@ -28,7 +28,7 @@ from ..util.ansi import (
     yellow as _yellow,
 )
 from ..util.podman import _podman_userns_args
-from .agent_config import resolve_agent_config
+from .agent_config import resolve_agent_config, resolve_provider_value
 from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import (
     apply_web_env_overrides,
@@ -267,13 +267,10 @@ def task_run_cli(
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
 
     # Resolve unrestricted mode from config (CLI/web tasks default to True)
-    from ..containers.agent_config import (
-        resolve_agent_config as _resolve_cfg,
-        resolve_provider_value as _resolve_pv,
+    _effective = resolve_agent_config(project_id, preset=preset)
+    _unrestricted = resolve_provider_value(
+        "unrestricted", _effective, project.default_agent or "claude"
     )
-
-    _effective = _resolve_cfg(project_id, preset=preset)
-    _unrestricted = _resolve_pv("unrestricted", _effective, project.default_agent or "claude")
     if _unrestricted is None or _unrestricted:
         env["TEROK_UNRESTRICTED"] = "1"
 
@@ -359,13 +356,8 @@ def task_run_web(
         meta["backend"] = effective_backend
 
     # Resolve unrestricted mode from config using the effective backend
-    from ..containers.agent_config import (
-        resolve_agent_config as _resolve_cfg,
-        resolve_provider_value as _resolve_pv,
-    )
-
-    _effective = _resolve_cfg(project_id, preset=preset)
-    _unrestricted = _resolve_pv("unrestricted", _effective, effective_backend)
+    _effective = resolve_agent_config(project_id, preset=preset)
+    _unrestricted = resolve_provider_value("unrestricted", _effective, effective_backend)
     resolved_unrestricted = _unrestricted is None or bool(_unrestricted)
     if resolved_unrestricted:
         env["TEROK_UNRESTRICTED"] = "1"
@@ -579,8 +571,6 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     )
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
-    from ..containers.agent_config import resolve_provider_value
-
     unrestricted = request.unrestricted
     if unrestricted is None:
         cfg_val = resolve_provider_value("unrestricted", effective, resolved.name)
