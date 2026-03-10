@@ -39,16 +39,19 @@ class RenderHelpersTests(TestCase):
     def test_render_project_details_shows_config_path(self) -> None:
         widgets = import_widgets()
 
+        from pathlib import Path
+
         project = mock.Mock()
         project.id = "test-proj"
         project.upstream_url = "https://example.com/repo.git"
         project.security_class = "online"
-        project.root = "/home/user/.config/terok/projects/test-proj"
+        project.root = Path("/home/user/.config/terok/projects/test-proj")
+        project.agent_config = {}
         state = {"ssh": True, "dockerfiles": True, "images": True, "gate": True}
 
         result = widgets.render_project_details(project, state, task_count=5)
         text_str = str(result)
-        self.assertIn("/home/user/.config/terok/projects/test-proj", text_str)
+        self.assertIn("Config: /home/user/.config/terok/projects/test-proj", text_str)
 
     def test_render_project_details_none_project(self) -> None:
         widgets = import_widgets()
