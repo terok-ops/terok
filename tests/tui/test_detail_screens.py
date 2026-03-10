@@ -1116,5 +1116,49 @@ class GateServerActionDispatchTests(TestCase):
             getattr(instance, handler).assert_not_called()
 
 
+class DeleteTaskResultTests(TestCase):
+    """Tests for _delete_task tuple shape and delete notification messages."""
+
+    def _call_delete(
+        self, side_effect: BaseException | None = None, **kwargs: str
+    ) -> tuple[str, str, str, str | None]:
+        """Import app, mock task_delete, and call _delete_task."""
+        _, AppClass = import_app()
+        instance = mock.Mock(spec=AppClass)
+        # Patch task_delete in the method's own globals (the reimported module dict).
+        fn_globals = AppClass._delete_task.__globals__
+        orig = fn_globals["task_delete"]
+        fake = mock.Mock(side_effect=side_effect) if side_effect else mock.Mock()
+        fn_globals["task_delete"] = fake
+        try:
+            return AppClass._delete_task(
+                instance,
+                kwargs.get("project_id", "proj1"),
+                kwargs.get("task_id", "3"),
+                kwargs.get("task_name", "fix-login"),
+            )
+        finally:
+            fn_globals["task_delete"] = orig
+
+    def test_delete_task_success_returns_four_tuple(self) -> None:
+        """Successful deletion returns (project_id, task_id, task_name, None)."""
+        assert self._call_delete() == ("proj1", "3", "fix-login", None)
+
+    def test_delete_task_error_returns_four_tuple(self) -> None:
+        """Failed deletion returns (project_id, task_id, task_name, error_str)."""
+        result = self._call_delete(side_effect=RuntimeError("boom"))
+        assert result == ("proj1", "3", "fix-login", "boom")
+
+    def test_delete_task_systemexit_returns_four_tuple(self) -> None:
+        """SystemExit during deletion is captured in the error slot."""
+        result = self._call_delete(side_effect=SystemExit("not found"), task_name="")
+        assert result == ("proj1", "3", "", "not found")
+
+    def test_delete_task_empty_name(self) -> None:
+        """Empty task name is preserved through the round-trip."""
+        result = self._call_delete(task_name="")
+        assert result == ("proj1", "3", "", None)
+
+
 if __name__ == "__main__":
     main()

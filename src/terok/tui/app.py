@@ -693,10 +693,7 @@ if _HAS_TEXTUAL:
                 if not result:
                     return
                 project_id, task_id, task_name, error = result
-                task_label = (
-                    f"{project_id} {task_id}"
-                    + (f" {task_name}" if task_name else "")
-                )
+                task_label = f"{project_id} {task_id}" + (f" {task_name}" if task_name else "")
                 if error:
                     self.notify(f"Delete error for task {task_label}: {error}")
                 else:

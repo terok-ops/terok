@@ -87,9 +87,7 @@ class TaskActionsMixin:
 
     # ---------- Worker helpers ----------
 
-    def _queue_task_delete(
-        self, project_id: str, task_id: str, task_name: str
-    ) -> None:
+    def _queue_task_delete(self, project_id: str, task_id: str, task_name: str) -> None:
         """Schedule a background worker to delete a task."""
         self.run_worker(
             lambda: self._delete_task(project_id, task_id, task_name),
