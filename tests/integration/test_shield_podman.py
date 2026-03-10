@@ -130,6 +130,7 @@ class TestShieldEgress:
                 TEST_EGRESS_URL,
             ],
             capture_output=True,
+            timeout=30,
         )
         assert result.returncode != 0
 
@@ -153,5 +154,6 @@ class TestShieldEgress:
                 TEST_EGRESS_URL,
             ],
             capture_output=True,
+            timeout=45,
         )
         assert result.returncode == 0
