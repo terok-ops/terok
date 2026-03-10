@@ -696,7 +696,10 @@ if _HAS_TEXTUAL:
                 if error:
                     self.notify(f"Delete error for task {task_id}: {error}")
                 else:
-                    self.notify(f"Deleted task {task_id}")
+                    self.notify(
+                        f"Deleted task {task_id}."
+                        f" Archive: terokctl task archive list {project_id}",
+                    )
 
                 if project_id != self.current_project_id:
                     return

@@ -338,6 +338,10 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         )
     elif args.task_cmd == "delete":
         task_delete(args.project_id, args.task_id)
+        print(
+            f"Deleted task {args.task_id}. "
+            f"Archive: terokctl task archive list {args.project_id}"
+        )
     elif args.task_cmd == "stop":
         task_stop(args.project_id, args.task_id, timeout=getattr(args, "timeout", None))
     elif args.task_cmd == "restart":
