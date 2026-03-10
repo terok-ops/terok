@@ -196,6 +196,9 @@ def render_project_details(
             lines.append(Text(f"  Commit:   {gate_head}"))
         lines.append(Text(f"  Checked:  {staleness.last_checked}"))
 
+    lines.append(Text(""))
+    lines.append(Text(f"Config: {project.root}", style=dim_style))
+
     return Text("\n").join(lines)
 
 
