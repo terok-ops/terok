@@ -692,13 +692,17 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, task_id, error = result
+                project_id, task_id, task_name, error = result
+                task_label = (
+                    f"{project_id}/{task_id}"
+                    + (f" ({task_name})" if task_name else "")
+                )
                 if error:
-                    self.notify(f"Delete error for task {task_id}: {error}")
+                    self.notify(f"Delete error for task {task_label}: {error}")
                 else:
                     self.notify(
-                        f"Deleted task {task_id}."
-                        f" Archive: terokctl task archive list {project_id}",
+                        f"Deleted task {task_label}.\n"
+                        f"Archive: terokctl task archive list {project_id}",
                     )
 
                 if project_id != self.current_project_id:

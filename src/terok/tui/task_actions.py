@@ -87,25 +87,29 @@ class TaskActionsMixin:
 
     # ---------- Worker helpers ----------
 
-    def _queue_task_delete(self, project_id: str, task_id: str) -> None:
+    def _queue_task_delete(
+        self, project_id: str, task_id: str, task_name: str
+    ) -> None:
         """Schedule a background worker to delete a task."""
         self.run_worker(
-            lambda: self._delete_task(project_id, task_id),
+            lambda: self._delete_task(project_id, task_id, task_name),
             name=f"task-delete:{project_id}:{task_id}",
             group="task-delete",
             thread=True,
             exit_on_error=False,
         )
 
-    def _delete_task(self, project_id: str, task_id: str) -> tuple[str, str, str | None]:
-        """Delete a task and return ``(project_id, task_id, error_or_None)``."""
+    def _delete_task(
+        self, project_id: str, task_id: str, task_name: str
+    ) -> tuple[str, str, str, str | None]:
+        """Delete a task and return ``(project_id, task_id, task_name, error_or_None)``."""
         try:
             task_delete(project_id, task_id)
-            return project_id, task_id, None
+            return project_id, task_id, task_name, None
         except SystemExit as e:
-            return project_id, task_id, str(e)
+            return project_id, task_id, task_name, str(e)
         except Exception as e:
-            return project_id, task_id, str(e)
+            return project_id, task_id, task_name, str(e)
 
     # ---------- Task lifecycle actions ----------
 
@@ -484,20 +488,23 @@ class TaskActionsMixin:
             return
 
         tid = self.current_task.task_id
+        tname = self.current_task.name or ""
+        pid = self.current_project_id
+        task_label = f"{pid}/{tid}" + (f" ({tname})" if tname else "")
         if self.current_task.deleting:
-            self.notify(f"Task {tid} is already deleting.")
+            self.notify(f"Task {task_label} is already deleting.")
             return
 
-        self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
-        self.notify(f"Deleting task {tid}...")
+        self._log_debug(f"delete: start project_id={pid} task_id={tid}")
+        self.notify(f"Deleting task {task_label}...")
 
         self.current_task.deleting = True
         task_list = self.query_one("#task-list", TaskList)
         task_list.mark_deleting(tid)
         self._update_task_details()
 
-        mark_task_deleting(self.current_project_id, tid)
-        self._queue_task_delete(self.current_project_id, tid)
+        mark_task_deleting(pid, tid)
+        self._queue_task_delete(pid, tid, tname)
 
     async def _action_rename_task(self) -> None:
         """Rename the currently selected task."""
