@@ -181,13 +181,13 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
     ws_status: str | None = None
     ws_message: str | None = None
     if tid:
+        project = load_project(project_id)
         try:
-            project = load_project(project_id)
             agent_cfg = project.tasks_root / tid / "agent-config"
             ws = read_work_status(agent_cfg)
             ws_status = ws.status
             ws_message = ws.message
-        except (Exception, SystemExit):  # noqa: BLE001 — best-effort; missing config is normal
+        except Exception:  # noqa: BLE001 — best-effort; agent-config may not exist yet
             pass
     return TaskMeta(
         task_id=tid,
@@ -727,13 +727,12 @@ def task_delete(project_id: str, task_id: str) -> None:
     _task_delete(load_project(project_id), task_id)
 
 
-def _validate_login(project_id: str, task_id: str) -> tuple[str, str, ProjectConfig]:
+def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     """Validate that a task exists and its container is running.
 
-    Returns (container_name, mode, project) on success.
-    Raises SystemExit with actionable messages on failure.
+    Returns ``(container_name, mode)`` on success.
+    Raises ``SystemExit`` with actionable messages on failure.
     """
-    project = load_project(project_id)
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
@@ -744,8 +743,8 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, ProjectCon
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'terokctl task run-cli {project_id} {task_id}' "
-            f"or 'terokctl task run-web {project_id} {task_id}'."
+            f"Start it first via 'terokctl task run-cli {project.id} {task_id}' "
+            f"or 'terokctl task run-web {project.id} {task_id}'."
         )
 
     cname = container_name(project.id, mode, task_id)
@@ -753,19 +752,19 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, ProjectCon
     if state is None:
         raise SystemExit(
             f"Container {cname} does not exist. "
-            f"Run 'terokctl task restart {project_id} {task_id}' first."
+            f"Run 'terokctl task restart {project.id} {task_id}' first."
         )
     if state != "running":
         raise SystemExit(
             f"Container {cname} is not running (state: {state}). "
-            f"Run 'terokctl task restart {project_id} {task_id}' first."
+            f"Run 'terokctl task restart {project.id} {task_id}' first."
         )
-    return cname, mode, project
+    return cname, mode
 
 
 def _get_login_command(project: ProjectConfig, task_id: str) -> list[str]:
     """Return the podman exec command to log into a task container."""
-    cname, _mode, _project = _validate_login(project.id, task_id)
+    cname, _mode = _validate_login(project, task_id)
     return [
         "podman",
         "exec",

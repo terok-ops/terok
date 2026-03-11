@@ -15,9 +15,7 @@ Access via ``project.ssh``::
     print(result["public_key"])  # copy to git remote as deploy key
 """
 
-import getpass
 import os
-import socket
 import subprocess
 from importlib import resources
 from pathlib import Path
@@ -120,7 +118,10 @@ class SSHManager:
         if force or not cfg_path.exists():
             self._render_config(cfg_path, key_name, priv_path, project)
 
-        _harden_permissions(target_dir, priv_path, pub_path, cfg_path)
+        try:
+            _harden_permissions(target_dir, priv_path, pub_path, cfg_path)
+        except OSError as e:
+            raise SystemExit(f"Failed to set SSH directory permissions on {target_dir}: {e}") from e
         _print_init_summary(target_dir, priv_path, pub_path, cfg_path)
         return SSHInitResult(
             dir=str(target_dir),
@@ -148,7 +149,7 @@ class SSHManager:
             "-N",
             "",
             "-C",
-            f"terok {project_id} {getpass.getuser()}@{socket.gethostname()}",
+            f"terok {project_id}",
         ]
         try:
             subprocess.run(cmd, check=True)
@@ -167,10 +168,11 @@ class SSHManager:
             "IDENTITY_FILE": str(priv_path),
             "PROJECT_ID": project.id,
         }
-        config_text = _try_render_user_template(
-            project, variables
-        ) or _try_render_packaged_template(variables)
-        if not config_text:
+        user_config = _try_render_user_template(project, variables)
+        config_text = (
+            user_config if user_config is not None else _try_render_packaged_template(variables)
+        )
+        if config_text is None:
             raise SystemExit(
                 "Failed to render SSH config: no valid template. "
                 "Ensure a project ssh.config_template is set or the packaged template exists."
@@ -219,17 +221,17 @@ def _try_render_packaged_template(variables: dict[str, str]) -> str | None:
 
 
 def _harden_permissions(target_dir: Path, priv_path: Path, pub_path: Path, cfg_path: Path) -> None:
-    """Best-effort chmod to secure the SSH directory for container dev access."""
-    try:
-        os.chmod(target_dir, 0o700)
-        if priv_path.exists():
-            os.chmod(priv_path, 0o600)
-        if pub_path.exists():
-            os.chmod(pub_path, 0o644)
-        if cfg_path.exists():
-            os.chmod(cfg_path, 0o644)
-    except Exception:
-        pass
+    """Set restrictive permissions on the SSH directory and key files.
+
+    Raises ``OSError`` if any chmod operation fails.
+    """
+    os.chmod(target_dir, 0o700)
+    if priv_path.exists():
+        os.chmod(priv_path, 0o600)
+    if pub_path.exists():
+        os.chmod(pub_path, 0o644)
+    if cfg_path.exists():
+        os.chmod(cfg_path, 0o644)
 
 
 def _print_init_summary(target_dir: Path, priv_path: Path, pub_path: Path, cfg_path: Path) -> None:
