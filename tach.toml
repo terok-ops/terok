@@ -76,16 +76,49 @@ depends_on = [
     "terok.lib.containers.environment",
     "terok.lib.containers.image_cleanup",
     "terok.lib.containers.project_state",
+    "terok.lib.containers.runtime",
     "terok.lib.containers.task_logs",
     "terok.lib.containers.task_runners",
     "terok.lib.containers.tasks",
-    "terok.lib.core.config",
     "terok.lib.core.projects",
+    "terok.lib.project",
     "terok.lib.security.auth",
     "terok.lib.security.gate_server",
     "terok.lib.security.git_gate",
     "terok.lib.security.ssh",
+]
+
+# Rich domain objects (Aggregate Root, Entity)
+
+[[modules]]
+path = "terok.lib.project"
+layer = "services"
+depends_on = [
+    "terok.lib.containers.agent_config",
+    "terok.lib.containers.docker",
+    "terok.lib.containers.headless_providers",
+    "terok.lib.containers.instructions",
+    "terok.lib.containers.project_state",
+    "terok.lib.containers.task_runners",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.config",
+    "terok.lib.core.project_model",
+    "terok.lib.core.projects",
+    "terok.lib.security.git_gate",
+    "terok.lib.security.ssh",
+    "terok.lib.task",
     "terok.lib.util.fs",
+]
+
+[[modules]]
+path = "terok.lib.task"
+layer = "services"
+depends_on = [
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.task_logs",
+    "terok.lib.containers.task_runners",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.project_model",
 ]
 
 # ── SERVICES LAYER ──────────────────────────────────────────────────
@@ -419,7 +452,7 @@ utility = true
 
 [[interfaces]]
 expose = [
-    "Project",
+    "ProjectConfig",
     "PresetInfo",
     "effective_ssh_key_name",
     "validate_project_id",
@@ -429,6 +462,7 @@ from = ["terok.lib.core.project_model"]
 [[interfaces]]
 expose = [
     "Project",
+    "ProjectConfig",
     "PresetInfo",
     "find_preset_path",
     "list_projects",
@@ -484,6 +518,7 @@ from = ["terok.lib.containers.task_logs"]
 
 [[interfaces]]
 expose = [
+    "TaskManager",
     "task_new",
     "task_rename",
     "task_stop",
@@ -514,7 +549,7 @@ expose = [
 from = ["terok.lib.containers.tasks"]
 
 [[interfaces]]
-expose = ["task_run_cli", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
+expose = ["TaskRunner", "CLIRunner", "WebRunner", "HeadlessRunner", "TaskRunnerFactory", "task_run_cli", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
 from = ["terok.lib.containers.task_runners"]
 
 [[interfaces]]
@@ -522,7 +557,7 @@ expose = ["parse_md_agent", "prepare_agent_config_dir", "AgentConfigSpec"]
 from = ["terok.lib.containers.agents"]
 
 [[interfaces]]
-expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "CLIOverrides", "WrapperConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
+expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderRegistry", "ProviderConfig", "CLIOverrides", "WrapperConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
 from = ["terok.lib.containers.headless_providers"]
 
 [[interfaces]]
@@ -534,7 +569,7 @@ expose = ["resolve_instructions", "bundled_default_instructions", "has_custom_in
 from = ["terok.lib.containers.instructions"]
 
 [[interfaces]]
-expose = ["AUTH_PROVIDERS", "AuthProvider", "authenticate"]
+expose = ["AuthManager", "AUTH_PROVIDERS", "AuthProvider", "authenticate"]
 from = ["terok.lib.security.auth"]
 
 [[interfaces]]
@@ -547,11 +582,12 @@ expose = [
 from = ["terok.lib.containers.docker"]
 
 [[interfaces]]
-expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", "CleanupResult"]
+expose = ["ImageManager", "list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", "CleanupResult"]
 from = ["terok.lib.containers.image_cleanup"]
 
 [[interfaces]]
 expose = [
+    "GateServerManager",
     "GateServerStatus",
     "check_units_outdated",
     "get_server_status",
@@ -572,7 +608,7 @@ expose = ["token_file_path", "create_token", "revoke_token_for_task"]
 from = ["terok.lib.security.gate_tokens"]
 
 [[interfaces]]
-expose = ["init_project_ssh"]
+expose = ["SSHManager", "init_project_ssh"]
 from = ["terok.lib.security.ssh"]
 
 [[interfaces]]
@@ -581,6 +617,7 @@ expose = [
     "compare_gate_vs_upstream",
     "sync_gate_branches",
     "GateStalenessInfo",
+    "GitGate",
     "find_projects_sharing_gate",
     "get_gate_last_commit",
 ]
@@ -647,6 +684,7 @@ from = ["terok.lib.containers.environment"]
 
 [[interfaces]]
 expose = [
+    "ContainerRuntime",
     "container_name",
     "get_task_container_state",
     "get_container_state",
@@ -673,6 +711,8 @@ from = ["terok.lib.wizards.new_project"]
 
 [[interfaces]]
 expose = [
+    "Terok",
+    "Project",
     "delete_project",
     "generate_dockerfiles",
     "build_images",
@@ -724,6 +764,14 @@ expose = [
     "maybe_pause_for_ssh_key_registration",
 ]
 from = ["terok.lib.facade"]
+
+[[interfaces]]
+expose = ["Project", "AgentManager", "DeleteProjectResult", "_archive_project", "delete_project"]
+from = ["terok.lib.project"]
+
+[[interfaces]]
+expose = ["Task"]
+from = ["terok.lib.task"]
 
 # Config stack utility interface
 [[interfaces]]

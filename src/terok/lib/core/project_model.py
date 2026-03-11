@@ -13,8 +13,13 @@ from pathlib import Path
 
 
 @dataclass
-class Project:
-    """Resolved project configuration loaded from ``project.yml``."""
+class ProjectConfig:
+    """Resolved project configuration loaded from ``project.yml``.
+
+    Pure value object — holds configuration fields with no behavior beyond
+    computed paths.  The rich domain object :class:`~terok.lib.project.Project`
+    wraps this and provides behavior.
+    """
 
     id: str
     security_class: str  # "online" | "gatekeeping"
@@ -75,7 +80,7 @@ class PresetInfo:
     path: Path
 
 
-def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
+def effective_ssh_key_name(project: ProjectConfig, key_type: str = "ed25519") -> str:
     """Return the SSH key filename that should be used for this project.
 
     Precedence:

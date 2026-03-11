@@ -7,6 +7,10 @@ Provides a data-driven registry of auth providers (``AUTH_PROVIDERS``) and a
 single entry point ``authenticate(project_id, provider)`` that runs the
 appropriate flow inside a temporary L2 CLI container.
 
+The ``AuthManager`` class (Strategy + Registry pattern) owns the provider
+registry and the ``authenticate`` method.  Module-level ``AUTH_PROVIDERS``
+and ``authenticate()`` remain as backward-compatible wrappers.
+
 The shared helper ``_run_auth_container`` handles the common lifecycle:
 check podman, load project, ensure host dir, cleanup old container, run.
 """
@@ -294,7 +298,54 @@ def _run_auth_container(project_id: str, provider: AuthProvider) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# AuthManager (Strategy + Registry)
+# ---------------------------------------------------------------------------
+
+
+class AuthManager:
+    """Manages authentication provider registration and dispatch.
+
+    Wraps the module-level ``AUTH_PROVIDERS`` registry and exposes a
+    ``providers`` property and an ``authenticate`` method following the
+    Strategy + Registry pattern.
+    """
+
+    def __init__(self, providers: dict[str, AuthProvider] | None = None) -> None:
+        """Initialise the manager.
+
+        Parameters
+        ----------
+        providers:
+            Provider registry to use.  Defaults to the module-level
+            ``AUTH_PROVIDERS`` dictionary.
+        """
+        self._providers: dict[str, AuthProvider] = (
+            providers if providers is not None else AUTH_PROVIDERS
+        )
+
+    @property
+    def providers(self) -> dict[str, AuthProvider]:
+        """Return the provider registry dictionary."""
+        return self._providers
+
+    def authenticate(self, project_id: str, provider: str) -> None:
+        """Run the auth flow for *provider* against *project_id*.
+
+        Raises ``SystemExit`` if the provider name is unknown.
+        """
+        info = self._providers.get(provider)
+        if not info:
+            available = ", ".join(self._providers)
+            raise SystemExit(f"Unknown auth provider: {provider}. Available: {available}")
+        _run_auth_container(project_id, info)
+
+
+# Singleton used by the module-level wrapper.
+_default_manager = AuthManager()
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible public API
 # ---------------------------------------------------------------------------
 
 
@@ -302,9 +353,8 @@ def authenticate(project_id: str, provider: str) -> None:
     """Run the auth flow for *provider* against *project_id*.
 
     Raises ``SystemExit`` if the provider name is unknown.
+
+    This is a backward-compatible wrapper that delegates to the default
+    ``AuthManager`` instance.
     """
-    info = AUTH_PROVIDERS.get(provider)
-    if not info:
-        available = ", ".join(AUTH_PROVIDERS)
-        raise SystemExit(f"Unknown auth provider: {provider}. Available: {available}")
-    _run_auth_container(project_id, info)
+    _default_manager.authenticate(project_id, provider)

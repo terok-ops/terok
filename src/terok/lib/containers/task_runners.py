@@ -3,14 +3,18 @@
 
 """Task container runners: CLI, web, headless, and restart.
 
-Split from ``tasks.py`` to decompose the God Module.  This module handles
-the ``podman run`` orchestration for each task mode while ``tasks.py``
-retains task metadata, lifecycle, and query operations.
+Provides :class:`TaskRunner` (Template Method ABC) with :class:`CLIRunner`,
+:class:`WebRunner`, and :class:`HeadlessRunner` subclasses, plus a
+:class:`TaskRunnerFactory` for mode-based selection.
+
+Backward-compatible module-level functions (``task_run_cli``, etc.) are
+preserved and delegate to the existing implementation.
 """
 
 from __future__ import annotations
 
 import subprocess
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -51,7 +55,7 @@ from .tasks import (
 )
 
 if TYPE_CHECKING:
-    from ..core.project_model import Project
+    from ..core.project_model import ProjectConfig as Project
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,82 @@ class DetachedSummary:
     color: bool
     log_cmd: str
     stop_cmd: str
+
+
+# ---------- TaskRunner ABC hierarchy (Template Method + Factory) ----------
+
+
+class TaskRunner(ABC):
+    """Abstract base for task container runners (Template Method pattern).
+
+    Subclasses implement :meth:`run` to handle the mode-specific orchestration.
+    """
+
+    @abstractmethod
+    def run(self, config: Project, task_id: str, **kwargs) -> None:
+        """Launch or attach to a task container."""
+
+
+class CLIRunner(TaskRunner):
+    """Runner for interactive CLI-mode tasks."""
+
+    def run(
+        self,
+        config: Project,
+        task_id: str,
+        *,
+        agents: list[str] | None = None,
+        preset: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Launch a CLI-mode task container."""
+        task_run_cli(config.id, task_id, agents=agents, preset=preset)
+
+
+class WebRunner(TaskRunner):
+    """Runner for web-mode tasks with a browser-accessible IDE."""
+
+    def run(
+        self,
+        config: Project,
+        task_id: str,
+        *,
+        backend: str | None = None,
+        agents: list[str] | None = None,
+        preset: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Launch a web-mode task container."""
+        task_run_web(config.id, task_id, backend=backend, agents=agents, preset=preset)
+
+
+class HeadlessRunner(TaskRunner):
+    """Runner for headless (autopilot) tasks."""
+
+    def run(self, config: Project, task_id: str, *, request: HeadlessRunRequest, **kwargs) -> None:
+        """Launch a headless task container."""
+        task_run_headless(request)
+
+
+class TaskRunnerFactory:
+    """Factory Method for mode-based runner selection."""
+
+    _runners: dict[str, type[TaskRunner]] = {
+        "cli": CLIRunner,
+        "web": WebRunner,
+        "run": HeadlessRunner,
+    }
+
+    @classmethod
+    def get_runner(cls, mode: str) -> TaskRunner:
+        """Return a runner instance for the given mode.
+
+        Raises ``SystemExit`` if *mode* is not recognized.
+        """
+        runner_cls = cls._runners.get(mode)
+        if runner_cls is None:
+            raise SystemExit(f"Unknown task mode: {mode!r}")
+        return runner_cls()
 
 
 def _prepare_agent_config(

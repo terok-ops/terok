@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dockerfile generation, image building, and build-context hashing."""
+"""Dockerfile generation, image building, and build-context hashing.
+
+Provides :class:`ImageBuilder` (Builder pattern) plus backward-compatible
+module-level functions.
+"""
 
 import hashlib
 import shutil

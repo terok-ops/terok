@@ -1,163 +1,306 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Container utility functions that can be safely imported by other modules."""
+"""Container runtime gateway wrapping the Podman CLI.
+
+Provides :class:`ContainerRuntime` (Gateway pattern) and backward-compatible
+module-level functions that delegate to a module-level singleton.
+"""
 
 import subprocess
 from collections.abc import Callable
 from typing import Any
 
-from ..core.projects import Project, load_project
+from ..core.projects import ProjectConfig, load_project
 
-# ---------- Container naming ----------
+# ---------- Constants ----------
 
 CONTAINER_MODES = ("cli", "web", "run")
 
 
+# ---------- ContainerRuntime class (Gateway) ----------
+
+
+class ContainerRuntime:
+    """Gateway wrapping the Podman CLI for container lifecycle operations.
+
+    All methods are stateless — the class groups related operations and
+    makes dependency injection possible.
+    """
+
+    @staticmethod
+    def container_name(project_id: str, mode: str, task_id: str) -> str:
+        """Return the canonical container name for a task."""
+        return f"{project_id}-{mode}-{task_id}"
+
+    @staticmethod
+    def get_project_container_states(project_id: str) -> dict[str, str]:
+        """Return ``{container_name: state}`` for all containers matching *project_id*.
+
+        Uses a single ``podman ps -a`` call with a name filter instead of
+        per-container ``podman inspect`` calls.  Returns an empty dict when
+        podman is unavailable.
+        """
+        try:
+            out = subprocess.check_output(
+                [
+                    "podman",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name=^{project_id}-",
+                    "--format",
+                    "{{.Names}} {{.State}}",
+                    "--no-trunc",
+                ],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return {}
+
+        result: dict[str, str] = {}
+        for line in out.strip().splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                result[parts[0]] = parts[1].lower()
+        return result
+
+    @staticmethod
+    def get_container_state(cname: str) -> str | None:
+        """Return container state ('running', 'exited', …) or ``None`` if not found."""
+        try:
+            out = subprocess.check_output(
+                ["podman", "inspect", "-f", "{{.State.Status}}", cname],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            return out.lower() if out else None
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+
+    @staticmethod
+    def is_container_running(cname: str) -> bool:
+        """Return ``True`` if the named container is currently running."""
+        try:
+            out = subprocess.check_output(
+                ["podman", "inspect", "-f", "{{.State.Running}}", cname],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+        return out.lower() == "true"
+
+    @staticmethod
+    def stop_task_containers(project: Any, task_id: str) -> None:
+        """Best-effort ``podman rm -f`` of all mode containers for a task.
+
+        Ignores all errors so that task deletion succeeds even when podman is
+        absent or the containers are already gone.
+        """
+        from ..util.logging_utils import _log_debug
+
+        names = [
+            ContainerRuntime.container_name(project.id, mode, task_id) for mode in CONTAINER_MODES
+        ]
+        for name in names:
+            try:
+                _log_debug(f"stop_containers: podman rm -f {name} (start)")
+                subprocess.run(
+                    ["podman", "rm", "-f", name],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                _log_debug(f"stop_containers: podman rm -f {name} (done)")
+            except Exception:
+                pass
+
+    @staticmethod
+    def gpu_run_args(project: "ProjectConfig") -> list[str]:
+        """Return additional ``podman run`` args to enable NVIDIA GPU if configured."""
+        import yaml
+
+        enabled = False
+        try:
+            proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+            run_cfg = proj_cfg.get("run", {}) or {}
+            gpus = run_cfg.get("gpus")
+            if isinstance(gpus, str):
+                enabled = gpus.lower() == "all"
+            elif isinstance(gpus, bool):
+                enabled = gpus
+        except Exception:
+            enabled = False
+
+        if not enabled:
+            return []
+
+        return [
+            "--device",
+            "nvidia.com/gpu=all",
+            "-e",
+            "NVIDIA_VISIBLE_DEVICES=all",
+            "-e",
+            "NVIDIA_DRIVER_CAPABILITIES=all",
+        ]
+
+    @staticmethod
+    def stream_initial_logs(
+        container_name: str,
+        timeout_sec: float | None,
+        ready_check: Callable[[str], bool],
+    ) -> bool:
+        """Stream logs until ready marker is seen or timeout.
+
+        Returns ``True`` if the ready marker was found, ``False`` on timeout.
+        """
+        import select
+        import sys
+        import threading
+        import time
+
+        from ..util.logging_utils import _log_debug
+
+        holder: list[bool] = [False]
+        stop_event = threading.Event()
+        proc_holder: list[subprocess.Popen | None] = [None]
+
+        def stream_logs() -> None:
+            """Follow container logs in a thread, setting *holder[0]* on ready."""
+            try:
+                proc = subprocess.Popen(
+                    ["podman", "logs", "-f", container_name],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                proc_holder[0] = proc
+                start_time = time.time()
+                buf = b""
+
+                while not stop_event.is_set():
+                    if timeout_sec is not None and time.time() - start_time >= timeout_sec:
+                        break
+                    if proc.poll() is not None:
+                        remaining = proc.stdout.read()
+                        if remaining:
+                            buf += remaining
+                        break
+                    try:
+                        ready, _, _ = select.select([proc.stdout], [], [], 0.2)
+                        if not ready:
+                            continue
+                        chunk = proc.stdout.read1(4096) if hasattr(proc.stdout, "read1") else b""
+                        if not chunk:
+                            continue
+                        buf += chunk
+                    except Exception as exc:
+                        _log_debug(f"_stream_initial_logs read error: {exc}")
+                        break
+
+                    while b"\n" in buf:
+                        raw_line, buf = buf.split(b"\n", 1)
+                        line = raw_line.decode("utf-8", errors="replace").strip()
+                        if line:
+                            print(line, file=sys.stdout, flush=True)
+                            if ready_check(line):
+                                holder[0] = True
+                                proc.terminate()
+                                return
+
+                if buf:
+                    line = buf.decode("utf-8", errors="replace").strip()
+                    if line:
+                        print(line, file=sys.stdout, flush=True)
+                        if ready_check(line):
+                            holder[0] = True
+
+                proc.terminate()
+            except Exception as exc:
+                _log_debug(f"_stream_initial_logs error: {exc}")
+
+        stream_thread = threading.Thread(target=stream_logs)
+        stream_thread.start()
+        stream_thread.join(timeout_sec)
+
+        if stream_thread.is_alive():
+            stop_event.set()
+            proc = proc_holder[0]
+            if proc is not None:
+                proc.terminate()
+            stream_thread.join(timeout=5)
+
+        return holder[0]
+
+    @staticmethod
+    def wait_for_exit(cname: str, timeout_sec: float | None = None) -> int:
+        """Wait for a container to exit and return its exit code.
+
+        Returns 124 on timeout, 1 if podman is not found.
+        """
+        try:
+            proc = subprocess.run(
+                ["podman", "wait", cname],
+                check=False,
+                capture_output=True,
+                timeout=timeout_sec,
+            )
+            stdout = proc.stdout.decode().strip() if isinstance(proc.stdout, bytes) else proc.stdout
+            if stdout:
+                return int(stdout)
+            return proc.returncode
+        except subprocess.TimeoutExpired:
+            return 124
+        except (FileNotFoundError, ValueError):
+            return 1
+
+    @staticmethod
+    def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
+        """Get actual container state for a task (TUI helper)."""
+        if not mode:
+            return None
+        try:
+            project = load_project(project_id)
+        except (SystemExit, ValueError):
+            return None
+        cname = container_name(project.id, mode, task_id)
+        return get_container_state(cname)
+
+
+# ---------- Module-level backward-compatible wrappers ----------
+
+_runtime = ContainerRuntime()
+
+
 def container_name(project_id: str, mode: str, task_id: str) -> str:
     """Return the canonical container name for a task."""
-    return f"{project_id}-{mode}-{task_id}"
+    return _runtime.container_name(project_id, mode, task_id)
 
 
 def get_project_container_states(project_id: str) -> dict[str, str]:
-    """Return ``{container_name: state}`` for all containers matching *project_id*.
-
-    Uses a single ``podman ps -a`` call with a name filter instead of
-    per-container ``podman inspect`` calls.  Returns an empty dict when
-    podman is unavailable.
-    """
-    try:
-        out = subprocess.check_output(
-            [
-                "podman",
-                "ps",
-                "-a",
-                "--filter",
-                f"name=^{project_id}-",
-                "--format",
-                "{{.Names}} {{.State}}",
-                "--no-trunc",
-            ],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return {}
-
-    result: dict[str, str] = {}
-    for line in out.strip().splitlines():
-        parts = line.split(None, 1)
-        if len(parts) == 2:
-            result[parts[0]] = parts[1].lower()
-    return result
+    """Return ``{container_name: state}`` for all containers matching *project_id*."""
+    return _runtime.get_project_container_states(project_id)
 
 
 def get_container_state(container_name: str) -> str | None:
-    """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
-
-    This uses `podman inspect` to get the actual container state. Returns None
-    if the container doesn't exist or podman is not available.
-    """
-    try:
-        out = subprocess.check_output(
-            ["podman", "inspect", "-f", "{{.State.Status}}", container_name],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return out.lower() if out else None
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+    """Return container state or ``None`` if not found."""
+    return _runtime.get_container_state(container_name)
 
 
 def is_container_running(container_name: str) -> bool:
-    """Return True if a podman container with the given name is running.
-
-    This uses `podman inspect` and treats missing containers or any
-    inspection error as "not running".
-    """
-    try:
-        out = subprocess.check_output(
-            ["podman", "inspect", "-f", "{{.State.Running}}", container_name],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-    return out.lower() == "true"
+    """Return ``True`` if a podman container with the given name is running."""
+    return _runtime.is_container_running(container_name)
 
 
 def stop_task_containers(project: Any, task_id: str) -> None:
-    """Best-effort removal of any containers associated with a task.
-
-    We intentionally ignore most errors here: task deletion should succeed
-    even if podman isn't installed, the containers are already gone, or the
-    container names never existed. This helper is used when deleting a
-    task's workspace/metadata to avoid leaving behind containers that would
-    later conflict with a new task reusing the same ID.
-
-    We use ``podman rm -f`` rather than ``podman stop`` to make teardown
-    deterministic and avoid hangs waiting for graceful shutdown inside the
-    container. The task itself is already being deleted at this point, so
-    a forceful remove is acceptable and keeps state consistent.
-    """
-    from ..util.logging_utils import _log_debug
-
-    # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
-    names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
-
-    for name in names:
-        try:
-            _log_debug(f"stop_containers: podman rm -f {name} (start)")
-            # "podman rm -f" force-removes the container even if it is
-            # currently running. If the container does not exist this will
-            # fail, but we treat that as a non-fatal condition and simply
-            # continue.
-            subprocess.run(
-                ["podman", "rm", "-f", name],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _log_debug(f"stop_containers: podman rm -f {name} (done)")
-        except Exception:
-            # We intentionally ignore all errors here.
-            pass
+    """Best-effort removal of any containers associated with a task."""
+    _runtime.stop_task_containers(project, task_id)
 
 
-def gpu_run_args(project: "Project") -> list[str]:
-    """Return additional podman run args to enable NVIDIA GPU if configured.
-
-    Per-project only: GPUs are enabled exclusively by the project's project.yml.
-    Default is disabled. Global config and environment variables are ignored.
-    """
-    import yaml
-
-    # Project-level setting from project.yml (only source of truth)
-    enabled = False
-    try:
-        proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
-        run_cfg = proj_cfg.get("run", {}) or {}
-        gpus = run_cfg.get("gpus")
-        if isinstance(gpus, str):
-            enabled = gpus.lower() == "all"
-        elif isinstance(gpus, bool):
-            enabled = gpus
-    except Exception:
-        enabled = False
-
-    if not enabled:
-        return []
-
-    args: list[str] = [
-        "--device",
-        "nvidia.com/gpu=all",
-        "-e",
-        "NVIDIA_VISIBLE_DEVICES=all",
-        "-e",
-        "NVIDIA_DRIVER_CAPABILITIES=all",
-    ]
-
-    return args
+def gpu_run_args(project: "ProjectConfig") -> list[str]:
+    """Return additional podman run args to enable NVIDIA GPU if configured."""
+    return _runtime.gpu_run_args(project)
 
 
 def stream_initial_logs(
@@ -165,132 +308,15 @@ def stream_initial_logs(
     timeout_sec: float | None,
     ready_check: Callable[[str], bool],
 ) -> bool:
-    """Stream logs from a container until ready marker is seen or timeout.
-
-    Returns True if ready marker was found, False on timeout.
-    Uses select.select for non-blocking reads so the thread can exit cleanly
-    when the caller's join timeout expires.
-    """
-    import select
-    import sys
-    import threading
-    import time
-
-    from ..util.logging_utils import _log_debug
-
-    # Mutable container so stream_logs can propagate its result back.
-    holder: list[bool] = [False]
-    # Event to signal the thread to stop (set when join times out).
-    stop_event = threading.Event()
-    # Keep a reference to proc so we can terminate it from the outer scope.
-    proc_holder: list[subprocess.Popen | None] = [None]
-
-    def stream_logs() -> None:
-        """Follow container logs in a thread, setting *holder[0]* on ready."""
-        try:
-            proc = subprocess.Popen(
-                ["podman", "logs", "-f", container_name],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-            proc_holder[0] = proc
-
-            start_time = time.time()
-            buf = b""
-
-            while not stop_event.is_set():
-                if timeout_sec is not None and time.time() - start_time >= timeout_sec:
-                    break
-                if proc.poll() is not None:
-                    # Process exited; drain remaining output.
-                    remaining = proc.stdout.read()
-                    if remaining:
-                        buf += remaining
-                    break
-
-                try:
-                    ready, _, _ = select.select([proc.stdout], [], [], 0.2)
-                    if not ready:
-                        continue
-                    chunk = proc.stdout.read1(4096) if hasattr(proc.stdout, "read1") else b""
-                    if not chunk:
-                        continue
-                    buf += chunk
-                except Exception as exc:
-                    _log_debug(f"_stream_initial_logs read error: {exc}")
-                    break
-
-                # Process complete lines from the buffer.
-                while b"\n" in buf:
-                    raw_line, buf = buf.split(b"\n", 1)
-                    line = raw_line.decode("utf-8", errors="replace").strip()
-                    if line:
-                        print(line, file=sys.stdout, flush=True)
-                        if ready_check(line):
-                            holder[0] = True
-                            proc.terminate()
-                            return
-
-            # Flush any trailing partial line.
-            if buf:
-                line = buf.decode("utf-8", errors="replace").strip()
-                if line:
-                    print(line, file=sys.stdout, flush=True)
-                    if ready_check(line):
-                        holder[0] = True
-
-            proc.terminate()
-        except Exception as exc:
-            _log_debug(f"_stream_initial_logs error: {exc}")
-
-    stream_thread = threading.Thread(target=stream_logs)
-    stream_thread.start()
-    stream_thread.join(timeout_sec)
-
-    if stream_thread.is_alive():
-        # Join timed out — signal and clean up.
-        stop_event.set()
-        proc = proc_holder[0]
-        if proc is not None:
-            proc.terminate()
-        stream_thread.join(timeout=5)
-
-    return holder[0]
+    """Stream logs from a container until ready marker is seen or timeout."""
+    return _runtime.stream_initial_logs(container_name, timeout_sec, ready_check)
 
 
 def wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int:
-    """Wait for a container to exit and return its exit code.
-
-    Returns the container's exit code, 124 on timeout, or 1 if podman is not found.
-    """
-    try:
-        proc = subprocess.run(
-            ["podman", "wait", container_name],
-            check=False,
-            capture_output=True,
-            timeout=timeout_sec,
-        )
-        stdout = proc.stdout.decode().strip() if isinstance(proc.stdout, bytes) else proc.stdout
-        if stdout:
-            return int(stdout)
-        return proc.returncode
-    except subprocess.TimeoutExpired:
-        return 124
-    except (FileNotFoundError, ValueError):
-        return 1
+    """Wait for a container to exit and return its exit code."""
+    return _runtime.wait_for_exit(container_name, timeout_sec)
 
 
 def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
-    """Get actual container state for a task.
-
-    This is intended for TUI background workers to check container status.
-    Returns 'running', 'exited', 'paused', etc., or None if container not found.
-    """
-    if not mode:
-        return None
-    try:
-        project = load_project(project_id)
-    except (SystemExit, ValueError):
-        return None
-    cname = container_name(project.id, mode, task_id)
-    return get_container_state(cname)
+    """Get actual container state for a task."""
+    return _runtime.get_task_container_state(project_id, task_id, mode)

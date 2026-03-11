@@ -18,7 +18,7 @@ from terok.lib.containers.headless_providers import (
     generate_all_wrappers,
     get_provider,
 )
-from terok.lib.core.project_model import Project
+from terok.lib.core.project_model import ProjectConfig as Project
 
 
 def _make_project(**kwargs: object) -> Project:

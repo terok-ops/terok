@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ..core.project_model import Project
+    from ..core.project_model import ProjectConfig as Project
 
 
 @dataclass(frozen=True)
@@ -263,6 +263,34 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
 PROVIDER_NAMES: tuple[str, ...] = tuple(HEADLESS_PROVIDERS.keys())
 
 
+class ProviderRegistry:
+    """Named lookup table for headless providers (Registry pattern)."""
+
+    def __init__(self, providers: dict[str, HeadlessProvider] | None = None) -> None:
+        self._providers = providers or HEADLESS_PROVIDERS
+
+    def get(self, name: str | None, project: Project) -> HeadlessProvider:
+        """Resolve a provider name to a :class:`HeadlessProvider`.
+
+        Resolution order: explicit *name* → ``project.default_agent`` → ``"claude"``.
+        Raises ``SystemExit`` if the resolved name is not in the registry.
+        """
+        resolved = name or project.default_agent or "claude"
+        provider = self._providers.get(resolved)
+        if provider is None:
+            valid = ", ".join(sorted(self._providers))
+            raise SystemExit(f"Unknown headless provider {resolved!r}. Valid providers: {valid}")
+        return provider
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return valid provider names for CLI argument validation."""
+        return tuple(self._providers.keys())
+
+
+_registry = ProviderRegistry()
+
+
 def get_provider(name: str | None, project: Project) -> HeadlessProvider:
     """Resolve a provider name to a ``HeadlessProvider``.
 
@@ -273,12 +301,7 @@ def get_provider(name: str | None, project: Project) -> HeadlessProvider:
 
     Raises ``SystemExit`` if the resolved name is not in the registry.
     """
-    resolved = name or project.default_agent or "claude"
-    provider = HEADLESS_PROVIDERS.get(resolved)
-    if provider is None:
-        valid = ", ".join(sorted(HEADLESS_PROVIDERS))
-        raise SystemExit(f"Unknown headless provider {resolved!r}. Valid providers: {valid}")
-    return provider
+    return _registry.get(name, project)
 
 
 @dataclass(frozen=True)

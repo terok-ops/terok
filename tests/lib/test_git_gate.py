@@ -330,11 +330,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=commit_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=commit_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": commit_hash,
                         "ref_name": "refs/heads/main",
@@ -366,11 +366,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": upstream_hash,
                         "ref_name": "refs/heads/main",
@@ -406,7 +406,7 @@ git:
         with project_env(yaml, project_id=project_id):
             # Mock get_gate_branch_head to return None
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=None
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=None
             ):
                 result = compare_gate_vs_upstream(project_id)
 
@@ -432,11 +432,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head to return None
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head", return_value=None
+                    "terok.lib.security.git_gate._get_upstream_head", return_value=None
                 ):
                     result = compare_gate_vs_upstream(project_id)
 
@@ -463,11 +463,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": upstream_hash,
                         "ref_name": "refs/heads/main",

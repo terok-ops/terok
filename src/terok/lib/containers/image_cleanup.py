@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Image listing and cleanup for terok-managed container images."""
+"""Image listing and cleanup for terok-managed container images.
+
+Provides :class:`ImageManager` (Builder + Repository pattern) plus
+backward-compatible module-level functions.
+"""
 
 from __future__ import annotations
 
@@ -92,6 +96,28 @@ def _is_terok_image(repo: str, tag: str) -> bool:
     if repo.startswith(_terok_image_prefixes()):
         return True
     return _is_terok_l2_image(repo, tag)
+
+
+class ImageManager:
+    """Repository for terok-managed container images.
+
+    Groups image listing, orphan detection, and cleanup operations.
+    """
+
+    @staticmethod
+    def list_images(project_id: str | None = None) -> list[ImageInfo]:
+        """List terok-managed images, optionally filtered by project."""
+        return list_images(project_id)
+
+    @staticmethod
+    def find_orphaned() -> list[ImageInfo]:
+        """Find terok images that are orphaned and safe to remove."""
+        return find_orphaned_images()
+
+    @staticmethod
+    def cleanup(*, dry_run: bool = False) -> CleanupResult:
+        """Remove orphaned terok images."""
+        return cleanup_images(dry_run=dry_run)
 
 
 def list_images(project_id: str | None = None) -> list[ImageInfo]:
