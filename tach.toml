@@ -80,14 +80,47 @@ depends_on = [
     "terok.lib.containers.task_logs",
     "terok.lib.containers.task_runners",
     "terok.lib.containers.tasks",
-    "terok.lib.core.config",
     "terok.lib.core.projects",
+    "terok.lib.project",
     "terok.lib.security.auth",
     "terok.lib.security.gate_server",
     "terok.lib.security.git_gate",
     "terok.lib.security.shield",
     "terok.lib.security.ssh",
+    "terok.lib.task",
+]
+
+# Rich domain objects (Aggregate Root, Entity)
+
+[[modules]]
+path = "terok.lib.project"
+layer = "services"
+depends_on = [
+    "terok.lib.containers.agent_config",
+    "terok.lib.containers.docker",
+    "terok.lib.containers.headless_providers",
+    "terok.lib.containers.instructions",
+    "terok.lib.containers.project_state",
+    "terok.lib.containers.task_runners",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.config",
+    "terok.lib.core.project_model",
+    "terok.lib.core.projects",
+    "terok.lib.security.git_gate",
+    "terok.lib.security.ssh",
+    "terok.lib.task",
     "terok.lib.util.fs",
+]
+
+[[modules]]
+path = "terok.lib.task"
+layer = "services"
+depends_on = [
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.task_logs",
+    "terok.lib.containers.task_runners",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.project_model",
 ]
 
 # ── SERVICES LAYER ──────────────────────────────────────────────────
@@ -438,7 +471,7 @@ utility = true
 
 [[interfaces]]
 expose = [
-    "Project",
+    "ProjectConfig",
     "PresetInfo",
     "effective_ssh_key_name",
     "validate_project_id",
@@ -447,7 +480,7 @@ from = ["terok.lib.core.project_model"]
 
 [[interfaces]]
 expose = [
-    "Project",
+    "ProjectConfig",
     "PresetInfo",
     "find_preset_path",
     "list_projects",
@@ -467,15 +500,12 @@ expose = [
     "ProjectBadge",
     "STATUS_DISPLAY",
     "MODE_DISPLAY",
-    "WEB_BACKEND_EMOJI",
-    "WEB_BACKEND_DEFAULT_EMOJI",
     "SECURITY_CLASS_DISPLAY",
     "GPU_DISPLAY",
     "WEB_BACKEND_DISPLAY",
     "WEB_BACKEND_DEFAULT",
     "effective_status",
     "mode_info",
-    "mode_emoji",
     "has_gpu",
 ]
 from = ["terok.lib.containers.task_display"]
@@ -518,6 +548,7 @@ expose = [
     "get_tasks",
     "get_all_task_states",
     "get_login_command",
+    "get_task_meta",
     "get_workspace_git_diff",
     "mark_task_deleting",
     "update_task_exit_code",
@@ -591,7 +622,7 @@ expose = ["token_file_path", "create_token", "revoke_token_for_task"]
 from = ["terok.lib.security.gate_tokens"]
 
 [[interfaces]]
-expose = ["init_project_ssh"]
+expose = ["SSHManager", "SSHInitResult"]
 from = ["terok.lib.security.ssh"]
 
 [[interfaces]]
@@ -612,12 +643,12 @@ from = ["terok.lib.security.shield"]
 
 [[interfaces]]
 expose = [
-    "sync_project_gate",
-    "compare_gate_vs_upstream",
-    "sync_gate_branches",
     "GateStalenessInfo",
+    "GateSyncResult",
+    "BranchSyncResult",
+    "CommitInfo",
+    "GitGate",
     "find_projects_sharing_gate",
-    "get_gate_last_commit",
 ]
 from = ["terok.lib.security.git_gate"]
 
@@ -708,6 +739,12 @@ from = ["terok.lib.wizards.new_project"]
 
 [[interfaces]]
 expose = [
+    "get_project",
+    "list_projects",
+    "derive_project",
+    "Project",
+    "Task",
+    "DeleteProjectResult",
     "delete_project",
     "generate_dockerfiles",
     "build_images",
@@ -733,8 +770,8 @@ expose = [
     "task_followup_headless",
     "task_logs",
     "LogViewOptions",
-    "init_project_ssh",
-    "sync_project_gate",
+    "SSHManager",
+    "GitGate",
     "AUTH_PROVIDERS",
     "AuthProvider",
     "authenticate",
@@ -749,9 +786,6 @@ expose = [
     "stop_daemon",
     "is_daemon_running",
     "is_systemd_available",
-    "compare_gate_vs_upstream",
-    "sync_gate_branches",
-    "get_gate_last_commit",
     "GateStalenessInfo",
     "find_projects_sharing_gate",
     "get_project_state",
@@ -762,6 +796,14 @@ expose = [
     "shield_status",
 ]
 from = ["terok.lib.facade"]
+
+[[interfaces]]
+expose = ["Project", "AgentManager", "DeleteProjectResult", "delete_project"]
+from = ["terok.lib.project"]
+
+[[interfaces]]
+expose = ["Task"]
+from = ["terok.lib.task"]
 
 # Config stack utility interface
 [[interfaces]]

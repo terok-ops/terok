@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ..core.project_model import Project
+    from ..core.project_model import ProjectConfig
 
 
 @dataclass(frozen=True)
@@ -272,7 +272,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
 PROVIDER_NAMES: tuple[str, ...] = tuple(HEADLESS_PROVIDERS.keys())
 
 
-def get_provider(name: str | None, project: Project) -> HeadlessProvider:
+def get_provider(name: str | None, project: ProjectConfig) -> HeadlessProvider:
     """Resolve a provider name to a ``HeadlessProvider``.
 
     Resolution order:
@@ -335,7 +335,7 @@ class WrapperConfig:
     """Groups parameters for generating the Claude shell wrapper."""
 
     has_agents: bool
-    project: Project
+    project: ProjectConfig
     has_instructions: bool = False
 
 
@@ -522,7 +522,7 @@ def _build_generic_command(
 
 def generate_agent_wrapper(
     provider: HeadlessProvider,
-    project: Project,
+    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -556,7 +556,7 @@ def generate_agent_wrapper(
 
 
 def generate_all_wrappers(
-    project: Project,
+    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -583,7 +583,7 @@ def generate_all_wrappers(
     return "\n".join(sections)
 
 
-def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> str:
+def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig) -> str:
     """Generate a shell wrapper for non-Claude providers.
 
     Sets git identity env vars and wraps the binary with optional timeout

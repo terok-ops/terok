@@ -65,10 +65,6 @@ WEB_BACKEND_DISPLAY: dict[str, ModeInfo] = {
 
 WEB_BACKEND_DEFAULT = MODE_DISPLAY["web"]
 
-# Backward-compatibility aliases for code that reads raw emoji strings.
-WEB_BACKEND_EMOJI: dict[str, str] = {k: v.emoji for k, v in WEB_BACKEND_DISPLAY.items()}
-WEB_BACKEND_DEFAULT_EMOJI: str = WEB_BACKEND_DEFAULT.emoji
-
 
 @dataclass(frozen=True)
 class ProjectBadge:
@@ -166,13 +162,3 @@ def mode_info(task: TaskMeta) -> ModeInfo:
         return WEB_BACKEND_DEFAULT
     info = MODE_DISPLAY.get(mode if isinstance(mode, str) else None)
     return info if info else MODE_DISPLAY[None]
-
-
-# Backward-compat alias — returns the raw emoji string.
-def mode_emoji(task: TaskMeta) -> str:
-    """Return the mode emoji string for a task (legacy wrapper).
-
-    Prefer ``mode_info()`` which returns a ``ModeInfo`` with both
-    ``emoji`` and ``label``, usable with ``render_emoji()``.
-    """
-    return mode_info(task).emoji

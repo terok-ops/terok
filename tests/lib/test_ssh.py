@@ -7,7 +7,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from terok.lib.security.ssh import init_project_ssh
+from terok.lib.core.projects import load_project
+from terok.lib.security.ssh import SSHManager
 from test_utils import mock_git_config, write_project
 
 
@@ -36,7 +37,7 @@ class SshTests(unittest.TestCase):
                 mock_git_config(),
                 unittest.mock.patch("terok.lib.security.ssh.subprocess.run") as run_mock,
             ):
-                result = init_project_ssh(project_id, key_name=key_name)
+                result = SSHManager(load_project(project_id)).init(key_name=key_name)
 
                 run_mock.assert_not_called()
                 cfg_path = Path(result["config_path"])
@@ -69,7 +70,7 @@ class SshTests(unittest.TestCase):
                 unittest.mock.patch("terok.lib.security.ssh.subprocess.run") as run_mock,
                 unittest.mock.patch("builtins.print") as print_mock,
             ):
-                init_project_ssh(project_id)
+                SSHManager(load_project(project_id)).init()
 
                 run_mock.assert_not_called()
                 printed_lines = [

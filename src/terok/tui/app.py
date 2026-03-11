@@ -46,7 +46,7 @@ if _HAS_TEXTUAL:
 
     from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import get_tui_default_tmux, set_experimental, state_root
-    from ..lib.core.projects import Project, list_projects, load_project
+    from ..lib.core.projects import ProjectConfig, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
     from ..lib.core.version import (
@@ -56,7 +56,7 @@ if _HAS_TEXTUAL:
     from ..lib.facade import (
         GateServerStatus,
         GateStalenessInfo,
-        compare_gate_vs_upstream,
+        GitGate,
         get_project_state,
         get_server_status,
         is_task_image_old,
@@ -67,7 +67,7 @@ if _HAS_TEXTUAL:
         """Result of loading project infrastructure state in a background thread."""
 
         project_id: str
-        project: Project | None = None
+        project: ProjectConfig | None = None
         state: dict | None = None
         staleness: GateStalenessInfo | None = None
         gate_server_status: GateServerStatus | None = None
@@ -217,7 +217,7 @@ if _HAS_TEXTUAL:
 
             self.current_project_id: str | None = None
             self.current_task: TaskMeta | None = None
-            self._projects_by_id: dict[str, Project] = {}
+            self._projects_by_id: dict[str, ProjectConfig] = {}
             self._last_task_count: int | None = None
             # Upstream polling state
             self._staleness_info: GateStalenessInfo | None = None
@@ -529,13 +529,15 @@ if _HAS_TEXTUAL:
             """Load project infrastructure state in a background thread."""
             try:
                 project = load_project(project_id)
-                from ..lib.facade import get_gate_last_commit
-
-                state = get_project_state(project_id, gate_commit_provider=get_gate_last_commit)
+                gate = GitGate(project)
+                state = get_project_state(
+                    project_id,
+                    gate_commit_provider=lambda _pid, _g=gate: _g.last_commit(),
+                )
                 staleness = None
                 if state.get("gate") and project.upstream_url:
                     try:
-                        staleness = compare_gate_vs_upstream(project_id)
+                        staleness = gate.compare_vs_upstream()
                     except Exception:
                         staleness = None
                 try:

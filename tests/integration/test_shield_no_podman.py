@@ -309,9 +309,9 @@ class TestTaskRunnerShieldIntegration:
             ),
         ):
             from terok.lib.containers.task_runners import _run_container
-            from terok.lib.core.project_model import Project
+            from terok.lib.core.projects import ProjectConfig
 
-            project = MagicMock(spec=Project)
+            project = MagicMock(spec=ProjectConfig)
 
             _run_container(
                 cname="integ-test-ctr",
@@ -347,9 +347,9 @@ class TestTaskRunnerShieldIntegration:
             ),
         ):
             from terok.lib.containers.task_runners import _run_container
-            from terok.lib.core.project_model import Project
+            from terok.lib.core.projects import ProjectConfig
 
-            project = MagicMock(spec=Project)
+            project = MagicMock(spec=ProjectConfig)
 
             with pytest.raises(RuntimeError, match="hook not installed"):
                 _run_container(

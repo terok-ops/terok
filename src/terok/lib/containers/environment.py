@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.config import get_envs_base_dir
-from ..core.projects import Project
+from ..core.projects import ProjectConfig
 from ..security.gate_server import ensure_server_reachable, get_gate_base_path, get_gate_server_port
 from ..util.fs import ensure_dir_writable
 
@@ -161,7 +161,7 @@ def _gate_url(gate_repo: Path, gate_base: Path, port: int, project_id: str, toke
 
 
 def _security_mode_env_and_volumes(
-    project: Project, ssh_host_dir: Path, task_id: str
+    project: ProjectConfig, ssh_host_dir: Path, task_id: str
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
     from ..security.gate_tokens import create_token
@@ -217,7 +217,7 @@ def _security_mode_env_and_volumes(
 # ---------- Main builder ----------
 
 
-def build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
+def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[dict, list[str]]:
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).

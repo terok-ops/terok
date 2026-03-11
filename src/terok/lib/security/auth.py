@@ -295,11 +295,6 @@ def _run_auth_container(project_id: str, provider: AuthProvider) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def authenticate(project_id: str, provider: str) -> None:
     """Run the auth flow for *provider* against *project_id*.
 

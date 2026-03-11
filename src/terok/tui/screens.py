@@ -47,7 +47,7 @@ from rich.text import Text
 
 from ..lib.containers.tasks import sanitize_task_name, validate_task_name
 from ..lib.core.config import is_experimental
-from ..lib.core.projects import Project
+from ..lib.core.projects import ProjectConfig
 from ..lib.facade import (
     GateServerStatus,
     GateStalenessInfo,
@@ -273,7 +273,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
     def __init__(
         self,
-        project: Project,
+        project: ProjectConfig,
         state: dict | None,
         task_count: int | None,
         staleness: GateStalenessInfo | None = None,

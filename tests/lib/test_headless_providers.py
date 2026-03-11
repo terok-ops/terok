@@ -18,11 +18,11 @@ from terok.lib.containers.headless_providers import (
     generate_all_wrappers,
     get_provider,
 )
-from terok.lib.core.project_model import Project
+from terok.lib.core.projects import ProjectConfig
 
 
-def _make_project(**kwargs: object) -> Project:
-    """Create a minimal Project with sensible defaults."""
+def _make_project(**kwargs: object) -> ProjectConfig:
+    """Create a minimal ProjectConfig with sensible defaults."""
     from pathlib import Path
 
     defaults: dict = {
@@ -41,7 +41,7 @@ def _make_project(**kwargs: object) -> Project:
         "human_email": "test@example.com",
     }
     defaults.update(kwargs)
-    return Project(**defaults)
+    return ProjectConfig(**defaults)
 
 
 class HeadlessProviderRegistryTests(unittest.TestCase):

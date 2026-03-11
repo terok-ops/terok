@@ -8,7 +8,8 @@ from pathlib import Path
 
 from terok.lib.core.config import build_root, deleted_projects_dir, state_root
 from terok.lib.core.projects import load_project
-from terok.lib.facade import _archive_project, delete_project
+from terok.lib.facade import delete_project
+from terok.lib.project import _archive_project
 from terok.lib.util.fs import (
     archive_timestamp,
     create_archive_dir,

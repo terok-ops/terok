@@ -3,6 +3,8 @@
 
 """Task metadata, lifecycle, and query operations.
 
+Provides module-level functions for CRUD over YAML-backed task metadata.
+
 Container runner functions (``task_run_cli``, ``task_run_web``,
 ``task_run_headless``, ``task_restart``) live in the companion
 ``task_runners`` module.  Display types and status computation live in
@@ -19,7 +21,7 @@ from pathlib import Path
 import yaml  # pip install pyyaml
 
 from ..core.config import state_root
-from ..core.projects import Project, load_project
+from ..core.projects import ProjectConfig, load_project
 from ..util.ansi import (
     green as _green,
     red as _red,
@@ -153,6 +155,58 @@ def _default_categories_for_project(project_id: str) -> list[str]:
     return rng.sample(categories, min(3, len(categories)))
 
 
+def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
+    """Return metadata for a single task with live container state.
+
+    Hydrates ``container_state`` from the running container so that
+    ``TaskMeta.status`` reflects current reality rather than stale YAML.
+    Raises ``SystemExit`` if the task metadata file is not found.
+    """
+    meta_dir = tasks_meta_dir(project_id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    raw = yaml.safe_load(meta_path.read_text()) or {}
+    mode = raw.get("mode")
+    tid = str(raw.get("task_id", ""))
+    # Hydrate live container state only for tasks that have actually been started
+    live_state: str | None = None
+    if mode is not None:
+        try:
+            cname = container_name(project_id, mode, task_id)
+            live_state = get_container_state(cname)
+        except Exception:
+            pass
+    # Hydrate work status from agent-config (same logic as _get_tasks)
+    ws_status: str | None = None
+    ws_message: str | None = None
+    if tid:
+        project = load_project(project_id)
+        try:
+            agent_cfg = project.tasks_root / tid / "agent-config"
+            ws = read_work_status(agent_cfg)
+            ws_status = ws.status
+            ws_message = ws.message
+        except Exception:  # noqa: BLE001 — best-effort; agent-config may not exist yet
+            pass
+    return TaskMeta(
+        task_id=tid,
+        mode=mode,
+        workspace=raw.get("workspace", ""),
+        web_port=raw.get("web_port"),
+        backend=raw.get("backend"),
+        container_state=live_state,
+        exit_code=raw.get("exit_code"),
+        deleting=bool(raw.get("deleting")),
+        preset=raw.get("preset"),
+        name=raw["name"],
+        provider=raw.get("provider"),
+        unrestricted=raw.get("unrestricted"),
+        work_status=ws_status,
+        work_message=ws_message,
+    )
+
+
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
     """Get git diff from a task's workspace.
 
@@ -252,6 +306,53 @@ def _write_task_readme(task_dir: Path) -> None:
     )
 
 
+def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
+    """Create a new task with a fresh workspace.  Returns the task ID."""
+    if name is not None:
+        task_name = sanitize_task_name(name)
+        if task_name is None:
+            raise SystemExit(f"Invalid task name: {name!r}")
+        err = validate_task_name(task_name)
+        if err:
+            raise SystemExit(f"Invalid task name: {err}")
+    else:
+        task_name = generate_task_name(project.id)
+    tasks_root = project.tasks_root
+    ensure_dir(tasks_root)
+    meta_dir = tasks_meta_dir(project.id)
+    ensure_dir(meta_dir)
+
+    existing = sorted([p.stem for p in meta_dir.glob("*.yml") if p.stem.isdigit()], key=int)
+    next_id = str(int(existing[-1]) + 1 if existing else 1)
+
+    ws = tasks_root / next_id
+    ensure_dir(ws)
+
+    workspace_dir = ws / "workspace-dangerous"
+    ensure_dir(workspace_dir)
+    workspace_dir.chmod(0o700)
+    marker_path = workspace_dir / ".new-task-marker"
+    marker_path.write_text(
+        "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
+        "# It is created by 'terokctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
+        "# If you see this file in an initialized workspace, something went wrong.\n",
+        encoding="utf-8",
+    )
+
+    _write_task_readme(ws)
+
+    meta = {
+        "task_id": next_id,
+        "name": task_name,
+        "mode": None,
+        "workspace": str(ws),
+        "web_port": None,
+    }
+    (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
+    print(f"Created task {next_id} ({task_name}) in {ws}")
+    return next_id
+
+
 def task_new(project_id: str, *, name: str | None = None) -> str:
     """Create a new task with a fresh workspace for a project.
 
@@ -284,66 +385,11 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
     - Stale workspace from incompletely deleted previous task with same ID
     - Ensuring new tasks always start with latest code
     """
-    project = load_project(project_id)
-
-    # Validate name early (before creating any artifacts on disk)
-    if name is not None:
-        task_name = sanitize_task_name(name)
-        if task_name is None:
-            raise SystemExit(f"Invalid task name: {name!r}")
-        err = validate_task_name(task_name)
-        if err:
-            raise SystemExit(f"Invalid task name: {err}")
-    else:
-        task_name = generate_task_name(project.id)
-    tasks_root = project.tasks_root
-    ensure_dir(tasks_root)
-    meta_dir = tasks_meta_dir(project.id)
-    ensure_dir(meta_dir)
-
-    # Simple ID: numeric increment
-    existing = sorted([p.stem for p in meta_dir.glob("*.yml") if p.stem.isdigit()], key=int)
-    next_id = str(int(existing[-1]) + 1 if existing else 1)
-
-    ws = tasks_root / next_id
-    ensure_dir(ws)
-
-    # Create the workspace subdirectory and place a marker file to signal
-    # that this is a fresh task. The init script will reset to latest HEAD
-    # when it sees this marker, then remove it. See docstring above.
-    workspace_dir = ws / "workspace-dangerous"
-    ensure_dir(workspace_dir)
-    workspace_dir.chmod(0o700)
-    marker_path = workspace_dir / ".new-task-marker"
-    marker_path.write_text(
-        "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
-        "# It is created by 'terokctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
-        "# If you see this file in an initialized workspace, something went wrong.\n",
-        encoding="utf-8",
-    )
-
-    # Write a README explaining the security implications of the task directory
-    _write_task_readme(ws)
-
-    meta = {
-        "task_id": next_id,
-        "name": task_name,
-        "mode": None,
-        "workspace": str(ws),
-        "web_port": None,
-    }
-    (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
-    print(f"Created task {next_id} ({task_name}) in {ws}")
-    return next_id
+    return _task_new(load_project(project_id), name=name)
 
 
-def task_rename(project_id: str, task_id: str, new_name: str) -> None:
-    """Rename a task by updating its metadata YAML.
-
-    Sanitizes *new_name* and writes the result to the task's metadata file.
-    Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
-    """
-    project = load_project(project_id)
+def _task_rename(project: ProjectConfig, task_id: str, new_name: str) -> None:
+    """Rename a task by updating its metadata YAML."""
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
@@ -360,13 +406,21 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     print(f"Renamed task {task_id} to {sanitized}")
 
 
-def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
+def task_rename(project_id: str, task_id: str, new_name: str) -> None:
+    """Rename a task by updating its metadata YAML.
+
+    Sanitizes *new_name* and writes the result to the task's metadata file.
+    Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
+    """
+    _task_rename(load_project(project_id), task_id, new_name)
+
+
+def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     """Return all task metadata for *project_id*, sorted by task ID."""
     meta_dir = tasks_meta_dir(project_id)
     tasks: list[TaskMeta] = []
     if not meta_dir.is_dir():
         return tasks
-    # Resolve tasks_root once for work-status enrichment
     try:
         project = load_project(project_id)
         tasks_root = project.tasks_root
@@ -376,7 +430,6 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
         try:
             meta = yaml.safe_load(f.read_text()) or {}
             tid = str(meta.get("task_id", ""))
-            # Read agent work status from agent-config dir
             ws_status = None
             ws_message = None
             if tasks_root and tid:
@@ -413,6 +466,11 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
 
     tasks.sort(key=_sort_key, reverse=reverse)
     return tasks
+
+
+def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
+    """Return all task metadata for *project_id*, sorted by task ID."""
+    return _get_tasks(project_id, reverse=reverse)
 
 
 def get_all_task_states(
@@ -527,15 +585,19 @@ def mark_task_deleting(project_id: str, task_id: str) -> None:
         _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
 
-def capture_task_logs(project_id: str, task_id: str, mode: str) -> Path | None:
+def capture_task_logs(project: ProjectConfig | str, task_id: str, mode: str) -> Path | None:
     """Capture container logs to the task's ``logs/`` directory on the host.
 
     Writes stdout/stderr from ``podman logs`` to
     ``<tasks_root>/<task_id>/logs/container.log``.  Returns the log file
     path on success, or ``None`` if the container doesn't exist or podman
     fails.
+
+    *project* may be a :class:`ProjectConfig` or a project-ID string
+    (the string form loads the config internally for backward compat).
     """
-    project = load_project(project_id)
+    if isinstance(project, str):
+        project = load_project(project)
     task_dir = project.tasks_root / str(task_id)
     logs_dir = task_dir / "logs"
     ensure_dir(logs_dir)
@@ -561,7 +623,7 @@ def capture_task_logs(project_id: str, task_id: str, mode: str) -> Path | None:
     return log_file
 
 
-def _archive_task(project: Project, task_id: str, meta: dict) -> Path | None:
+def _archive_task(project: ProjectConfig, task_id: str, meta: dict) -> Path | None:
     """Archive task metadata and logs before deletion.
 
     Creates an archive entry at
@@ -602,59 +664,36 @@ def _archive_task(project: Project, task_id: str, meta: dict) -> Path | None:
         return None
 
 
-def task_delete(project_id: str, task_id: str) -> None:
-    """Delete a task's workspace, metadata, and any associated containers.
+def _task_delete(project: ProjectConfig, task_id: str) -> None:
+    """Delete a task's workspace, metadata, and associated containers."""
+    _log_debug(f"task_delete: start project_id={project.id} task_id={task_id}")
 
-    Before removing the task, captures container logs and archives the task
-    metadata and logs to ``<state_root>/projects/<project_id>/archive/``.
-    The archive directory is named by archival timestamp + task ID + name
-    for unique identification (task numbers and names can be reused).
-
-    This mirrors the behavior used by the TUI when deleting a task, but is
-    exposed here so both CLI and TUI share the same logic. Containers are
-    stopped best-effort via podman using the naming scheme
-    "<project.id>-<mode>-<task_id>".
-    """
-    _log_debug(f"task_delete: start project_id={project_id} task_id={task_id}")
-
-    project = load_project(project_id)
-    _log_debug("task_delete: loaded project")
-
-    # Workspace lives under the project's tasks_root using the numeric ID.
     workspace = project.tasks_root / str(task_id)
-
-    # Metadata lives in the per-project tasks state dir.
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
 
-    # Load metadata for archival before we delete anything
     meta = {}
     if meta_path.is_file():
         meta = yaml.safe_load(meta_path.read_text()) or {}
 
-    # Capture container logs before stopping containers
     mode = meta.get("mode")
     if mode:
         _log_debug("task_delete: capturing container logs")
-        capture_task_logs(project_id, task_id, mode)
+        capture_task_logs(project, task_id, mode)
 
-    # Archive metadata + logs before cleanup
     if meta:
         _log_debug("task_delete: archiving task")
         _archive_task(project, task_id, meta)
 
-    # Revoke gate tokens before stopping containers
     _log_debug("task_delete: revoking gate tokens")
     from ..security.gate_tokens import revoke_token_for_task
 
     try:
-        revoke_token_for_task(project_id, task_id)
+        revoke_token_for_task(project.id, task_id)
     except Exception as exc:
         _log_debug(f"task_delete: token revoke failed: {exc}")
 
-    # Stop any matching containers first to avoid name conflicts if a new
-    # task is later created with the same ID.
     _log_debug("task_delete: calling _stop_task_containers")
     stop_task_containers(project, str(task_id))
     _log_debug("task_delete: _stop_task_containers returned")
@@ -672,13 +711,28 @@ def task_delete(project_id: str, task_id: str) -> None:
     _log_debug("task_delete: finished")
 
 
-def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
+def task_delete(project_id: str, task_id: str) -> None:
+    """Delete a task's workspace, metadata, and any associated containers.
+
+    Before removing the task, captures container logs and archives the task
+    metadata and logs to ``<state_root>/projects/<project_id>/archive/``.
+    The archive directory is named by archival timestamp + task ID + name
+    for unique identification (task numbers and names can be reused).
+
+    This mirrors the behavior used by the TUI when deleting a task, but is
+    exposed here so both CLI and TUI share the same logic. Containers are
+    stopped best-effort via podman using the naming scheme
+    "<project.id>-<mode>-<task_id>".
+    """
+    _task_delete(load_project(project_id), task_id)
+
+
+def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     """Validate that a task exists and its container is running.
 
-    Returns (container_name, mode, project) on success.
-    Raises SystemExit with actionable messages on failure.
+    Returns ``(container_name, mode)`` on success.
+    Raises ``SystemExit`` with actionable messages on failure.
     """
-    project = load_project(project_id)
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
@@ -689,8 +743,8 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'terokctl task run-cli {project_id} {task_id}' "
-            f"or 'terokctl task run-web {project_id} {task_id}'."
+            f"Start it first via 'terokctl task run-cli {project.id} {task_id}' "
+            f"or 'terokctl task run-web {project.id} {task_id}'."
         )
 
     cname = container_name(project.id, mode, task_id)
@@ -698,26 +752,19 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
     if state is None:
         raise SystemExit(
             f"Container {cname} does not exist. "
-            f"Run 'terokctl task restart {project_id} {task_id}' first."
+            f"Run 'terokctl task restart {project.id} {task_id}' first."
         )
     if state != "running":
         raise SystemExit(
             f"Container {cname} is not running (state: {state}). "
-            f"Run 'terokctl task restart {project_id} {task_id}' first."
+            f"Run 'terokctl task restart {project.id} {task_id}' first."
         )
-    return cname, mode, project
+    return cname, mode
 
 
-def get_login_command(project_id: str, task_id: str) -> list[str]:
-    """Return the podman exec command to log into a task container.
-
-    Validates the task and container state, then returns the command
-    list for use by TUI/tmux/terminal-spawn paths.
-
-    Agent config is injected via the mount at container creation time,
-    so no runtime injection is needed here.
-    """
-    cname, _mode, _project = _validate_login(project_id, task_id)
+def _get_login_command(project: ProjectConfig, task_id: str) -> list[str]:
+    """Return the podman exec command to log into a task container."""
+    cname, _mode = _validate_login(project, task_id)
     return [
         "podman",
         "exec",
@@ -731,14 +778,9 @@ def get_login_command(project_id: str, task_id: str) -> list[str]:
     ]
 
 
-def task_login(project_id: str, task_id: str) -> None:
-    """Open an interactive shell in a running task container.
-
-    Validates the task, then replaces the current process with
-    ``podman exec -it <container> tmux new-session -A -s main``.
-    Raises SystemExit if podman is not found on PATH.
-    """
-    cmd = get_login_command(project_id, task_id)
+def _task_login(project: ProjectConfig, task_id: str) -> None:
+    """Open an interactive shell in a running task container."""
+    cmd = _get_login_command(project, task_id)
     try:
         os.execvp(cmd[0], cmd)
     except FileNotFoundError:
@@ -747,15 +789,8 @@ def task_login(project_id: str, task_id: str) -> None:
         )
 
 
-def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> None:
-    """Gracefully stop a running task container.
-
-    Uses ``podman stop --time <N>`` to give the container *timeout* seconds
-    before SIGKILL.  When *timeout* is ``None`` the project's
-    ``run.shutdown_timeout`` setting is used (default 10 s).
-    Updates task metadata status to 'stopped'.
-    """
-    project = load_project(project_id)
+def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = None) -> None:
+    """Gracefully stop a running task container."""
     effective_timeout = timeout if timeout is not None else project.shutdown_timeout
     meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -789,7 +824,27 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
 
     color_enabled = _supports_color()
     print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")
-    print(f"Restart with: terokctl task restart {project_id} {task_id}")
+    print(f"Restart with: terokctl task restart {project.id} {task_id}")
+
+
+def get_login_command(project_id: str, task_id: str) -> list[str]:
+    """Return the podman exec command to log into a task container."""
+    return _get_login_command(load_project(project_id), task_id)
+
+
+def task_login(project_id: str, task_id: str) -> None:
+    """Open an interactive shell in a running task container."""
+    _task_login(load_project(project_id), task_id)
+
+
+def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> None:
+    """Gracefully stop a running task container.
+
+    Uses ``podman stop --time <N>`` to give the container *timeout* seconds
+    before SIGKILL.  When *timeout* is ``None`` the project's
+    ``run.shutdown_timeout`` setting is used (default 10 s).
+    """
+    _task_stop(load_project(project_id), task_id, timeout=timeout)
 
 
 def task_status(project_id: str, task_id: str) -> None:

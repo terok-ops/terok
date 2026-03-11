@@ -9,15 +9,16 @@ from collections.abc import Callable
 def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     """Apply project-init step mocks to a test method.
 
-    Mock args are injected as: mock_ssh, mock_pause, mock_gen, mock_build, mock_gate.
+    Mock args are injected as: mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load.
     """
-    func = unittest.mock.patch("terok.cli.commands.setup.init_project_ssh")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.SSHManager")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
         func
     )
     func = unittest.mock.patch("terok.cli.commands.setup.generate_dockerfiles")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.build_images")(func)
-    func = unittest.mock.patch("terok.cli.commands.setup.sync_project_gate")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.GitGate")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.load_project")(func)
     return func
 
 
@@ -26,30 +27,30 @@ class ProjectInitTests(unittest.TestCase):
 
     @_patch_init_steps
     def test_cmd_project_init_calls_four_steps(
-        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
+        self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
-        mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
+        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": "/tmp/gate"}
 
         from terok.cli.commands.setup import cmd_project_init
 
         cmd_project_init("myproj")
 
-        mock_ssh.assert_called_once_with("myproj")
+        mock_ssh_cls.return_value.init.assert_called_once()
         mock_pause.assert_called_once_with("myproj")
         mock_gen.assert_called_once_with("myproj")
         mock_build.assert_called_once_with("myproj")
-        mock_gate.assert_called_once_with("myproj")
+        mock_gate_cls.return_value.sync.assert_called_once()
 
     @_patch_init_steps
     def test_cmd_project_init_calls_in_order(
-        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
+        self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
         call_order: list[str] = []
-        mock_ssh.side_effect = lambda *a, **kw: call_order.append("ssh")
+        mock_ssh_cls.return_value.init.side_effect = lambda **kw: call_order.append("ssh")
         mock_pause.side_effect = lambda *a, **kw: call_order.append("pause")
         mock_gen.side_effect = lambda *a, **kw: call_order.append("generate")
         mock_build.side_effect = lambda *a, **kw: call_order.append("build")
-        mock_gate.side_effect = lambda *a, **kw: (
+        mock_gate_cls.return_value.sync.side_effect = lambda **kw: (
             call_order.append("gate"),
             {"success": True, "path": "/tmp/gate"},
         )[-1]
@@ -62,9 +63,12 @@ class ProjectInitTests(unittest.TestCase):
 
     @_patch_init_steps
     def test_cmd_project_init_gate_failure_raises(
-        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
+        self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
-        mock_gate.return_value = {"success": False, "errors": ["no upstream_url"]}
+        mock_gate_cls.return_value.sync.return_value = {
+            "success": False,
+            "errors": ["no upstream_url"],
+        }
 
         from terok.cli.commands.setup import cmd_project_init
 
@@ -102,20 +106,20 @@ class SshPauseTests(unittest.TestCase):
 
     @_patch_init_steps
     def test_project_init_continues_after_pause(
-        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
+        self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
         """Verify generate/build/gate-sync all proceed after the pause step."""
-        mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
+        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": "/tmp/gate"}
 
         from terok.cli.commands.setup import cmd_project_init
 
         cmd_project_init("sshproj")
 
-        mock_ssh.assert_called_once_with("sshproj")
+        mock_ssh_cls.return_value.init.assert_called_once()
         mock_pause.assert_called_once_with("sshproj")
         mock_gen.assert_called_once_with("sshproj")
         mock_build.assert_called_once_with("sshproj")
-        mock_gate.assert_called_once_with("sshproj")
+        mock_gate_cls.return_value.sync.assert_called_once()
 
 
 class TaskStartTests(unittest.TestCase):

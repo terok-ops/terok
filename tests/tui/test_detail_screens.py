@@ -917,16 +917,23 @@ class GateSyncActionTests(TestCase):
         instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
         instance._print_sync_gate_ssh_help = mock.Mock()
         instance._refresh_project_state = mock.Mock()
-        fake_sync_project_gate = mock.Mock(side_effect=SystemExit("auth failed"))
+        fake_gate = mock.Mock()
+        fake_gate.sync = mock.Mock(side_effect=SystemExit("auth failed"))
         action_globals = AppClass._action_sync_gate.__globals__
 
         with (
-            mock.patch.dict(action_globals, {"sync_project_gate": fake_sync_project_gate}),
+            mock.patch.dict(
+                action_globals,
+                {
+                    "GitGate": mock.Mock(return_value=fake_gate),
+                    "load_project": mock.Mock(),
+                },
+            ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass._action_sync_gate(instance))
 
-        fake_sync_project_gate.assert_called_once_with("proj1")
+        fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_called_once_with("proj1")
         instance.notify.assert_called_once_with("Gate sync failed. See terminal output.")
         instance._refresh_project_state.assert_called_once()
@@ -940,18 +947,23 @@ class GateSyncActionTests(TestCase):
         instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
         instance._print_sync_gate_ssh_help = mock.Mock()
         instance._refresh_project_state = mock.Mock()
-        fake_sync_project_gate = mock.Mock(
-            return_value={"success": True, "created": False, "errors": []}
-        )
+        fake_gate = mock.Mock()
+        fake_gate.sync = mock.Mock(return_value={"success": True, "created": False, "errors": []})
         action_globals = AppClass._action_sync_gate.__globals__
 
         with (
-            mock.patch.dict(action_globals, {"sync_project_gate": fake_sync_project_gate}),
+            mock.patch.dict(
+                action_globals,
+                {
+                    "GitGate": mock.Mock(return_value=fake_gate),
+                    "load_project": mock.Mock(),
+                },
+            ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass._action_sync_gate(instance))
 
-        fake_sync_project_gate.assert_called_once_with("proj1")
+        fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_not_called()
         instance.notify.assert_called_once_with("Gate synced from upstream")
         instance._refresh_project_state.assert_called_once()

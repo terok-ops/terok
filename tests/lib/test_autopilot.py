@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 if TYPE_CHECKING:
-    from terok.lib.core.projects import Project
+    from terok.lib.core.projects import ProjectConfig
 
 from terok.lib.containers.agents import (
     _generate_claude_wrapper,
@@ -242,10 +242,10 @@ class ParseMdAgentTests(unittest.TestCase):
 class GenerateClaudeWrapperTests(unittest.TestCase):
     """Tests for _generate_claude_wrapper."""
 
-    def _make_project(self) -> Project:
-        from terok.lib.core.projects import Project
+    def _make_project(self) -> ProjectConfig:
+        from terok.lib.core.projects import ProjectConfig
 
-        return Project(
+        return ProjectConfig(
             id="testproj",
             security_class="online",
             upstream_url=None,
@@ -424,10 +424,10 @@ class WriteSessionHookTests(unittest.TestCase):
 class PrepareAgentConfigDirTests(unittest.TestCase):
     """Tests for prepare_agent_config_dir."""
 
-    def _make_project(self) -> Project:
-        from terok.lib.core.projects import Project
+    def _make_project(self) -> ProjectConfig:
+        from terok.lib.core.projects import ProjectConfig
 
-        return Project(
+        return ProjectConfig(
             id="test-proj",
             security_class="online",
             upstream_url=None,

@@ -44,6 +44,9 @@ _UNIT_VERSION = 3
 """Bump when the systemd unit templates change.  ``ensure_server_reachable``
 checks the installed version and refuses to start tasks if it is stale."""
 
+_SOCKET_UNIT = "terok-gate.socket"
+"""Name of the systemd socket unit file."""
+
 
 # ---------- Config helpers ----------
 
@@ -69,7 +72,66 @@ def _systemd_unit_dir() -> Path:
     return (Path(xdg) if xdg else Path.home() / ".config") / "systemd" / "user"
 
 
-# ---------- Systemd helpers ----------
+# ---------- Private helpers ----------
+
+
+def _installed_unit_version() -> int | None:
+    """Return the version stamp from the installed socket unit, or ``None``."""
+    unit_file = _systemd_unit_dir() / _SOCKET_UNIT
+    if not unit_file.is_file():
+        return None
+    try:
+        for line in unit_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# terok-gate-version:"):
+                return int(line.split(":", 1)[1].strip())
+    except (ValueError, OSError):
+        pass
+    return None
+
+
+def _is_managed_server(pid: int) -> bool:
+    """Return whether *pid* was started with the expected PID file argument.
+
+    Reads ``/proc/<pid>/cmdline`` and checks that the ``--pid-file=<path>``
+    flag matches :func:`_pid_file`.  This guards against PID reuse (a stale
+    PID file pointing at an unrelated process) but does **not** verify the
+    executable name — callers should not assume the binary identity is
+    confirmed.
+    """
+    cmdline_path = Path(f"/proc/{pid}/cmdline")
+    if not cmdline_path.is_file():
+        return False
+    try:
+        raw = cmdline_path.read_bytes()
+    except OSError:
+        return False
+    args = raw.rstrip(b"\x00").split(b"\x00")
+    if len(args) < 2:
+        return False
+    args_str = [a.decode("utf-8", errors="ignore") for a in args]
+    # Verify our PID file is among the arguments
+    expected_pid_flag = f"--pid-file={_pid_file()}"
+    return expected_pid_flag in args_str
+
+
+# ---------- Data classes ----------
+
+
+@dataclass(frozen=True)
+class GateServerStatus:
+    """Current state of the gate server."""
+
+    mode: str
+    """``"systemd"``, ``"daemon"``, or ``"none"``."""
+
+    running: bool
+    """Whether the server is currently reachable."""
+
+    port: int
+    """Configured port."""
+
+
+# ---------- Public API ----------
 
 
 def is_systemd_available() -> bool:
@@ -96,14 +158,14 @@ def is_systemd_available() -> bool:
 def is_socket_installed() -> bool:
     """Check whether the ``terok-gate.socket`` unit file exists."""
     unit_dir = _systemd_unit_dir()
-    return (unit_dir / "terok-gate.socket").is_file()
+    return (unit_dir / _SOCKET_UNIT).is_file()
 
 
 def is_socket_active() -> bool:
     """Check whether the ``terok-gate.socket`` unit is active (listening)."""
     try:
         result = subprocess.run(
-            ["systemctl", "--user", "is-active", "terok-gate.socket"],
+            ["systemctl", "--user", "is-active", _SOCKET_UNIT],
             capture_output=True,
             text=True,
             timeout=5,
@@ -111,20 +173,6 @@ def is_socket_active() -> bool:
         return result.stdout.strip() == "active"
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
-
-
-def _installed_unit_version() -> int | None:
-    """Return the version stamp from the installed socket unit, or ``None``."""
-    unit_file = _systemd_unit_dir() / "terok-gate.socket"
-    if not unit_file.is_file():
-        return None
-    try:
-        for line in unit_file.read_text(encoding="utf-8").splitlines():
-            if line.startswith("# terok-gate-version:"):
-                return int(line.split(":", 1)[1].strip())
-    except (ValueError, OSError):
-        pass
-    return None
 
 
 def install_systemd_units() -> None:
@@ -155,7 +203,7 @@ def install_systemd_units() -> None:
         "TEROK_GATE_BIN": gate_bin,
     }
 
-    for template_name in ("terok-gate.socket", "terok-gate@.service"):
+    for template_name in (_SOCKET_UNIT, "terok-gate@.service"):
         template_path = resource_dir / template_name
         if not template_path.is_file():
             raise SystemExit(f"Missing systemd template: {template_path}")
@@ -164,7 +212,7 @@ def install_systemd_units() -> None:
 
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, timeout=10)
     subprocess.run(
-        ["systemctl", "--user", "enable", "--now", "terok-gate.socket"],
+        ["systemctl", "--user", "enable", "--now", _SOCKET_UNIT],
         check=True,
         timeout=10,
     )
@@ -175,21 +223,18 @@ def uninstall_systemd_units() -> None:
     unit_dir = _systemd_unit_dir()
 
     subprocess.run(
-        ["systemctl", "--user", "disable", "--now", "terok-gate.socket"],
+        ["systemctl", "--user", "disable", "--now", _SOCKET_UNIT],
         check=False,
         timeout=10,
     )
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, timeout=10)
 
-    for name in ("terok-gate.socket", "terok-gate@.service"):
+    for name in (_SOCKET_UNIT, "terok-gate@.service"):
         unit_file = unit_dir / name
         if unit_file.is_file():
             unit_file.unlink()
 
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, timeout=10)
-
-
-# ---------- Daemon fallback ----------
 
 
 def start_daemon(port: int | None = None) -> None:
@@ -217,29 +262,6 @@ def start_daemon(port: int | None = None) -> None:
         check=True,
         timeout=10,
     )
-
-
-def _is_managed_server(pid: int) -> bool:
-    """Return whether *pid* belongs to the managed gate server.
-
-    Reads ``/proc/<pid>/cmdline`` and verifies that the process is a
-    ``terok-gate`` launched with *our* PID file, guarding against both
-    PID reuse and unrelated processes.
-    """
-    cmdline_path = Path(f"/proc/{pid}/cmdline")
-    if not cmdline_path.is_file():
-        return False
-    try:
-        raw = cmdline_path.read_bytes()
-    except OSError:
-        return False
-    args = raw.rstrip(b"\x00").split(b"\x00")
-    if len(args) < 2:
-        return False
-    args_str = [a.decode("utf-8", errors="ignore") for a in args]
-    # Verify our PID file is among the arguments
-    expected_pid_flag = f"--pid-file={_pid_file()}"
-    return expected_pid_flag in args_str
 
 
 def stop_daemon() -> None:
@@ -273,23 +295,6 @@ def is_daemon_running() -> bool:
         return False
 
 
-# ---------- Status ----------
-
-
-@dataclass(frozen=True)
-class GateServerStatus:
-    """Current state of the gate server."""
-
-    mode: str
-    """``"systemd"``, ``"daemon"``, or ``"none"``."""
-
-    running: bool
-    """Whether the server is currently reachable."""
-
-    port: int
-    """Configured port."""
-
-
 def get_server_status() -> GateServerStatus:
     """Return the current gate server status."""
     port = _get_port()
@@ -321,7 +326,8 @@ def check_units_outdated() -> str | None:
         return None
     installed_label = "unversioned" if installed is None else f"v{installed}"
     return (
-        f"Systemd units are outdated (installed {installed_label}, expected v{_UNIT_VERSION}). "
+        f"Systemd units are outdated (installed {installed_label}, "
+        f"expected v{_UNIT_VERSION}). "
         "Run 'terokctl gate-server install' to update."
     )
 

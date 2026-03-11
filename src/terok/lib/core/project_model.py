@@ -1,10 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Project and preset data models.
+"""Project and preset data models — DDD Value Objects.
 
-Pure data types with no filesystem or subprocess I/O.  The companion
-``projects`` module handles discovery, loading, and serialisation.
+Pure data types with no filesystem or subprocess I/O.  These are the
+**value objects** in the domain model: they carry configuration data but
+have no behavior beyond computed paths.
+
+:class:`ProjectConfig` is loaded from ``project.yml`` by the companion
+:mod:`~terok.lib.core.projects` module and wrapped by the rich
+:class:`~terok.lib.project.Project` aggregate to provide behavior.
 """
 
 import re
@@ -13,8 +18,13 @@ from pathlib import Path
 
 
 @dataclass
-class Project:
-    """Resolved project configuration loaded from ``project.yml``."""
+class ProjectConfig:
+    """Resolved project configuration loaded from ``project.yml``.
+
+    Pure value object — holds configuration fields with no behavior beyond
+    computed paths.  The rich domain object :class:`~terok.lib.project.Project`
+    wraps this and provides behavior.
+    """
 
     id: str
     security_class: str  # "online" | "gatekeeping"
@@ -77,7 +87,7 @@ class PresetInfo:
     path: Path
 
 
-def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
+def effective_ssh_key_name(project: ProjectConfig, key_type: str = "ed25519") -> str:
     """Return the SSH key filename that should be used for this project.
 
     Precedence:

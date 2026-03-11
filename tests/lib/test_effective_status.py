@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for effective_status(), mode_emoji(), and batch container state queries."""
+"""Tests for effective_status(), mode_info(), and batch container state queries."""
 
 import subprocess
 import unittest
@@ -12,7 +12,6 @@ from terok.lib.containers.task_display import (
     STATUS_DISPLAY,
     WEB_BACKEND_DISPLAY,
     effective_status,
-    mode_emoji,
     mode_info,
 )
 from terok.lib.containers.tasks import TaskMeta, get_all_task_states
@@ -106,39 +105,39 @@ class EffectiveStatusTests(unittest.TestCase):
             self.assertIn(status, STATUS_DISPLAY, f"Status {status!r} not in STATUS_DISPLAY")
 
 
-class ModeEmojiTests(unittest.TestCase):
-    """Test mode_emoji() for all modes and web backends."""
+class ModeInfoTests(unittest.TestCase):
+    """Test mode_info() for all modes and web backends."""
 
     def test_cli_mode(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="cli")), "💻")
+        self.assertEqual(mode_info(_task(mode="cli")).emoji, "💻")
 
     def test_run_mode(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="run")), "🚀")
+        self.assertEqual(mode_info(_task(mode="run")).emoji, "🚀")
 
     def test_none_mode(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode=None)), "🦗")
+        self.assertEqual(mode_info(_task(mode=None)).emoji, "🦗")
 
     def test_web_mode_claude(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="claude")), "💠")
+        self.assertEqual(mode_info(_task(mode="web", backend="claude")).emoji, "💠")
 
     def test_web_mode_codex(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="codex")), "🌸")
+        self.assertEqual(mode_info(_task(mode="web", backend="codex")).emoji, "🌸")
 
     def test_web_mode_mistral(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="mistral")), "🏰")
+        self.assertEqual(mode_info(_task(mode="web", backend="mistral")).emoji, "🏰")
 
     def test_web_mode_copilot(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="copilot")), "🤖")
+        self.assertEqual(mode_info(_task(mode="web", backend="copilot")).emoji, "🤖")
 
     def test_web_mode_unknown_backend(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="something")), "🌍")
+        self.assertEqual(mode_info(_task(mode="web", backend="something")).emoji, "🌍")
 
     def test_web_mode_no_backend(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web")), "🌍")
+        self.assertEqual(mode_info(_task(mode="web")).emoji, "🌍")
 
     def test_all_known_backends_covered(self) -> None:
         for backend, info in WEB_BACKEND_DISPLAY.items():
-            self.assertEqual(mode_emoji(_task(mode="web", backend=backend)), info.emoji)
+            self.assertEqual(mode_info(_task(mode="web", backend=backend)).emoji, info.emoji)
 
     def test_mode_info_returns_mode_info(self) -> None:
         """mode_info() returns a ModeInfo with both emoji and label."""

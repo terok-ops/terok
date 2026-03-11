@@ -23,13 +23,15 @@ class ProjectStateStalenessTests(TestCase):
 
                 state = {"gate": True}
 
+                mock_gate = mock.Mock()
+                mock_gate.compare_vs_upstream.return_value = staleness
+                mock_gate.last_commit.return_value = "abc123"
+
                 with mock.patch.object(app, "load_project", return_value=project):
                     with mock.patch.object(app, "get_project_state", return_value=state):
-                        with mock.patch.object(
-                            app, "compare_gate_vs_upstream", return_value=staleness
-                        ) as compare:
+                        with mock.patch.object(app, "GitGate", return_value=mock_gate):
                             result = app.TerokTUI._load_project_state(mock.Mock(), "proj1")
-                            compare.assert_called_once_with("proj1")
+                            mock_gate.compare_vs_upstream.assert_called_once()
 
                 self.assertEqual(result.project_id, "proj1")
                 self.assertEqual(result.project, project)

@@ -1,15 +1,11 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Task container runners: CLI, web, headless, and restart.
-
-Split from ``tasks.py`` to decompose the God Module.  This module handles
-the ``podman run`` orchestration for each task mode while ``tasks.py``
-retains task metadata, lifecycle, and query operations.
-"""
+"""Task container runners: CLI, web, headless, and restart."""
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,9 +47,27 @@ from .tasks import (
 )
 
 if TYPE_CHECKING:
-    from ..core.project_model import Project
+    from ..core.project_model import ProjectConfig
 
 _LOCALHOST = "127.0.0.1"
+_SENSITIVE_KEY_RE = re.compile(r"(?i)(KEY|TOKEN|SECRET|API|PASSWORD|PRIVATE)")
+
+
+def _redact_env_args(cmd: list[str]) -> list[str]:
+    """Return a copy of *cmd* with sensitive ``-e KEY=VALUE`` args redacted."""
+    out: list[str] = []
+    redact_next = False
+    for arg in cmd:
+        if redact_next:
+            k, _, _v = arg.partition("=")
+            out.append(f"{k}=REDACTED" if _SENSITIVE_KEY_RE.search(k) else arg)
+            redact_next = False
+        elif arg == "-e":
+            out.append(arg)
+            redact_next = True
+        else:
+            out.append(arg)
+    return out
 
 
 @dataclass(frozen=True)
@@ -88,7 +102,7 @@ class DetachedSummary:
 
 
 def _prepare_agent_config(
-    project: Project,
+    project: ProjectConfig,
     project_id: str,
     task_id: str,
     agents: list[str] | None,
@@ -188,7 +202,7 @@ def _run_container(
     image: str,
     env: dict[str, str],
     volumes: list[str],
-    project: Project,
+    project: ProjectConfig,
     extra_args: list[str] | None = None,
     command: list[str] | None = None,
 ) -> None:
@@ -203,7 +217,7 @@ def _run_container(
         image: Container image to run.
         env: Environment variables to pass via ``-e``.
         volumes: Volume mounts to pass via ``-v``.
-        project: The resolved :class:`Project` (used for GPU args).
+        project: The resolved :class:`ProjectConfig` (used for GPU args).
         extra_args: Additional ``podman run`` flags inserted after the GPU
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
@@ -221,7 +235,7 @@ def _run_container(
     cmd += ["--name", cname, "-w", "/workspace", image]
     if command:
         cmd += command
-    print("$", " ".join(map(str, cmd)))
+    print("$", " ".join(_redact_env_args(cmd)))
     try:
         subprocess.run(cmd, check=True, capture_output=True)
     except FileNotFoundError:

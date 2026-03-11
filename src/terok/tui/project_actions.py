@@ -18,17 +18,17 @@ from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
 from ..lib.facade import (
     WEB_BACKENDS,
+    GitGate,
+    SSHManager,
     authenticate,
     build_images,
     delete_project,
     find_projects_sharing_gate,
     generate_dockerfiles,
-    init_project_ssh,
     install_systemd_units,
     maybe_pause_for_ssh_key_registration,
     start_daemon,
     stop_daemon,
-    sync_project_gate,
     uninstall_systemd_units,
 )
 from .shell_launch import launch_login
@@ -74,7 +74,7 @@ class ProjectActionsMixin:
         """Print SSH-specific troubleshooting details for gate sync failures."""
         try:
             project = load_project(project_id)
-        except Exception:
+        except (Exception, SystemExit):
             return
 
         upstream = project.upstream_url or ""
@@ -196,7 +196,7 @@ class ProjectActionsMixin:
             return
         pid = self.current_project_id
         await self._run_suspended(
-            lambda: init_project_ssh(pid),
+            lambda: SSHManager(load_project(pid)).init(),
             success_msg=f"Initialized SSH dir for {pid}",
         )
 
@@ -236,14 +236,14 @@ class ProjectActionsMixin:
             nonlocal gate_ok
             print(f"=== Full Setup for {pid} ===\n")
             print("Step 1/4: Initializing SSH...")
-            init_project_ssh(pid)
+            SSHManager(load_project(pid)).init()
             maybe_pause_for_ssh_key_registration(pid)
             print("\nStep 2/4: Generating Dockerfiles...")
             generate_dockerfiles(pid)
             print("\nStep 3/4: Building images...")
             build_images(pid)
             print("\nStep 4/4: Syncing git gate...")
-            res = sync_project_gate(pid)
+            res = GitGate(load_project(pid)).sync()
             if not res["success"]:
                 print(f"\nGate sync warnings: {', '.join(res['errors'])}")
             else:
@@ -287,7 +287,7 @@ class ProjectActionsMixin:
         with self.suspend():
             try:
                 print(f"Syncing gate for {project_id}...")
-                result = sync_project_gate(project_id)
+                result = GitGate(load_project(project_id)).sync()
                 if result["success"]:
                     sync_ok = True
                     if result["created"]:

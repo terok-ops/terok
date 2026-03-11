@@ -12,7 +12,7 @@ from textual.message import Message
 from textual.widgets import Button, ListItem, ListView, Static
 
 from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
-from ...lib.core.projects import Project
+from ...lib.core.projects import ProjectConfig
 from ...lib.util.emoji import render_emoji
 
 
@@ -48,10 +48,10 @@ class ProjectList(ListView):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the project list with empty state."""
         super().__init__(**kwargs)
-        self.projects: list[Project] = []
+        self.projects: list[ProjectConfig] = []
         self._generation = 0
 
-    def set_projects(self, projects: list[Project]) -> None:
+    def set_projects(self, projects: list[ProjectConfig]) -> None:
         """Populate the list with projects."""
         self.projects = projects
         self._generation += 1

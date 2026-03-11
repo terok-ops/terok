@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 from ..core.config import get_envs_base_dir
-from ..core.projects import Project
+from ..core.projects import ProjectConfig
 from ..util.fs import ensure_dir, ensure_dir_writable
 from .headless_providers import WrapperConfig
 
@@ -394,7 +394,7 @@ def _inject_opencode_instructions(config_path: Path) -> None:
 class AgentConfigSpec:
     """Groups parameters for preparing an agent-config directory."""
 
-    project: Project
+    project: ProjectConfig
     task_id: str
     subagents: tuple[dict, ...]
     selected_agents: tuple[str, ...] | None = None

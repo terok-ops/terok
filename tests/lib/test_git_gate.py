@@ -5,14 +5,12 @@ import subprocess
 import unittest
 import unittest.mock
 
+from terok.lib.core.projects import load_project
 from terok.lib.security.git_gate import (
-    compare_gate_vs_upstream,
+    GitGate,
+    _get_gate_branch_head,
+    _get_upstream_head,
     find_projects_sharing_gate,
-    get_gate_branch_head,
-    get_gate_last_commit,
-    get_upstream_head,
-    sync_gate_branches,
-    sync_project_gate,
     validate_gate_upstream_match,
 )
 from test_utils import project_env, write_project
@@ -31,7 +29,7 @@ git:
             project_env(yaml, project_id=project_id, with_config_file=True),
             self.assertRaises(SystemExit),
         ):
-            sync_project_gate(project_id)
+            GitGate(load_project(project_id)).sync()
 
     def test_sync_project_gate_https_clone(self) -> None:
         project_id = "proj7"
@@ -66,7 +64,7 @@ git:
                     return config_result
 
                 run_mock.side_effect = _run_side_effect
-                result = sync_project_gate(project_id)
+                result = GitGate(load_project(project_id)).sync()
 
             self.assertTrue(result["created"])
             self.assertTrue(result["success"])
@@ -93,7 +91,7 @@ git:
   upstream_url: https://example.com/repo.git
 """
         with project_env(yaml, project_id=project_id):
-            result = get_gate_last_commit(project_id)
+            result = GitGate(load_project(project_id)).last_commit()
             self.assertIsNone(result)
 
     def test_get_gate_last_commit_with_gate(self) -> None:
@@ -110,13 +108,13 @@ git:
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 0
             mock_result.stdout = (
-                "abc123def456|2023-01-01 12:00:00 +0000|Test commit message|John Doe\n"
+                "abc123def456\x002023-01-01 12:00:00 +0000\x00John Doe\x00Test commit message\n"
             )
 
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_gate_last_commit(project_id)
+                result = GitGate(load_project(project_id)).last_commit()
 
             self.assertIsNotNone(result)
             self.assertEqual(result["commit_hash"], "abc123def456")
@@ -144,7 +142,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_upstream_head(project_id)
+                result = _get_upstream_head(load_project(project_id))
 
             self.assertIsNotNone(result)
             self.assertEqual(result["commit_hash"], "abc123def456789")
@@ -159,7 +157,7 @@ project:
   id: {project_id}
 """
         with project_env(yaml, project_id=project_id):
-            result = get_upstream_head(project_id)
+            result = _get_upstream_head(load_project(project_id))
             self.assertIsNone(result)
 
     def test_get_upstream_head_network_failure(self) -> None:
@@ -181,7 +179,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_upstream_head(project_id)
+                result = _get_upstream_head(load_project(project_id))
 
             self.assertIsNone(result)
 
@@ -204,7 +202,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_upstream_head(project_id)
+                result = _get_upstream_head(load_project(project_id))
 
             self.assertIsNone(result)
 
@@ -224,7 +222,7 @@ git:
                 "terok.lib.security.git_gate.subprocess.run",
                 side_effect=subprocess.TimeoutExpired("git", 30),
             ):
-                result = get_upstream_head(project_id)
+                result = _get_upstream_head(load_project(project_id))
 
             self.assertIsNone(result)
 
@@ -247,7 +245,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_upstream_head(project_id, branch="develop")
+                result = _get_upstream_head(load_project(project_id), branch="develop")
 
             self.assertIsNotNone(result)
             self.assertEqual(result["commit_hash"], "fedcba987654321")
@@ -273,7 +271,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_gate_branch_head(project_id)
+                result = _get_gate_branch_head(load_project(project_id))
 
             self.assertEqual(result, "abc123def456789")
 
@@ -288,7 +286,7 @@ git:
   default_branch: main
 """
         with project_env(yaml, project_id=project_id):
-            result = get_gate_branch_head(project_id)
+            result = _get_gate_branch_head(load_project(project_id))
             self.assertIsNone(result)
 
     def test_get_gate_branch_head_branch_not_found(self) -> None:
@@ -310,7 +308,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = get_gate_branch_head(project_id, branch="nonexistent")
+                result = _get_gate_branch_head(load_project(project_id), branch="nonexistent")
 
             self.assertIsNone(result)
 
@@ -330,18 +328,18 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=commit_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=commit_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": commit_hash,
                         "ref_name": "refs/heads/main",
                         "upstream_url": "https://example.com/repo.git",
                     },
                 ):
-                    result = compare_gate_vs_upstream(project_id)
+                    result = GitGate(load_project(project_id)).compare_vs_upstream()
 
             self.assertEqual(result.branch, "main")
             self.assertEqual(result.gate_head, commit_hash)
@@ -366,11 +364,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": upstream_hash,
                         "ref_name": "refs/heads/main",
@@ -384,7 +382,7 @@ git:
                         with unittest.mock.patch(
                             "terok.lib.security.git_gate._count_commits_ahead", return_value=0
                         ):
-                            result = compare_gate_vs_upstream(project_id)
+                            result = GitGate(load_project(project_id)).compare_vs_upstream()
 
             self.assertEqual(result.branch, "main")
             self.assertEqual(result.gate_head, gate_hash)
@@ -406,9 +404,9 @@ git:
         with project_env(yaml, project_id=project_id):
             # Mock get_gate_branch_head to return None
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=None
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=None
             ):
-                result = compare_gate_vs_upstream(project_id)
+                result = GitGate(load_project(project_id)).compare_vs_upstream()
 
             self.assertEqual(result.branch, "main")
             self.assertIsNone(result.gate_head)
@@ -432,13 +430,13 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head to return None
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head", return_value=None
+                    "terok.lib.security.git_gate._get_upstream_head", return_value=None
                 ):
-                    result = compare_gate_vs_upstream(project_id)
+                    result = GitGate(load_project(project_id)).compare_vs_upstream()
 
             self.assertEqual(result.branch, "main")
             self.assertEqual(result.gate_head, gate_hash)
@@ -463,11 +461,11 @@ git:
 
             # Mock get_gate_branch_head
             with unittest.mock.patch(
-                "terok.lib.security.git_gate.get_gate_branch_head", return_value=gate_hash
+                "terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_hash
             ):
                 # Mock get_upstream_head
                 with unittest.mock.patch(
-                    "terok.lib.security.git_gate.get_upstream_head",
+                    "terok.lib.security.git_gate._get_upstream_head",
                     return_value={
                         "commit_hash": upstream_hash,
                         "ref_name": "refs/heads/main",
@@ -481,7 +479,7 @@ git:
                         with unittest.mock.patch(
                             "terok.lib.security.git_gate._count_commits_ahead", return_value=None
                         ):
-                            result = compare_gate_vs_upstream(project_id)
+                            result = GitGate(load_project(project_id)).compare_vs_upstream()
 
             self.assertTrue(result.is_stale)
             self.assertIsNone(result.commits_behind)
@@ -506,7 +504,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = sync_gate_branches(project_id)
+                result = GitGate(load_project(project_id)).sync_branches()
 
             self.assertTrue(result["success"])
             self.assertEqual(result["updated_branches"], ["all"])
@@ -523,7 +521,7 @@ git:
   default_branch: main
 """
         with project_env(yaml, project_id=project_id):
-            result = sync_gate_branches(project_id)
+            result = GitGate(load_project(project_id)).sync_branches()
 
             self.assertFalse(result["success"])
             self.assertEqual(result["updated_branches"], [])
@@ -548,7 +546,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = sync_gate_branches(project_id)
+                result = GitGate(load_project(project_id)).sync_branches()
 
             self.assertFalse(result["success"])
             self.assertIn("remote update failed", result["errors"][0])
@@ -569,7 +567,7 @@ git:
                 "terok.lib.security.git_gate.subprocess.run",
                 side_effect=subprocess.TimeoutExpired("git", 120),
             ):
-                result = sync_gate_branches(project_id)
+                result = GitGate(load_project(project_id)).sync_branches()
 
             self.assertFalse(result["success"])
             self.assertEqual(result["errors"], ["Sync timed out"])
@@ -593,7 +591,7 @@ git:
             with unittest.mock.patch(
                 "terok.lib.security.git_gate.subprocess.run", return_value=mock_result
             ):
-                result = sync_gate_branches(project_id, branches=["main", "develop"])
+                result = GitGate(load_project(project_id)).sync_branches(["main", "develop"])
 
             self.assertTrue(result["success"])
             self.assertEqual(result["updated_branches"], ["main", "develop"])
@@ -641,7 +639,7 @@ gate:
             )
 
             with self.assertRaises(SystemExit) as exc_ctx:
-                sync_gate_branches("new-proj")
+                GitGate(load_project("new-proj")).sync_branches()
 
             error_msg = str(exc_ctx.exception)
             self.assertIn("Gate path conflict", error_msg)
@@ -825,7 +823,7 @@ gate:
             )
 
             with self.assertRaises(SystemExit) as exc_ctx:
-                sync_project_gate("new-proj")
+                GitGate(load_project("new-proj")).sync()
 
             error_msg = str(exc_ctx.exception)
             self.assertIn("Gate path conflict", error_msg)

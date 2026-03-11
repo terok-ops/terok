@@ -7,14 +7,15 @@ from __future__ import annotations
 
 import argparse
 
+from ...lib.core.projects import load_project
 from ...lib.facade import (
     AUTH_PROVIDERS,
+    GitGate,
+    SSHManager,
     authenticate,
     build_images,
     generate_dockerfiles,
-    init_project_ssh,
     maybe_pause_for_ssh_key_registration,
-    sync_project_gate,
 )
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
@@ -117,16 +118,14 @@ def dispatch(args: argparse.Namespace) -> bool:
         )
         return True
     if args.cmd == "ssh-init":
-        init_project_ssh(
-            args.project_id,
+        SSHManager(load_project(args.project_id)).init(
             key_type=getattr(args, "key_type", "ed25519"),
             key_name=getattr(args, "key_name", None),
             force=getattr(args, "force", False),
         )
         return True
     if args.cmd == "gate-sync":
-        res = sync_project_gate(
-            args.project_id,
+        res = GitGate(load_project(args.project_id)).sync(
             force_reinit=getattr(args, "force_reinit", False),
         )
         if not res["success"]:
@@ -147,8 +146,10 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def cmd_project_init(project_id: str) -> None:
     """Full project setup: ssh-init, generate, build, gate-sync."""
+    project = load_project(project_id)
+
     print("==> Initializing SSH...")
-    init_project_ssh(project_id)
+    SSHManager(project).init()
     maybe_pause_for_ssh_key_registration(project_id)
 
     print("==> Generating Dockerfiles...")
@@ -158,7 +159,7 @@ def cmd_project_init(project_id: str) -> None:
     build_images(project_id)
 
     print("==> Syncing git gate...")
-    res = sync_project_gate(project_id)
+    res = GitGate(project).sync()
     if not res["success"]:
         raise SystemExit(f"Gate sync failed: {', '.join(res['errors'])}")
     print(f"Gate ready at {res['path']}")

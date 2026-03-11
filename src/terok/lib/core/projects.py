@@ -24,7 +24,7 @@ from .config import (
 from .git_authorship import normalize_git_authorship
 from .project_model import (  # noqa: F401 — re-exported public API
     PresetInfo,
-    Project,
+    ProjectConfig,
     effective_ssh_key_name,
     validate_project_id,
 )
@@ -74,7 +74,7 @@ def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Pa
         sa["file"] = str(file_path.resolve())
 
 
-def find_preset_path(project: Project, preset_name: str) -> Path | None:
+def find_preset_path(project: ProjectConfig, preset_name: str) -> Path | None:
     """Return the path of a preset file, or ``None`` if not found.
 
     Search order: project presets → global presets → bundled presets.
@@ -186,9 +186,9 @@ def _find_project_root(project_id: str) -> Path:
 # ---------- Project listing ----------
 
 
-def list_projects() -> list[Project]:
-    """
-    Discover all projects (user + system) and return them as Project objects.
+def list_projects() -> list[ProjectConfig]:
+    """Discover all projects (user + system) and return them as ProjectConfig objects.
+
     User projects override system ones with the same id.
     """
     ids: set[str] = set()
@@ -203,7 +203,7 @@ def list_projects() -> list[Project]:
             if (d / "project.yml").is_file():
                 ids.add(d.name)
 
-    projects: list[Project] = []
+    projects: list[ProjectConfig] = []
     for pid in sorted(ids):
         # load_project will automatically prefer user over system config
         try:
@@ -216,8 +216,8 @@ def list_projects() -> list[Project]:
     return projects
 
 
-def load_project(project_id: str) -> Project:
-    """Load and return a fully resolved :class:`Project` from *project_id*."""
+def load_project(project_id: str) -> ProjectConfig:
+    """Load and return a fully resolved :class:`ProjectConfig` from *project_id*."""
     root = _find_project_root(project_id)
     cfg_path = root / "project.yml"
     if not cfg_path.is_file():
@@ -315,7 +315,7 @@ def load_project(project_id: str) -> Project:
     # Resolve subagent file: paths relative to project root
     _resolve_subagent_files(agent_cfg.get("subagents", []), root)
 
-    p = Project(
+    p = ProjectConfig(
         id=pid,
         security_class=sec,
         upstream_url=upstream_url,

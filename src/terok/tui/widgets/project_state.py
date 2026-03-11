@@ -12,14 +12,14 @@ from rich.text import Text
 from textual.widgets import Static
 
 from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
-from ...lib.core.projects import Project
+from ...lib.core.projects import ProjectConfig
 from ...lib.facade import GateServerStatus, GateStalenessInfo
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 
 
 def render_project_loading(
-    project: Project | None,
+    project: ProjectConfig | None,
     task_count: int | None = None,
 ) -> Text:
     """Render project loading state as a Rich Text object."""
@@ -45,7 +45,7 @@ def render_project_loading(
 
 
 def render_project_details(
-    project: Project | None,
+    project: ProjectConfig | None,
     state: dict | None,
     task_count: int | None = None,
     staleness: GateStalenessInfo | None = None,
@@ -209,13 +209,13 @@ class ProjectState(Static):
         """Initialize the project state panel."""
         super().__init__(**kwargs)
 
-    def set_loading(self, project: Project | None, task_count: int | None = None) -> None:
+    def set_loading(self, project: ProjectConfig | None, task_count: int | None = None) -> None:
         """Show a loading placeholder while project state is being fetched."""
         self.update(render_project_loading(project, task_count))
 
     def set_state(
         self,
-        project: Project | None,
+        project: ProjectConfig | None,
         state: dict | None,
         task_count: int | None = None,
         staleness: GateStalenessInfo | None = None,

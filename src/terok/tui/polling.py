@@ -156,7 +156,7 @@ class PollingMixin:
                 None, get_all_task_states, project_id, tasks
             )
             return (project_id, states)
-        except Exception as e:
+        except (Exception, SystemExit) as e:  # noqa: BLE001 — background worker; must not crash TUI
             self._log_debug(f"container state batch check error: {e}")
             return (project_id, {})
 
@@ -182,12 +182,13 @@ class PollingMixin:
         """Background worker to check upstream (runs in thread pool)."""
         import asyncio
 
-        from ..lib.facade import compare_gate_vs_upstream
+        from ..lib.core.projects import load_project
+        from ..lib.security.git_gate import GitGate
 
         try:
             # Run blocking call in thread pool
             staleness = await asyncio.get_event_loop().run_in_executor(
-                None, compare_gate_vs_upstream, project_id
+                None, lambda: GitGate(load_project(project_id)).compare_vs_upstream()
             )
 
             # Validate project hasn't changed while we were polling
@@ -196,7 +197,7 @@ class PollingMixin:
 
             self._on_staleness_updated(project_id, staleness)
 
-        except Exception as e:
+        except (Exception, SystemExit) as e:  # noqa: BLE001 — background worker; must not crash TUI
             self._log_debug(f"upstream poll error: {e}")
 
     def _on_staleness_updated(self, project_id: str, staleness) -> None:
@@ -266,7 +267,7 @@ class PollingMixin:
                 exclusive=True,
             )
 
-        except Exception as e:
+        except (Exception, SystemExit) as e:  # noqa: BLE001 — background worker; must not crash TUI
             self._log_debug(f"auto-sync error: {e}")
 
     async def _sync_worker(
@@ -275,12 +276,13 @@ class PollingMixin:
         """Background worker to sync gate from upstream."""
         import asyncio
 
-        from ..lib.facade import compare_gate_vs_upstream, sync_gate_branches
+        from ..lib.core.projects import load_project
+        from ..lib.security.git_gate import GitGate
 
         try:
             # Run blocking sync in thread pool
             result = await asyncio.get_event_loop().run_in_executor(
-                None, sync_gate_branches, project_id, branches
+                None, lambda: GitGate(load_project(project_id)).sync_branches(branches)
             )
 
             # Validate project hasn't changed
@@ -293,7 +295,7 @@ class PollingMixin:
 
                 # Re-check staleness after sync
                 staleness = await asyncio.get_event_loop().run_in_executor(
-                    None, compare_gate_vs_upstream, project_id
+                    None, lambda: GitGate(load_project(project_id)).compare_vs_upstream()
                 )
 
                 if project_id == self.current_project_id:
@@ -306,6 +308,6 @@ class PollingMixin:
                 label = "Auto-sync" if is_auto else "Sync"
                 self.notify(f"{label} failed: {', '.join(result['errors'])}")
 
-        except Exception as e:
+        except (Exception, SystemExit) as e:  # noqa: BLE001 — background worker; must not crash TUI
             label = "Auto-sync" if is_auto else "Sync"
             self.notify(f"{label} error: {e}")

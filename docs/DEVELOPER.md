@@ -2,6 +2,60 @@
 
 This document covers internal architecture and implementation details for contributors and maintainers of terok.
 
+## Domain Model Architecture
+
+terok's library layer (`src/terok/lib/`) follows Domain-Driven Design (DDD) conventions with a clear separation between **value objects** (pure data), **entities** (identity + behavior), and **services** (stateful helpers).
+
+### Object Graph
+
+```text
+facade.get_project("myproj")  →  Project          (Aggregate Root)
+    .config                    →  ProjectConfig    (Value Object — dataclass)
+    .gate                      →  GitGate          (Repository + Gateway)
+    .ssh                       →  SSHManager       (Service)
+    .agents                    →  AgentManager     (Strategy + Config Stack)
+    .create_task(name="x")     →  Task             (Entity)
+    .get_task("1")             →  Task             (Entity)
+        .meta                  →  TaskMeta         (Value Object)
+```
+
+### Key Types
+
+| Type | Module | DDD Role | Description |
+|------|--------|----------|-------------|
+| `Project` | `lib.project` | Aggregate Root | Entry point for all project-scoped operations. Wraps `ProjectConfig` with behavior. |
+| `Task` | `lib.task` | Entity | Wraps `TaskMeta` with lifecycle methods (run, stop, delete, rename, logs). |
+| `ProjectConfig` | `lib.core.project_model` | Value Object | Configuration dataclass loaded from `project.yml`. No behavior. |
+| `TaskMeta` | `lib.containers.tasks` | Value Object | Task metadata snapshot (ID, mode, status, workspace path). |
+| `GitGate` | `lib.security.git_gate` | Repository + Gateway | Manages the bare git mirror; wraps git CLI. |
+| `SSHManager` | `lib.security.ssh` | Service | Generates SSH keypairs and config for container mounts. |
+| `AgentManager` | `lib.project` | Strategy + Config Stack | Resolves layered agent configuration and provider selection. |
+
+### Design Principles
+
+**Value Objects vs Rich Objects.** `ProjectConfig` and `TaskMeta` are dataclass data holders — they carry configuration and metadata but have no behavior beyond computed properties. The rich `Project` and `Task` objects wrap these and delegate to service functions, providing a natural OOP interface.
+
+**Snapshot Semantics.** `Task` captures a point-in-time snapshot of `TaskMeta`. Mutations (`rename()`, `stop()`) update persistent storage but do *not* refresh the in-memory snapshot. To observe new state, obtain a fresh `Task` via `project.get_task(id)`. This keeps entities free of implicit I/O.
+
+**Lazy Initialization.** `Project` subsystems (`gate`, `ssh`, `agents`) are created on first access, not at construction. This avoids I/O when only a subset of functionality is needed. Since `Project` uses `__slots__`, `cached_property` is not available — the manual pattern (`if self._gate is None: ...`) is used instead.
+
+**Identity-Based Equality.** `Project.__eq__` compares by project ID; `Task.__eq__` compares by `(project_id, task_id)`. Both are hashable, so they work correctly in sets and dicts.
+
+**Facade Pattern.** `lib.facade` provides factory functions (`get_project`, `list_projects`, `derive_project`) as the stable entry point. It also re-exports low-level service functions for CLI commands that operate on raw `project_id` strings.
+
+### Module Boundaries
+
+Module dependencies are enforced by [tach](https://github.com/gauge-sh/tach) via `tach.toml`. The key constraint: **presentation modules** (CLI, TUI) depend on the facade and domain objects, but never reach into container/security internals directly. The domain objects depend on service modules but not on presentation. Presentation modules may also import `lib.core.projects` directly for raw config access (`load_project`, `ProjectConfig`).
+
+```text
+Presentation (CLI, TUI)
+    ├── depends on → lib.facade, lib.project, lib.task
+    │                    └── depends on → lib.containers.*, lib.security.*, lib.core.*
+    └── allowed for raw config → lib.core.projects (load_project, ProjectConfig)
+```
+
+---
+
 ## Container Readiness and Log Streaming
 
 terok shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met. This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.

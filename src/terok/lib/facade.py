@@ -1,21 +1,33 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Service facade for common cross-cutting operations.
+"""Service facade — stable import boundary for the terok library.
 
-Provides a single entry point for operations that both the CLI and TUI
-frontends use, reducing the number of direct service-module imports
-required by the presentation layer.
+Re-exports key service classes and functions so that the presentation
+layer (CLI, TUI) can import from a single stable module instead of
+reaching into internal subpackages.
 
-The facade re-exports key service functions and provides composite
-helpers for multi-step workflows like project initialization.
+**Recommended entry points** for project-scoped operations::
+
+    from terok.lib.facade import get_project
+
+    project = get_project("myproj")  # → Project (Aggregate Root)
+    task = project.create_task(name="x")  # → Task (Entity)
+    task.run_cli()
+
+Factory functions:
+
+- :func:`get_project` — load a single project by ID
+- :func:`list_projects` — return all known projects
+- :func:`derive_project` — create a new project from an existing one
+
+The facade also re-exports low-level service functions (``task_new``,
+``task_run_cli``, ``build_images``, etc.) for callers that need direct
+access without going through the ``Project`` object graph.  These are
+used by CLI commands that operate on ``project_id`` strings directly.
 """
 
-import logging
-import shutil
-import tarfile
-from pathlib import Path
-from typing import TypedDict
+from __future__ import annotations
 
 from .containers.docker import build_images, generate_dockerfiles
 from .containers.environment import WEB_BACKENDS
@@ -46,8 +58,12 @@ from .containers.tasks import (  # noqa: F401 — re-exported public API
     task_status,
     task_stop,
 )
-from .core.config import build_root, deleted_projects_dir, get_envs_base_dir, state_root
 from .core.projects import load_project
+from .project import (  # noqa: F401 — re-exported public API
+    DeleteProjectResult,
+    Project,
+    delete_project,
+)
 from .security.auth import AUTH_PROVIDERS, AuthProvider, authenticate
 from .security.gate_server import (  # noqa: F401 — re-exported public API
     GateServerStatus,
@@ -64,171 +80,51 @@ from .security.gate_server import (  # noqa: F401 — re-exported public API
 )
 from .security.git_gate import (
     GateStalenessInfo,
-    compare_gate_vs_upstream,
+    GitGate,
     find_projects_sharing_gate,
-    get_gate_last_commit,
-    sync_gate_branches,
-    sync_project_gate,
 )
 from .security.shield import (  # noqa: F401 — re-exported public API
     get_shield_config,
     setup as shield_setup,
     status as shield_status,
 )
-from .security.ssh import init_project_ssh
-from .util.fs import archive_timestamp, create_archive_file
+from .security.ssh import SSHManager
+from .task import Task  # noqa: F401 — re-exported public API
 
-_logger = logging.getLogger(__name__)
-
-
-def _archive_project(project_id: str) -> str | None:
-    """Create a compressed archive of project data before deletion.
-
-    Collects project config, task metadata/archives, and build artifacts
-    into a ``.tar.gz`` file under ``deleted_projects_dir()``.  SSH
-    credentials and git gate contents are excluded for security.
-
-    Returns the archive file path as a string, or ``None`` on failure.
-    """
-    try:
-        project = load_project(project_id)
-        pid = project.id
-
-        archive_root = deleted_projects_dir()
-        ts = archive_timestamp()
-        base_name = f"{ts}_{pid}"
-        archive_path = create_archive_file(archive_root, base_name)
-
-        # Directories to include: (arcname_prefix, source_path)
-        sources: list[tuple[str, Path]] = []
-
-        # Project config
-        if project.root.is_dir():
-            sources.append(("config", project.root))
-
-        # Task metadata + task archives
-        project_state = state_root() / "projects" / pid
-        if project_state.is_dir():
-            sources.append(("state", project_state))
-
-        # Build artifacts
-        build_dir = build_root() / pid
-        if build_dir.is_dir():
-            sources.append(("build", build_dir))
-
-        if not sources:
-            _logger.debug("_archive_project: nothing to archive for %s", pid)
-            return None
-
-        with tarfile.open(archive_path, "w:gz") as tar:
-            for prefix, src_dir in sources:
-                for item in src_dir.rglob("*"):
-                    if item.is_file():
-                        arcname = f"{prefix}/{item.relative_to(src_dir)}"
-                        tar.add(str(item), arcname=arcname)
-
-        _logger.debug("_archive_project: archived %s to %s", pid, archive_path)
-        return str(archive_path)
-    except Exception as exc:
-        _logger.warning("_archive_project: failed to archive %s: %s", project_id, exc)
-        return None
+# ---------------------------------------------------------------------------
+# Project factory functions
+# ---------------------------------------------------------------------------
 
 
-class DeleteProjectResult(TypedDict):
-    """Result of a project deletion."""
-
-    deleted: list[str]
-    skipped: list[str]
-    archive: str | None
+def get_project(project_id: str) -> Project:
+    """Load a project by ID and return a rich :class:`Project` aggregate."""
+    return Project(load_project(project_id))
 
 
-def delete_project(project_id: str) -> DeleteProjectResult:
-    """Delete a project and all its associated data.
+def list_projects() -> list[Project]:
+    """Return all known projects as rich :class:`Project` aggregates."""
+    from .core.projects import list_projects as _list_projects
 
-    Removes task workspaces, task metadata, build artifacts, SSH credentials,
-    the git gate (if not shared with other projects), and the project config
-    directory.
+    return [Project(cfg) for cfg in _list_projects()]
 
-    Returns a ``DeleteProjectResult`` (dict subclass) with:
-    - ``deleted``: list of paths removed
-    - ``skipped``: list of descriptions for items not removed
-    - ``archive``: path to the ``.tar.gz`` archive, or ``None`` if archiving failed
-    """
-    # Archive project data before any destructive operations
-    archive_path = _archive_project(project_id)
-    if archive_path is None:
-        raise SystemExit(
-            f"Project archiving failed for '{project_id}'; aborting deletion to prevent data loss."
-        )
 
-    project = load_project(project_id)
-    pid = project.id
-    deleted: list[str] = []
-    skipped: list[str] = []
+def derive_project(source_id: str, new_id: str) -> Project:
+    """Derive a new project from an existing one and return it."""
+    from .core.projects import derive_project as _derive_project
 
-    # 1. Delete all tasks (stops containers, removes workspaces + metadata)
-    tasks = get_tasks(pid)
-    for task in tasks:
-        try:
-            task_delete(pid, task.task_id)
-            _logger.debug("Deleted task %s", task.task_id)
-        except Exception as exc:
-            _logger.warning("Failed to delete task %s: %s", task.task_id, exc)
+    _derive_project(source_id, new_id)
+    return Project(load_project(new_id))
 
-    # 2. Remove tasks root directory (may still have leftover dirs)
-    if project.tasks_root.is_dir():
-        shutil.rmtree(project.tasks_root)
-        deleted.append(str(project.tasks_root))
 
-    # 3. Remove tasks metadata directory
-    meta_dir = state_root() / "projects" / pid
-    if meta_dir.is_dir():
-        shutil.rmtree(meta_dir)
-        deleted.append(str(meta_dir))
-
-    # 4. Remove build artifacts
-    build_dir = build_root() / pid
-    if build_dir.is_dir():
-        shutil.rmtree(build_dir)
-        deleted.append(str(build_dir))
-
-    # 5. Remove SSH credentials (respect configured ssh.host_dir)
-    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{pid}")
-    if ssh_dir.is_dir():
-        shutil.rmtree(ssh_dir)
-        deleted.append(str(ssh_dir))
-
-    # 6. Remove git gate (only if not shared with other projects)
-    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=pid)
-    if project.gate_path.exists():
-        if sharing:
-            names = ", ".join(pid for pid, _ in sharing)
-            skipped.append(f"Gate {project.gate_path} shared with: {names}")
-        else:
-            shutil.rmtree(project.gate_path)
-            deleted.append(str(project.gate_path))
-
-    # 7. Remove staging root (gatekeeping mode)
-    if project.staging_root and project.staging_root.is_dir():
-        shutil.rmtree(project.staging_root)
-        deleted.append(str(project.staging_root))
-
-    # 8. Remove project config directory
-    if project.root.is_dir():
-        shutil.rmtree(project.root)
-        deleted.append(str(project.root))
-
-    return DeleteProjectResult(
-        deleted=deleted,
-        skipped=skipped,
-        archive=archive_path,
-    )
+# ---------------------------------------------------------------------------
+# Workflow helpers
+# ---------------------------------------------------------------------------
 
 
 def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
     """If the project's upstream uses SSH, pause so the user can register the deploy key.
 
-    Call this right after ``init_project_ssh()`` — the public key will already
+    Call this right after ``SSHManager.init()`` — the public key will already
     have been printed to the terminal.  For HTTPS upstreams this is a no-op.
     """
     project = load_project(project_id)
@@ -242,6 +138,13 @@ def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
 
 
 __all__ = [
+    # Project factory functions
+    "get_project",
+    "list_projects",
+    "derive_project",
+    # Rich domain objects
+    "Project",
+    "Task",
     # Docker / image management
     "generate_dockerfiles",
     "build_images",
@@ -276,8 +179,8 @@ __all__ = [
     "task_logs",
     "LogViewOptions",
     # Security setup
-    "init_project_ssh",
-    "sync_project_gate",
+    "SSHManager",
+    "GitGate",
     # Workflow helpers
     "maybe_pause_for_ssh_key_registration",
     # Auth
@@ -297,9 +200,6 @@ __all__ = [
     "is_daemon_running",
     "is_systemd_available",
     # Git gate
-    "compare_gate_vs_upstream",
-    "sync_gate_branches",
-    "get_gate_last_commit",
     "GateStalenessInfo",
     "find_projects_sharing_gate",
     # Project state
