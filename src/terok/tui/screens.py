@@ -1142,6 +1142,10 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(Option("Copy diff vs \\[P]REV", id="diff_prev"))
             options.append(None)
             options.append(Option("re\\[n]ame task", id="rename"))
+            options.append(Option("delete task  \\[X]", id="delete"))
+            options.append(None)
+            options.append(Option("shield \\[D]own (bypass)", id="shield_down"))
+            options.append(Option("\\[s]hield up (deny-all)", id="shield_up"))
         options.append(None)
         options.append(Option("New task (no run)  \\[C]", id="new"))
 
@@ -1175,18 +1179,20 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Shift keys (uppercase) — N/A/C always available, H/P require tasks
+        # Shift keys (uppercase) — N/A/C always available, H/P/X/D require tasks
         shift_map: dict[str, str] = {
             "N": "task_start_cli",
             "A": "task_start_autopilot",
             "C": "new",
             "H": "diff_head",
             "P": "diff_prev",
+            "X": "delete",
+            "D": "shield_down",
         }
         if is_experimental():
             shift_map["W"] = "task_start_web"
         if key in shift_map:
-            if key in ("H", "P") and not self._has_tasks:
+            if key in ("H", "P", "X", "D") and not self._has_tasks:
                 return
             self.dismiss(shift_map[key])
             event.stop()
@@ -1194,12 +1200,12 @@ class TaskDetailsScreen(screen.Screen[str | None]):
 
         # Lowercase keys — all require tasks to exist
         lower_map: dict[str, str] = {
-            "d": "delete",
             "c": "cli",
             "r": "restart",
             "l": "login",
             "u": "followup",
             "n": "rename",
+            "s": "shield_up",
         }
         if is_experimental():
             lower_map["w"] = "web"

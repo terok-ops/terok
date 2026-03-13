@@ -21,6 +21,8 @@ from ..lib.core.config import is_experimental
 from ..lib.core.projects import load_project
 from ..lib.facade import (
     HeadlessRunRequest,
+    shield_down,
+    shield_up,
     task_delete,
     task_followup_headless,
     task_new,
@@ -562,6 +564,66 @@ class TaskActionsMixin:
     async def action_copy_diff_prev(self) -> None:
         """Copy git diff vs previous commit to clipboard."""
         await self._copy_diff_to_clipboard("PREV", "PREV")
+
+    # --- Shield actions ---
+
+    async def _action_shield_down(self) -> None:
+        """Drop the shield (bypass mode) for the current task."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        pid = self.current_project_id
+        task = self.current_task
+        tid = task.task_id
+        mode = task.mode or "cli"
+        cname = container_name(pid, mode, tid)
+        project = load_project(pid)
+        task_dir = project.tasks_root / str(tid)
+
+        def work() -> tuple[str, str, str | None]:
+            """Drop shield in background thread."""
+            try:
+                shield_down(cname, task_dir)
+                return pid, tid, None
+            except Exception as e:
+                return pid, tid, str(e)
+
+        self.run_worker(
+            work,
+            name=f"shield-action:down:{pid}:{tid}",
+            group="shield-action",
+            thread=True,
+            exit_on_error=False,
+        )
+
+    async def _action_shield_up(self) -> None:
+        """Raise the shield (deny-all) for the current task."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        pid = self.current_project_id
+        task = self.current_task
+        tid = task.task_id
+        mode = task.mode or "cli"
+        cname = container_name(pid, mode, tid)
+        project = load_project(pid)
+        task_dir = project.tasks_root / str(tid)
+
+        def work() -> tuple[str, str, str | None]:
+            """Raise shield in background thread."""
+            try:
+                shield_up(cname, task_dir)
+                return pid, tid, None
+            except Exception as e:
+                return pid, tid, str(e)
+
+        self.run_worker(
+            work,
+            name=f"shield-action:up:{pid}:{tid}",
+            group="shield-action",
+            thread=True,
+            exit_on_error=False,
+        )
 
     # --- Main-screen task pane shortcuts (c/w/d) ---
 

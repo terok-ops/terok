@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -143,6 +144,34 @@ git:
                 # The malformed project should be skipped, only the good one returned
                 self.assertEqual(len(projects), 1)
                 self.assertEqual(projects[0].id, "good")
+
+    def test_load_project_shield_drop_on_task_start_default(self) -> None:
+        """shield_drop_on_task_start defaults to False when not set."""
+        project_id = "proj-shield-default"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+"""
+        with project_env(yaml, project_id=project_id):
+            proj = load_project(project_id)
+            self.assertFalse(proj.shield_drop_on_task_start)
+
+    def test_load_project_shield_drop_on_task_start_enabled(self) -> None:
+        """shield.drop_on_task_start: true is parsed correctly."""
+        project_id = "proj-shield-drop"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+shield:
+  drop_on_task_start: true
+"""
+        with project_env(yaml, project_id=project_id):
+            proj = load_project(project_id)
+            self.assertTrue(proj.shield_drop_on_task_start)
 
     def test_get_project_state(self) -> None:
         project_id = "proj3"

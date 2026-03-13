@@ -83,6 +83,12 @@ def render_task_details(
     if task.unrestricted is not None:
         perm_label = "unrestricted" if task.unrestricted else "restricted"
         lines.append(Text(f"Perms:     {perm_label}"))
+    if task.shield_state:
+        shield_colors = {"UP": "red", "DOWN": "green", "INACTIVE": "dim"}
+        shield_color = shield_colors.get(task.shield_state, "yellow")
+        lines.append(
+            Text.assemble("Shield:    ", Text(task.shield_state, style=Style(color=shield_color)))
+        )
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))

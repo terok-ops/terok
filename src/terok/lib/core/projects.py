@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Project discovery, loading, and preset management."""
@@ -310,6 +311,10 @@ def load_project(project_id: str) -> ProjectConfig:
     elif isinstance(raw_cats, str) and raw_cats.strip():
         task_name_categories = [raw_cats.strip()]
 
+    # Shield config
+    shield_cfg = cfg.get("shield", {}) or {}
+    shield_drop_on_task_start = bool(shield_cfg.get("drop_on_task_start", False))
+
     # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
     # Resolve subagent file: paths relative to project root
@@ -341,5 +346,6 @@ def load_project(project_id: str) -> ProjectConfig:
         agent_config=agent_cfg,
         shutdown_timeout=shutdown_timeout,
         task_name_categories=task_name_categories,
+        shield_drop_on_task_start=shield_drop_on_task_start,
     )
     return p

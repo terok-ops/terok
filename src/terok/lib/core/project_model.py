@@ -71,6 +71,8 @@ class ProjectConfig:
     shutdown_timeout: int = 10
     # Task name categories for unique-namer (from tasks.name_categories in project.yml)
     task_name_categories: list[str] | None = None
+    # When True, automatically drop the shield (bypass mode) after task container starts.
+    shield_drop_on_task_start: bool = False
 
     @property
     def presets_dir(self) -> Path:

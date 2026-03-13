@@ -478,11 +478,12 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.on_key(event)
         screen.dismiss.assert_not_called()
 
-    def test_lowercase_d_works_with_tasks(self) -> None:
+    def test_shift_x_works_with_tasks(self) -> None:
+        """Shift-X triggers delete (remapped from d)."""
         screens, _ = import_screens()
         screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
         screen.dismiss = mock.Mock()
-        event = make_key_event("d")
+        event = make_key_event("X")
         screen.on_key(event)
         screen.dismiss.assert_called_once_with("delete")
 
@@ -530,6 +531,33 @@ class TaskScreenKeyBindingTests(TestCase):
         event = make_key_event("r")
         screen.on_key(event)
         screen.dismiss.assert_called_once_with("restart")
+
+    def test_shift_d_shield_down_with_tasks(self) -> None:
+        """Shift-D triggers shield_down action."""
+        screens, _ = import_screens()
+        screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = make_key_event("D")
+        screen.on_key(event)
+        screen.dismiss.assert_called_once_with("shield_down")
+
+    def test_shift_d_blocked_without_tasks(self) -> None:
+        """Shift-D is a no-op without tasks."""
+        screens, _ = import_screens()
+        screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = make_key_event("D")
+        screen.on_key(event)
+        screen.dismiss.assert_not_called()
+
+    def test_lowercase_s_shield_up_with_tasks(self) -> None:
+        """Lowercase s triggers shield_up action."""
+        screens, _ = import_screens()
+        screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = make_key_event("s")
+        screen.on_key(event)
+        screen.dismiss.assert_called_once_with("shield_up")
 
     def test_escape_dismisses_none(self) -> None:
         screens, _ = import_screens()

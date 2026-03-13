@@ -85,8 +85,12 @@ from .security.git_gate import (
 )
 from .security.shield import (  # noqa: F401 — re-exported public API
     NftNotFoundError,
+    ShieldState,
+    down as shield_down,
     make_shield,
+    state as shield_state,
     status as shield_status,
+    up as shield_up,
 )
 from .security.ssh import SSHManager
 from .task import Task  # noqa: F401 — re-exported public API
@@ -206,6 +210,10 @@ __all__ = [
     "get_project_state",
     "is_task_image_old",
     # Shield
+    "ShieldState",
     "make_shield",
+    "shield_down",
+    "shield_up",
+    "shield_state",
     "shield_status",
 ]

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Adapter for terok-shield egress firewall.
@@ -14,6 +15,7 @@ from terok_shield import (
     Shield,
     ShieldConfig,
     ShieldMode,
+    ShieldState,  # noqa: F401 — re-exported
 )
 
 from ..core.config import get_gate_server_port, get_global_section
@@ -86,6 +88,21 @@ def make_shield(task_dir: Path) -> Shield:
 def pre_start(container: str, task_dir: Path) -> list[str]:
     """Return extra ``podman run`` args for egress firewalling."""
     return make_shield(task_dir).pre_start(container)
+
+
+def down(container: str, task_dir: Path) -> None:
+    """Set shield to bypass mode (allow egress) for a running container."""
+    make_shield(task_dir).down(container)
+
+
+def up(container: str, task_dir: Path) -> None:
+    """Set shield to deny-all mode for a running container."""
+    make_shield(task_dir).up(container)
+
+
+def state(container: str, task_dir: Path) -> ShieldState:
+    """Return the live shield state for a running container."""
+    return make_shield(task_dir).state(container)
 
 
 def status() -> dict:

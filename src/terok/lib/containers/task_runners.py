@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Task container runners: CLI, web, headless, and restart."""
@@ -15,7 +16,7 @@ import yaml
 
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
-from ..security.shield import pre_start as _shield_pre_start_impl
+from ..security.shield import down as _shield_down_impl, pre_start as _shield_pre_start_impl
 from ..util.ansi import (
     blue as _blue,
     green as _green,
@@ -196,6 +197,20 @@ def _print_detached_summary(summary: DetachedSummary) -> None:
     )
 
 
+def _maybe_drop_shield(project: ProjectConfig, cname: str, task_dir: Path) -> None:
+    """Best-effort shield drop if ``shield.drop_on_task_start`` is enabled."""
+    if not project.shield_drop_on_task_start:
+        return
+    try:
+        _shield_down_impl(cname, task_dir)
+        audit_path = task_dir / "shield" / "audit.jsonl"
+        print(f"Shield dropped (bypass mode). Audit log: {audit_path}")
+    except Exception as exc:
+        import warnings
+
+        warnings.warn(f"shield.drop_on_task_start: failed to drop shield: {exc}", stacklevel=2)
+
+
 def _run_container(
     *,
     cname: str,
@@ -307,6 +322,7 @@ def task_run_cli(
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
         command=["bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null"],
     )
+    _maybe_drop_shield(project, cname, task_dir)
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
     stream_initial_logs(
@@ -420,6 +436,7 @@ def task_run_web(
         task_dir=task_dir,
         extra_args=["-p", f"{_LOCALHOST}:{port}:7860"],
     )
+    _maybe_drop_shield(project, cname, task_dir)
 
     # Stream initial logs and detach once the Terok Web UI server reports that it
     # is actually running. We intentionally rely on a *log marker* here
@@ -628,6 +645,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         task_dir=task_dir,
         command=["bash", "-lc", headless_cmd],
     )
+    _maybe_drop_shield(project, cname, task_dir)
 
     # Update task metadata
     meta, meta_path = load_task_meta(project.id, task_id)
