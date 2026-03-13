@@ -57,11 +57,6 @@ def _resolve_task(project_id: str, task_id: str) -> tuple[str, Path]:
     return cname, task_dir
 
 
-def _needs_task(cmd: CommandDef) -> bool:
-    """Whether a command requires project_id + task_id (container context)."""
-    return cmd.needs_container or any(a.name == "container" for a in cmd.args)
-
-
 def _extract_handler_kwargs(args: argparse.Namespace, cmd_def: CommandDef) -> dict:
     """Extract keyword arguments for a registry handler from parsed args."""
     kwargs: dict = {}
