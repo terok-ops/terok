@@ -3,7 +3,7 @@
 
 """Fixtures for shield integration tests.
 
-Overrides the root autouse ``_mock_shield_pre_start`` so the real
+Overrides the root autouse ``_mock_shield_helpers`` so the real
 ``terok_shield`` library is exercised, and provides isolated shield
 environments via temporary per-task state directories.
 """
@@ -29,8 +29,8 @@ skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
 
 
 @pytest.fixture(autouse=True)
-def _mock_shield_pre_start() -> Iterator[None]:
-    """Override root conftest: let real shield_pre_start execute."""
+def _mock_shield_helpers() -> Iterator[None]:
+    """Override root conftest: let real shield helpers execute."""
     yield
 
 
