@@ -709,6 +709,8 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
     if provider.name == "vibe" and session_path:
         lines.append("        local _rc=$?; _terok_capture_vibe_session; return $_rc")
 
+    lines.append("        )")
+
     # Interactive mode (no timeout)
     lines.append("    else")
     lines.append("        (")
@@ -719,6 +721,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
 
     lines.append(f'        command {binary}{extra} "$@"')
 
+    lines.append("        )")
     lines.append("    fi")
     lines.append("}")
 

@@ -650,3 +650,14 @@ class GenerateAllWrappersTests(unittest.TestCase):
         self.assertGreaterEqual(
             wrapper.count("_terok_apply_git_identity"), len(HEADLESS_PROVIDERS) * 2
         )
+
+    def test_all_wrappers_valid_bash_syntax(self) -> None:
+        """Combined wrapper output passes bash -n syntax check."""
+        import subprocess
+
+        project = _make_project()
+        wrapper = generate_all_wrappers(
+            project, has_agents=True, claude_wrapper_fn=self._claude_wrapper_fn
+        )
+        result = subprocess.run(["bash", "-n"], input=wrapper, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"bash syntax error:\n{result.stderr}")
