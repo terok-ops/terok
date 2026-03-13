@@ -63,13 +63,16 @@ class TestProfilesDir(unittest.TestCase):
         self.assertEqual(_profiles_dir(), MOCK_CONFIG_ROOT / "shield" / "profiles")
 
 
+@patch("terok_shield.SubprocessRunner", autospec=True)
 class TestMakeShield(unittest.TestCase):
     """Tests for make_shield()."""
 
     @patch("terok.lib.security.shield.config_root", return_value=MOCK_CONFIG_ROOT)
     @patch("terok.lib.security.shield.get_global_section", return_value={})
     @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
-    def test_defaults(self, _port: MagicMock, _sec: MagicMock, _root: MagicMock) -> None:
+    def test_defaults(
+        self, _port: MagicMock, _sec: MagicMock, _root: MagicMock, _runner: MagicMock
+    ) -> None:
         """Default config uses hook mode, dev-standard profile, audit on."""
         shield = make_shield(MOCK_TASK_DIR)
         self.assertIsInstance(shield, Shield)
@@ -86,7 +89,7 @@ class TestMakeShield(unittest.TestCase):
         return_value={"profiles": ["custom-a", "custom-b"], "audit": False},
     )
     @patch("terok.lib.security.shield.get_gate_server_port", return_value=7777)
-    def test_custom(self, _port: MagicMock, _sec: MagicMock) -> None:
+    def test_custom(self, _port: MagicMock, _sec: MagicMock, _runner: MagicMock) -> None:
         """Custom config values are mapped correctly."""
         cfg = make_shield(MOCK_TASK_DIR).config
         self.assertEqual(cfg.default_profiles, ("custom-a", "custom-b"))
@@ -98,13 +101,17 @@ class TestMakeShield(unittest.TestCase):
         return_value={"profiles": "single-profile"},
     )
     @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
-    def test_single_profile_string(self, _port: MagicMock, _sec: MagicMock) -> None:
+    def test_single_profile_string(
+        self, _port: MagicMock, _sec: MagicMock, _runner: MagicMock
+    ) -> None:
         """A single profile string is normalised to a tuple."""
         self.assertEqual(make_shield(MOCK_TASK_DIR).config.default_profiles, ("single-profile",))
 
     @patch("terok.lib.security.shield.get_global_section", return_value={"profiles": 123})
     @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
-    def test_invalid_profiles_type(self, _port: MagicMock, _sec: MagicMock) -> None:
+    def test_invalid_profiles_type(
+        self, _port: MagicMock, _sec: MagicMock, _runner: MagicMock
+    ) -> None:
         """Non-string/non-list profiles value raises TypeError."""
         with self.assertRaises(TypeError):
             make_shield(MOCK_TASK_DIR)

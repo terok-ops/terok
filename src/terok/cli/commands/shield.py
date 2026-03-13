@@ -4,8 +4,9 @@
 """Shield egress firewall management commands.
 
 Uses the ``terok_shield`` command registry to build subcommands.
-Each command that ``needs_container`` resolves the project + task to
-construct a per-task :class:`Shield` and calls the registry handler.
+Commands that need a container take positional ``project_id task_id``
+(same convention as ``terokctl task …``), which are resolved to a
+container name + task directory for the registry handler.
 """
 
 from __future__ import annotations
@@ -19,17 +20,8 @@ from terok_shield import COMMANDS, ArgDef, CommandDef, ExecError
 from ...lib.facade import make_shield
 
 
-def _add_project_task_args(parser: argparse.ArgumentParser) -> None:
-    """Add --project and --task arguments to a subparser."""
-    parser.add_argument("--project", "-p", required=True, help="Project ID")
-    parser.add_argument("--task", "-t", required=True, help="Task ID")
-
-
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
-    """Register an :class:`ArgDef` with an argparse parser.
-
-    Local helper mirroring ``ArgDef.add_to()`` (proposed for terok-shield).
-    """
+    """Register an :class:`ArgDef` with an argparse parser."""
     kwargs: dict = {}
     if arg.help:
         kwargs["help"] = arg.help
@@ -65,10 +57,17 @@ def _resolve_task(project_id: str, task_id: str) -> tuple[str, Path]:
     return cname, task_dir
 
 
+def _needs_task(cmd: CommandDef) -> bool:
+    """Whether a command requires project_id + task_id (container context)."""
+    return cmd.needs_container or any(a.name == "container" for a in cmd.args)
+
+
 def _extract_handler_kwargs(args: argparse.Namespace, cmd_def: CommandDef) -> dict:
     """Extract keyword arguments for a registry handler from parsed args."""
     kwargs: dict = {}
     for arg in cmd_def.args:
+        if arg.name == "container":
+            continue
         key = arg.dest or arg.name.lstrip("-").replace("-", "_")
         if hasattr(args, key):
             kwargs[key] = getattr(args, key)
@@ -86,10 +85,20 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
         sp = sub.add_parser(cmd.name, help=cmd.help)
 
+        # Commands that need a container get positional project_id + task_id,
+        # matching the ``terokctl task …`` convention.  Commands with an
+        # *optional* container arg (like ``status``) get nargs="?" so they
+        # work both with and without a task target.
         if cmd.needs_container:
-            _add_project_task_args(sp)
+            sp.add_argument("project_id", help="Project ID")
+            sp.add_argument("task_id", help="Task ID")
+        elif any(a.name == "container" for a in cmd.args):
+            sp.add_argument("project_id", nargs="?", help="Project ID")
+            sp.add_argument("task_id", nargs="?", help="Task ID")
 
         for arg in cmd.args:
+            if arg.name == "container":
+                continue
             _add_arg(sp, arg)
 
 
@@ -104,30 +113,31 @@ def dispatch(args: argparse.Namespace) -> bool:
     if cmd_def is None or cmd_def.handler is None:
         return False
 
+    has_task = getattr(args, "project_id", None) and getattr(args, "task_id", None)
+
     try:
-        if cmd_def.needs_container:
-            cname, task_dir = _resolve_task(args.project, args.task)
+        if has_task:
+            cname, task_dir = _resolve_task(args.project_id, args.task_id)
             shield = make_shield(task_dir)
             kwargs = _extract_handler_kwargs(args, cmd_def)
-            cmd_def.handler(shield, cname, **kwargs)
+            if cmd_def.needs_container:
+                cmd_def.handler(shield, cname, **kwargs)
+            else:
+                # Optional container arg (e.g. ``status <project> <task>``)
+                kwargs["container"] = cname
+                cmd_def.handler(shield, **kwargs)
         else:
-            # Non-container commands (status, profiles, preview) use the
-            # registry handler directly.  For ``status`` this deliberately
-            # shows *available* profiles (filesystem scan via Shield.status)
-            # rather than *configured* profiles from the terok config.
-            # The config-aware view lives in shield.status() (facade) and
-            # is used by the TUI; the CLI shows runtime reality instead.
             import tempfile
 
             with tempfile.TemporaryDirectory() as tmp:
                 shield = make_shield(Path(tmp))
                 kwargs = _extract_handler_kwargs(args, cmd_def)
                 cmd_def.handler(shield, **kwargs)
-    except ExecError as exc:
-        if cmd_def.needs_container:
-            print(f"Error: container for task {args.task} is not running", file=sys.stderr)
+    except ExecError:
+        if has_task:
+            print(f"Error: container for task {args.task_id} is not running", file=sys.stderr)
         else:
-            print(f"Error: {exc}", file=sys.stderr)
+            print("Error: shield command failed", file=sys.stderr)
         sys.exit(1)
     except (ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

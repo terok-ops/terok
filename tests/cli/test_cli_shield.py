@@ -23,49 +23,52 @@ class TestRegister(unittest.TestCase):
         subs = self.parser.add_subparsers(dest="cmd")
         register(subs)
 
-    def test_status_subcommand(self) -> None:
-        """status subcommand parses without errors."""
+    def test_status_without_task(self) -> None:
+        """status subcommand parses without project/task."""
         args = self.parser.parse_args(["shield", "status"])
         self.assertEqual(args.shield_cmd, "status")
 
+    def test_status_with_task(self) -> None:
+        """status with project_id and task_id queries container state."""
+        args = self.parser.parse_args(["shield", "status", "proj", "1"])
+        self.assertEqual(args.shield_cmd, "status")
+        self.assertEqual(args.project_id, "proj")
+        self.assertEqual(args.task_id, "1")
+
     def test_allow_subcommand(self) -> None:
-        """allow requires --project, --task, and target."""
-        args = self.parser.parse_args(
-            ["shield", "allow", "-p", "proj", "-t", "task1", "example.com"]
-        )
+        """allow requires project_id, task_id, and target."""
+        args = self.parser.parse_args(["shield", "allow", "proj", "task1", "example.com"])
         self.assertEqual(args.shield_cmd, "allow")
-        self.assertEqual(args.project, "proj")
-        self.assertEqual(args.task, "task1")
+        self.assertEqual(args.project_id, "proj")
+        self.assertEqual(args.task_id, "task1")
         self.assertEqual(args.target, "example.com")
 
     def test_deny_subcommand(self) -> None:
-        """deny requires --project, --task, and target."""
-        args = self.parser.parse_args(
-            ["shield", "deny", "-p", "proj", "-t", "task1", "example.com"]
-        )
+        """deny requires project_id, task_id, and target."""
+        args = self.parser.parse_args(["shield", "deny", "proj", "task1", "example.com"])
         self.assertEqual(args.shield_cmd, "deny")
 
     def test_down_subcommand(self) -> None:
-        """down accepts --project, --task, and optional --all."""
-        args = self.parser.parse_args(["shield", "down", "-p", "proj", "-t", "task1", "--all"])
+        """down accepts project_id, task_id, and optional --all."""
+        args = self.parser.parse_args(["shield", "down", "proj", "task1", "--all"])
         self.assertEqual(args.shield_cmd, "down")
         self.assertTrue(args.allow_all)
 
     def test_up_subcommand(self) -> None:
-        """up requires --project and --task."""
-        args = self.parser.parse_args(["shield", "up", "-p", "proj", "-t", "task1"])
+        """up requires project_id and task_id."""
+        args = self.parser.parse_args(["shield", "up", "proj", "task1"])
         self.assertEqual(args.shield_cmd, "up")
 
     def test_rules_subcommand(self) -> None:
-        """rules requires --project and --task."""
-        args = self.parser.parse_args(["shield", "rules", "-p", "proj", "-t", "task1"])
+        """rules requires project_id and task_id."""
+        args = self.parser.parse_args(["shield", "rules", "proj", "task1"])
         self.assertEqual(args.shield_cmd, "rules")
 
     def test_profiles_subcommand(self) -> None:
-        """profiles subcommand has no container args."""
+        """profiles subcommand has no project/task args."""
         args = self.parser.parse_args(["shield", "profiles"])
         self.assertEqual(args.shield_cmd, "profiles")
-        self.assertFalse(hasattr(args, "project"))
+        self.assertFalse(hasattr(args, "project_id"))
 
     def test_standalone_only_excluded(self) -> None:
         """prepare, run, resolve are not registered (standalone_only)."""
@@ -83,8 +86,8 @@ class TestDispatch(unittest.TestCase):
         self.assertFalse(dispatch(args))
 
     @patch("terok.cli.commands.shield.make_shield")
-    def test_status_dispatch(self, mock_make: MagicMock) -> None:
-        """dispatch handles status command via registry handler."""
+    def test_status_without_task(self, mock_make: MagicMock) -> None:
+        """dispatch handles bare status (no task) via registry handler."""
         mock_shield = MagicMock()
         mock_shield.status.return_value = {
             "mode": "hook",
@@ -101,6 +104,23 @@ class TestDispatch(unittest.TestCase):
         output = out.getvalue()
         self.assertIn("Mode", output)
         self.assertIn("hook", output)
+
+    @patch("terok.cli.commands.shield._resolve_task")
+    @patch("terok.cli.commands.shield.make_shield")
+    def test_status_with_task(self, mock_make: MagicMock, mock_resolve: MagicMock) -> None:
+        """dispatch handles status with project/task — queries container state."""
+        mock_resolve.return_value = ("proj-cli-1", str(MOCK_TASK_DIR_1))
+        mock_shield = MagicMock()
+        mock_shield.state.return_value = MagicMock(value="up")
+        mock_make.return_value = mock_shield
+
+        args = argparse.Namespace(cmd="shield", shield_cmd="status", project_id="proj", task_id="1")
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            result = dispatch(args)
+
+        self.assertTrue(result)
+        self.assertIn("up", out.getvalue())
+        mock_shield.state.assert_called_once_with("proj-cli-1")
 
     @patch("terok.cli.commands.shield.make_shield")
     def test_preview_all_without_down_prints_error(self, mock_make: MagicMock) -> None:
@@ -130,7 +150,7 @@ class TestDispatch(unittest.TestCase):
         mock_shield.state.side_effect = ExecError(["nft", "list"], 1, "no such process")
         mock_make.return_value = mock_shield
 
-        args = argparse.Namespace(cmd="shield", shield_cmd="state", project="proj", task="1")
+        args = argparse.Namespace(cmd="shield", shield_cmd="status", project_id="proj", task_id="1")
         with (
             patch("sys.stderr", new_callable=StringIO) as err,
             self.assertRaises(SystemExit) as ctx,
@@ -154,8 +174,8 @@ class TestDispatch(unittest.TestCase):
         args = argparse.Namespace(
             cmd="shield",
             shield_cmd="allow",
-            project="proj",
-            task="1",
+            project_id="proj",
+            task_id="1",
             target="example.com",
         )
         with (
