@@ -87,7 +87,7 @@ def render_task_details(
         success_color = variables.get("success", "green")
         error_color = variables.get("error", "red")
         warning_color = variables.get("warning", "yellow")
-        shield_colors = {"UP": success_color, "DOWN": error_color, "INACTIVE": "dim"}
+        shield_colors = {"UP": success_color, "DOWN": warning_color, "INACTIVE": error_color}
         shield_color = shield_colors.get(task.shield_state, warning_color)
         lines.append(
             Text.assemble(
