@@ -6,6 +6,7 @@
 
 """Terok TUI application built on Textual."""
 
+import inspect
 import os
 import sys
 
@@ -918,13 +919,17 @@ if _HAS_TEXTUAL:
                 return
             handler = PROJECT_ACTION_HANDLERS.get(action)
             if handler:
-                await getattr(self, handler)()
+                result = getattr(self, handler)()
+                if inspect.isawaitable(result):
+                    await result
 
         async def _handle_task_action(self, action: str) -> None:
             """Handle task actions."""
             handler = TASK_ACTION_HANDLERS.get(action)
             if handler:
-                await getattr(self, handler)()
+                result = getattr(self, handler)()
+                if inspect.isawaitable(result):
+                    await result
 
         # ---------- Command palette ----------
 

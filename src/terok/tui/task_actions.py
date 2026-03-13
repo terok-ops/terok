@@ -601,11 +601,11 @@ class TaskActionsMixin:
             exit_on_error=False,
         )
 
-    async def _action_shield_down(self) -> None:
+    def _action_shield_down(self) -> None:
         """Drop the shield (bypass mode) for the current task."""
         self._action_shield_toggle("down", shield_down)
 
-    async def _action_shield_up(self) -> None:
+    def _action_shield_up(self) -> None:
         """Raise the shield (deny-all) for the current task."""
         self._action_shield_toggle("up", shield_up)
 
