@@ -570,7 +570,7 @@ class TaskActionsMixin:
 
     # --- Shield actions ---
 
-    def _action_shield_toggle(
+    async def _action_shield_toggle(
         self,
         action: str,
         shield_fn: Callable[[str, Path], None],
@@ -603,11 +603,11 @@ class TaskActionsMixin:
 
     async def _action_shield_down(self) -> None:
         """Drop the shield (bypass mode) for the current task."""
-        self._action_shield_toggle("down", shield_down)
+        await self._action_shield_toggle("down", shield_down)
 
     async def _action_shield_up(self) -> None:
         """Raise the shield (deny-all) for the current task."""
-        self._action_shield_toggle("up", shield_up)
+        await self._action_shield_toggle("up", shield_up)
 
     # --- Main-screen task pane shortcuts (c/w/d) ---
 
