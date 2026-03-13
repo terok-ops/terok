@@ -1,6 +1,3 @@
-# THE MASTER BRANCH IS UNDREGOING REFACTORING AND IS NOT STABLE
-# DOWNLOAD AND INSTALL [RELEASE 0.5.3](https://github.com/terok-ai/terok/releases/tag/v0.5.3) INSTEAD
-
 # terok
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -15,12 +12,14 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 | Document | Description |
 |----------|-------------|
-| [Full Usage Guide](docs/USAGE.md) | Complete user documentation |
-| [Developer Guide](docs/DEVELOPER.md) | Internal architecture and contributor docs |
-| [Shared Directories](docs/SHARED_DIRS.md) | Volume mounts and SSH configuration |
-| [Container Layers](docs/CONTAINER_LAYERS.md) | Docker image architecture |
-| [Security Modes](docs/GIT_CACHE_AND_SECURITY_MODES.md) | Online vs gatekeeping modes |
-| [Packaging](docs/PACKAGING.md) | pip, deb, and rpm packaging |
+| [Full Usage Guide](docs/usage.md) | Complete user documentation |
+| [Developer Guide](docs/developer.md) | Internal architecture and contributor docs |
+| [Container Layers](docs/container-layers.md) | Docker image architecture |
+| [Container Lifecycle](docs/container-lifecycle.md) | Container and image lifecycle |
+| [Shared Directories](docs/shared-dirs.md) | Volume mounts and SSH configuration |
+| [Security Modes](docs/git-gate-and-security-modes.md) | Online vs gatekeeping modes |
+| [Login Design](docs/login-design.md) | Login session architecture |
+| [Packaging](docs/packaging.md) | pip, deb, and rpm packaging |
 
 ## Quick Start
 
@@ -48,7 +47,7 @@ pip install '.[tui]'
 # 1. Create project directory
 mkdir -p ~/.config/terok/projects/myproj
 
-# 2. Create project.yml (see docs/USAGE.md for full schema)
+# 2. Create project.yml (see docs/usage.md for full schema)
 cat > ~/.config/terok/projects/myproj/project.yml << 'EOF'
 project:
   id: myproj
@@ -97,7 +96,7 @@ terokctl run myproj "Add pagination" --preset team         # multi-agent team
 
 Create your own in `~/.config/terok/presets/` (shared across projects) or
 per-project in `<project>/presets/`. See the
-[Presets Guide](docs/USAGE.md#presets) for details.
+[Presets Guide](docs/usage.md#presets) for details.
 
 ### Common Commands
 
@@ -114,7 +113,7 @@ terokctl completions install               # Install shell completions
 
 ## Tips
 
-- **Clipboard:** If mouse selection doesn't copy to your clipboard, hold **Shift** while selecting, then **Shift+Ctrl+C** to copy. See [Tips](docs/USAGE.md#tips) for details.
+- **Clipboard:** If mouse selection doesn't copy to your clipboard, hold **Shift** while selecting, then **Shift+Ctrl+C** to copy. See [Tips](docs/usage.md#tips) for details.
 
 ## Configuration
 
@@ -163,7 +162,7 @@ make format    # Auto-fix issues if lint fails
 make check     # Run all checks (lint + test + tach + docstrings + deadcode + reuse)
 ```
 
-See [Developer Guide](docs/DEVELOPER.md) for full details.
+See [Developer Guide](docs/developer.md) for full details.
 
 ## License
 

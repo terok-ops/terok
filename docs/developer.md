@@ -113,7 +113,7 @@ terok builds project containers in three logical layers:
 
 L0 and L1 are project-agnostic and cache well; L2 is project-specific.
 
-See [CONTAINER_LAYERS.md](CONTAINER_LAYERS.md) for detailed documentation.
+See [container-layers.md](container-layers.md) for detailed documentation.
 
 ---
 
@@ -135,7 +135,7 @@ When a task container starts, terok mounts:
 | `/home/dev/.config/glab-cli` | `<envs_base>/_glab-config` | GitLab CLI config |
 | `/home/dev/.ssh` (optional) | `<envs_base>/_ssh-config-<project>` | SSH keys/config |
 
-See [SHARED_DIRS.md](SHARED_DIRS.md) for detailed documentation.
+See [shared-dirs.md](shared-dirs.md) for detailed documentation.
 
 ---
 
@@ -178,7 +178,7 @@ See [SHARED_DIRS.md](SHARED_DIRS.md) for detailed documentation.
 - Container cannot access upstream directly
 - Human review required before changes reach upstream
 
-See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md) for detailed documentation.
+See [git-gate-and-security-modes.md](git-gate-and-security-modes.md) for detailed documentation.
 
 ---
 
@@ -436,7 +436,7 @@ Between releases, `poetry-dynamic-versioning` generates PEP 440 versions from gi
 
 ## Packaging
 
-See [PACKAGING.md](PACKAGING.md) for details on:
+See [packaging.md](packaging.md) for details on:
 - Python packaging (pip/Poetry)
 - Distribution packages (deb/rpm)
 - FHS compliance

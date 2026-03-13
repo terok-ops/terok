@@ -4,8 +4,8 @@
 
 terok manages containerized AI coding agent tasks. Users need to open interactive
 shells inside running containers — to debug, inspect, or interact with the agent
-directly. Currently this requires manually typing `podman exec -it <name> bash`,
-the container name must be remembered or copied, and sessions are lost on disconnect.
+directly. Without the login feature, this would require manually typing
+`podman exec -it <name> bash`, remembering container names, and losing sessions on disconnect.
 
 ## Requirements
 

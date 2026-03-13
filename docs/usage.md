@@ -1,6 +1,6 @@
 # terok User Guide
 
-A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`terokctl`) and a Textual TUI (`terok`).
+Complete guide to installing, configuring, and using terok.
 
 ## Table of Contents
 
@@ -932,15 +932,11 @@ When enabled, terok adds:
 
 - **Show resolved paths:** `terokctl config`
 - **Where envs live:** `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if root, or as configured under `envs.base_dir`)
-- **Shared directories:** See [SHARED_DIRS.md](SHARED_DIRS.md)
-- **Security modes:** See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md)
-- **Copying text from the terminal:** Normal mouse text selection may not
-  reach your system clipboard when running inside the TUI or in-container
-  agents. This is due to the somewhat unpredictable interaction of nested
-  Textual TUIs and tmux sessions intercepting mouse events. Hold **Shift**
-  while selecting text with the mouse, then use your terminal's copy shortcut
-  (usually **Shift+Ctrl+C**) to copy to the system clipboard. This applies to
-  most terminals and all in-container agents (OpenCode, Claude Code, etc.).
+- **Shared directories:** See [shared-dirs.md](shared-dirs.md)
+- **Security modes:** See [git-gate-and-security-modes.md](git-gate-and-security-modes.md)
+- **Copying text from the terminal:** TUI and tmux can intercept mouse
+  events, preventing normal text selection from reaching the clipboard.
+  Hold **Shift** while selecting, then **Shift+Ctrl+C** to copy.
 
 ---
 
@@ -964,13 +960,5 @@ Then run: `terok`
 
 ### How do I package for Debian/RPM?
 
-See [PACKAGING.md](PACKAGING.md).
+See [packaging.md](packaging.md).
 
----
-
-## See Also
-
-- [Developer Guide](DEVELOPER.md) - Internal architecture and contributor docs
-- [Shared Directories](SHARED_DIRS.md) - Volume mounts and SSH configuration
-- [Container Layers](CONTAINER_LAYERS.md) - Docker image architecture
-- [Security Modes](GIT_CACHE_AND_SECURITY_MODES.md) - Online vs gatekeeping modes

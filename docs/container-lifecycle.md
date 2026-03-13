@@ -135,11 +135,12 @@ Auth containers are ephemeral because:
 ┌───────────────────────────────┐ ┌───────────────────────────────┐
 │ L1: terok-l1-cli:<base-tag> │ │ L1: terok-l1-ui:<base-tag>  │
 │ ┌───────────────────────────┐ │ │ ┌───────────────────────────┐ │
-│ │ + Codex CLI               │ │ │ │ + Terok Web UI distribution     │ │
+│ │ + Codex CLI               │ │ │ │ + Terok Web UI dist       │ │
 │ │ + Claude Code             │ │ │ │ + Node.js runtime         │ │
-│ │ + Mistral Vibe            │ │ │ │ + terok-ui-entry.sh         │ │
-│ │ + OpenCode (blablador)    │ │ │ └───────────────────────────┘ │
-│ └───────────────────────────┘ │ └───────────────────────────────┘
+│ │ + GitHub Copilot          │ │ │ │ + terok-ui-entry.sh       │ │
+│ │ + Mistral Vibe            │ │ │ │                           │ │
+│ │ + OpenCode (blablador)    │ │ │ │                           │ │
+│ └───────────────────────────┘ │ │ └───────────────────────────┘ │
 └───────────────────────────────┘ └───────────────────────────────┘
                 │                               │
                 ▼                               ▼
