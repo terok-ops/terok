@@ -1,25 +1,21 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-import unittest
-import unittest.mock
+from __future__ import annotations
+
+import sys
+from unittest.mock import patch
 
 
-class ProjectWizardDispatchTests(unittest.TestCase):
-    """Tests for the project-wizard CLI command dispatch."""
+def test_project_wizard_dispatch(monkeypatch) -> None:
+    """``terok project-wizard`` dispatches to ``run_wizard`` with ``cmd_project_init``."""
+    from terok.cli.commands.setup import cmd_project_init
+    from terok.cli.main import main
 
-    @unittest.mock.patch("terok.cli.commands.project.run_wizard")
-    def test_project_wizard_dispatch(self, mock_wizard: unittest.mock.Mock) -> None:
-        from terok.cli.commands.setup import cmd_project_init
-        from terok.cli.main import main
+    monkeypatch.setattr(sys, "argv", ["terok", "project-wizard"])
 
-        with unittest.mock.patch("sys.argv", ["terok", "project-wizard"]):
-            main()
+    with patch("terok.cli.commands.project.run_wizard") as mock_wizard:
+        main()
 
-        mock_wizard.assert_called_once()
-        _, kwargs = mock_wizard.call_args
-        self.assertIs(kwargs.get("init_fn"), cmd_project_init)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    mock_wizard.assert_called_once()
+    assert mock_wizard.call_args.kwargs.get("init_fn") is cmd_project_init

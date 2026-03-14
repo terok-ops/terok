@@ -1,118 +1,98 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import subprocess
-import sys
-import tempfile
-import unittest
-import unittest.mock
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from terok.ui_utils.editor import _resolve_editor, open_in_editor
 
 
-def _only_custom_editor(cmd: str) -> str | None:
-    return cmd if cmd == "/usr/bin/custom-editor" else None
+def _which_for(*available: str):
+    available_set = set(available)
+    return lambda cmd: cmd if cmd in available_set else None
 
 
-def _only_nano(cmd: str) -> str | None:
-    return cmd if cmd == "nano" else None
+@pytest.mark.parametrize(
+    ("editor", "which_side_effect", "expected"),
+    [
+        pytest.param(
+            "/usr/bin/custom-editor",
+            _which_for("/usr/bin/custom-editor"),
+            "/usr/bin/custom-editor",
+            id="prefers-editor-env",
+        ),
+        pytest.param("", _which_for("nano"), "nano", id="falls-back-to-nano"),
+        pytest.param("", _which_for("vi"), "vi", id="falls-back-to-vi"),
+        pytest.param("   ", _which_for("nano"), "nano", id="ignores-whitespace-editor"),
+        pytest.param("nonexistent", _which_for("nano"), "nano", id="invalid-editor-env-falls-back"),
+    ],
+)
+def test_resolve_editor_prefers_env_then_fallbacks(
+    monkeypatch,
+    editor: str,
+    which_side_effect,
+    expected: str,
+) -> None:
+    monkeypatch.setenv("EDITOR", editor)
+    with patch("shutil.which", side_effect=which_side_effect):
+        assert _resolve_editor() == expected
 
 
-def _only_vi(cmd: str) -> str | None:
-    return cmd if cmd == "vi" else None
+def test_resolve_editor_returns_none_when_no_editor(monkeypatch) -> None:
+    monkeypatch.setenv("EDITOR", "")
+    with patch("shutil.which", return_value=None):
+        assert _resolve_editor() is None
 
 
-class ResolveEditorTests(unittest.TestCase):
-    """Tests for _resolve_editor()."""
+@patch("terok.ui_utils.editor._resolve_editor", return_value="nano")
+@patch("subprocess.run")
+def test_open_in_editor_returns_true_on_success(
+    mock_run,
+    _mock_resolve,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text("x", encoding="utf-8")
 
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": "/usr/bin/custom-editor"})
-    @unittest.mock.patch("shutil.which", side_effect=_only_custom_editor)
-    def test_prefers_editor_env_var(self, _which: unittest.mock.Mock) -> None:
-        self.assertEqual(_resolve_editor(), "/usr/bin/custom-editor")
-
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": ""})
-    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
-    def test_falls_back_to_nano(self, _which: unittest.mock.Mock) -> None:
-        self.assertEqual(_resolve_editor(), "nano")
-
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": ""})
-    @unittest.mock.patch("shutil.which", side_effect=_only_vi)
-    def test_falls_back_to_vi(self, _which: unittest.mock.Mock) -> None:
-        self.assertEqual(_resolve_editor(), "vi")
-
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": ""})
-    @unittest.mock.patch("shutil.which", return_value=None)
-    def test_returns_none_when_no_editor(self, _which: unittest.mock.Mock) -> None:
-        self.assertIsNone(_resolve_editor())
-
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": "   "})
-    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
-    def test_ignores_whitespace_only_editor(self, _which: unittest.mock.Mock) -> None:
-        self.assertEqual(_resolve_editor(), "nano")
-
-    @unittest.mock.patch.dict("os.environ", {"EDITOR": "nonexistent"})
-    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
-    def test_editor_env_not_on_path_falls_back(self, _which: unittest.mock.Mock) -> None:
-        self.assertEqual(_resolve_editor(), "nano")
+    assert open_in_editor(path)
+    mock_run.assert_called_once_with(["nano", str(path)], check=True)
 
 
-class OpenInEditorTests(unittest.TestCase):
-    """Tests for open_in_editor()."""
+@patch("terok.ui_utils.editor._resolve_editor", return_value=None)
+def test_open_in_editor_returns_false_without_editor(
+    _mock_resolve,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text("x", encoding="utf-8")
 
-    @unittest.mock.patch("terok.ui_utils.editor._resolve_editor", return_value="nano")
-    @unittest.mock.patch("subprocess.run")
-    def test_success_returns_true(
-        self,
-        mock_run: unittest.mock.Mock,
-        _resolve: unittest.mock.Mock,
-    ) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".yml") as f:
-            path = Path(f.name)
-            self.assertTrue(open_in_editor(path))
-            mock_run.assert_called_once_with(["nano", str(path)], check=True)
-
-    @unittest.mock.patch("terok.ui_utils.editor._resolve_editor", return_value=None)
-    def test_no_editor_returns_false(self, _resolve: unittest.mock.Mock) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".yml") as f:
-            self.assertFalse(open_in_editor(Path(f.name)))
-
-    @unittest.mock.patch("terok.ui_utils.editor._resolve_editor", return_value="nano")
-    @unittest.mock.patch(
-        "subprocess.run",
-        side_effect=subprocess.CalledProcessError(1, "nano"),
-    )
-    def test_editor_failure_returns_false(
-        self,
-        _run: unittest.mock.Mock,
-        _resolve: unittest.mock.Mock,
-    ) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".yml") as f:
-            self.assertFalse(open_in_editor(Path(f.name)))
-
-    @unittest.mock.patch("terok.ui_utils.editor._resolve_editor", return_value="nano")
-    @unittest.mock.patch("subprocess.run", side_effect=FileNotFoundError)
-    def test_editor_not_found_returns_false(
-        self,
-        _run: unittest.mock.Mock,
-        _resolve: unittest.mock.Mock,
-    ) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".yml") as f:
-            self.assertFalse(open_in_editor(Path(f.name)))
-
-    @unittest.mock.patch("terok.ui_utils.editor._resolve_editor", return_value=None)
-    @unittest.mock.patch("builtins.print")
-    def test_no_editor_prints_message(
-        self,
-        mock_print: unittest.mock.Mock,
-        _resolve: unittest.mock.Mock,
-    ) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".yml") as f:
-            open_in_editor(Path(f.name))
-            mock_print.assert_called_once()
-            self.assertIn("EDITOR", mock_print.call_args[0][0])
-            self.assertIs(mock_print.call_args[1].get("file"), sys.stderr)
+    assert not open_in_editor(path)
+    err = capsys.readouterr().err
+    assert "EDITOR" in err
+    assert err
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(subprocess.CalledProcessError(1, "nano"), id="called-process-error"),
+        pytest.param(FileNotFoundError(), id="file-not-found"),
+    ],
+)
+@patch("terok.ui_utils.editor._resolve_editor", return_value="nano")
+def test_open_in_editor_returns_false_on_launch_failure(
+    _mock_resolve,
+    error: Exception,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text("x", encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=error):
+        assert not open_in_editor(path)

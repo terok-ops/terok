@@ -3,146 +3,139 @@
 
 """Tests for the completions CLI subcommand."""
 
-import os
-import tempfile
-import unittest
-import unittest.mock
-from contextlib import redirect_stdout
-from io import StringIO
+from __future__ import annotations
+
 from pathlib import Path
+from unittest.mock import patch
 
-from terok.cli.commands.completions import (
-    _detect_shell,
-    _install_completions,
-    is_completion_installed,
-)
+import pytest
 
-
-class DetectShellTests(unittest.TestCase):
-    """Tests for _detect_shell()."""
-
-    def test_detects_bash(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {"SHELL": "/bin/bash"}):
-            self.assertEqual(_detect_shell(), "bash")
-
-    def test_detects_zsh(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {"SHELL": "/usr/bin/zsh"}):
-            self.assertEqual(_detect_shell(), "zsh")
-
-    def test_detects_fish(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {"SHELL": "/usr/bin/fish"}):
-            self.assertEqual(_detect_shell(), "fish")
-
-    def test_unknown_shell_exits(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {"SHELL": "/bin/tcsh"}):
-            with self.assertRaises(SystemExit):
-                _detect_shell()
-
-    def test_missing_shell_var_exits(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(SystemExit):
-                _detect_shell()
+from terok.cli.commands import completions
 
 
-class InstallCompletionsTests(unittest.TestCase):
-    """Tests for _install_completions()."""
+@pytest.fixture()
+def patch_completion_locations(monkeypatch):
+    """Return a helper that replaces completion search locations for one test."""
 
-    @unittest.mock.patch("terok.cli.commands.completions.shellcode", return_value="# completion")
-    def test_writes_to_target(self, _mock_sc: unittest.mock.MagicMock) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            target = Path(td) / "nested" / "dir" / "terokctl"
-            targets = {"bash": target, "zsh": Path("/unused"), "fish": Path("/unused")}
-            with (
-                unittest.mock.patch("terok.cli.commands.completions._INSTALL_TARGETS", targets),
-                redirect_stdout(StringIO()) as out,
-            ):
-                _install_completions("bash")
-            self.assertTrue(target.is_file())
-            self.assertIn("# completion", target.read_text(encoding="utf-8"))
-            self.assertIn(str(target), out.getvalue())
-
-    @unittest.mock.patch("terok.cli.commands.completions.shellcode", return_value="# comp")
-    @unittest.mock.patch("terok.cli.commands.completions._detect_shell", return_value="fish")
-    def test_auto_detects_shell(
-        self,
-        mock_detect: unittest.mock.MagicMock,
-        _mock_sc: unittest.mock.MagicMock,
+    def _apply(
+        *,
+        bash: tuple[Path, ...] = (),
+        zsh: tuple[Path, ...] = (),
+        fish: tuple[Path, ...] = (),
+        rc: tuple[Path, ...] = (),
     ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            target = Path(td) / "terokctl.fish"
-            targets = {"bash": Path("/unused"), "zsh": Path("/unused"), "fish": target}
-            with (
-                unittest.mock.patch("terok.cli.commands.completions._INSTALL_TARGETS", targets),
-                redirect_stdout(StringIO()),
-            ):
-                _install_completions(None)
-            mock_detect.assert_called_once()
-            self.assertTrue(target.is_file())
+        monkeypatch.setattr(completions, "_BASH_COMPLETION_DIRS", bash)
+        monkeypatch.setattr(completions, "_ZSH_COMPLETION_DIRS", zsh)
+        monkeypatch.setattr(completions, "_FISH_COMPLETION_DIRS", fish)
+        monkeypatch.setattr(completions, "_SHELL_RC_FILES", rc)
+
+    return _apply
 
 
-class IsCompletionInstalledTests(unittest.TestCase):
-    """Tests for is_completion_installed()."""
+@pytest.mark.parametrize(
+    ("shell", "expected"),
+    [
+        pytest.param("/bin/bash", "bash", id="bash"),
+        pytest.param("/usr/bin/zsh", "zsh", id="zsh"),
+        pytest.param("/usr/bin/fish", "fish", id="fish"),
+    ],
+)
+def test_detect_shell_returns_supported_shell(
+    monkeypatch,
+    shell: str,
+    expected: str,
+) -> None:
+    monkeypatch.setenv("SHELL", shell)
+    assert completions._detect_shell() == expected
 
-    def _patch_all_empty(self) -> unittest.mock._patch_dict:
-        """Return a context manager that empties all search directories."""
-        # We need to stack multiple patches; use a helper
-        return unittest.mock.patch.multiple(
-            "terok.cli.commands.completions",
-            _BASH_COMPLETION_DIRS=(),
-            _ZSH_COMPLETION_DIRS=(),
-            _FISH_COMPLETION_DIRS=(),
-            _SHELL_RC_FILES=(),
-        )
 
-    def test_returns_false_when_nothing_found(self) -> None:
-        with self._patch_all_empty():
-            self.assertFalse(is_completion_installed())
+@pytest.mark.parametrize(
+    "shell",
+    [pytest.param("/bin/tcsh", id="unsupported"), pytest.param(None, id="missing")],
+)
+def test_detect_shell_rejects_unknown_shell(monkeypatch, shell: str | None) -> None:
+    if shell is None:
+        monkeypatch.delenv("SHELL", raising=False)
+    else:
+        monkeypatch.setenv("SHELL", shell)
 
-    def test_detects_bash_autoload(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "terokctl").write_text("# comp", encoding="utf-8")
-            with unittest.mock.patch.multiple(
-                "terok.cli.commands.completions",
-                _BASH_COMPLETION_DIRS=(Path(td),),
-                _ZSH_COMPLETION_DIRS=(),
-                _FISH_COMPLETION_DIRS=(),
-                _SHELL_RC_FILES=(),
-            ):
-                self.assertTrue(is_completion_installed())
+    with pytest.raises(SystemExit):
+        completions._detect_shell()
 
-    def test_detects_zsh_autoload(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "_terokctl").write_text("# comp", encoding="utf-8")
-            with unittest.mock.patch.multiple(
-                "terok.cli.commands.completions",
-                _BASH_COMPLETION_DIRS=(),
-                _ZSH_COMPLETION_DIRS=(Path(td),),
-                _FISH_COMPLETION_DIRS=(),
-                _SHELL_RC_FILES=(),
-            ):
-                self.assertTrue(is_completion_installed())
 
-    def test_detects_fish_autoload(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "terokctl.fish").write_text("# comp", encoding="utf-8")
-            with unittest.mock.patch.multiple(
-                "terok.cli.commands.completions",
-                _BASH_COMPLETION_DIRS=(),
-                _ZSH_COMPLETION_DIRS=(),
-                _FISH_COMPLETION_DIRS=(Path(td),),
-                _SHELL_RC_FILES=(),
-            ):
-                self.assertTrue(is_completion_installed())
+@patch("terok.cli.commands.completions.shellcode", return_value="# completion")
+def test_install_completions_writes_to_requested_target(
+    _mock_shellcode,
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    target = tmp_path / "nested" / "dir" / "terokctl"
+    monkeypatch.setattr(
+        completions,
+        "_INSTALL_TARGETS",
+        {"bash": target, "zsh": Path("/unused"), "fish": Path("/unused")},
+    )
 
-    def test_detects_rc_marker(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            rc = Path(td) / ".bashrc"
-            rc.write_text("# register-python-argcomplete terokctl\n", encoding="utf-8")
-            with unittest.mock.patch.multiple(
-                "terok.cli.commands.completions",
-                _BASH_COMPLETION_DIRS=(),
-                _ZSH_COMPLETION_DIRS=(),
-                _FISH_COMPLETION_DIRS=(),
-                _SHELL_RC_FILES=(rc,),
-            ):
-                self.assertTrue(is_completion_installed())
+    completions._install_completions("bash")
+
+    assert target.is_file()
+    assert "# completion" in target.read_text(encoding="utf-8")
+    assert str(target) in capsys.readouterr().out
+
+
+@patch("terok.cli.commands.completions.shellcode", return_value="# comp")
+def test_install_completions_auto_detects_shell(
+    _mock_shellcode,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "terokctl.fish"
+    monkeypatch.setattr(
+        completions,
+        "_INSTALL_TARGETS",
+        {"bash": Path("/unused"), "zsh": Path("/unused"), "fish": target},
+    )
+    monkeypatch.setattr(completions, "_detect_shell", lambda: "fish")
+
+    completions._install_completions(None)
+
+    assert target.is_file()
+
+
+def test_is_completion_installed_returns_false_when_nothing_found(
+    patch_completion_locations,
+) -> None:
+    patch_completion_locations()
+    assert not completions.is_completion_installed()
+
+
+@pytest.mark.parametrize(
+    ("attr", "filename"),
+    [
+        pytest.param("bash", "terokctl", id="bash-autoload"),
+        pytest.param("zsh", "_terokctl", id="zsh-autoload"),
+        pytest.param("fish", "terokctl.fish", id="fish-autoload"),
+    ],
+)
+def test_is_completion_installed_detects_autoload_files(
+    patch_completion_locations,
+    tmp_path: Path,
+    attr: str,
+    filename: str,
+) -> None:
+    (tmp_path / filename).write_text("# comp", encoding="utf-8")
+    patch_completion_locations(**{attr: (tmp_path,)})
+
+    assert completions.is_completion_installed()
+
+
+def test_is_completion_installed_detects_rc_marker(
+    patch_completion_locations,
+    tmp_path: Path,
+) -> None:
+    rc_file = tmp_path / ".bashrc"
+    rc_file.write_text("# register-python-argcomplete terokctl\n", encoding="utf-8")
+    patch_completion_locations(rc=(rc_file,))
+
+    assert completions.is_completion_installed()
