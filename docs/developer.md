@@ -184,6 +184,10 @@ See [git-gate-and-security-modes.md](git-gate-and-security-modes.md) for detaile
 
 ## Agent Permission Mode Architecture
 
+> **See also:** [Agent Configuration Compatibility Matrix](agent-compat-matrix.md)
+> for a per-agent reference of CLI flags, env vars, config files, and ACP
+> adapter behaviour — including the ACP permission gap and recommended solutions.
+
 Agents can run in **unrestricted** (fully autonomous) or **restricted**
 (vendor-default permissions) mode.  The design goal is a single unified code
 path: the host makes one decision and all agents — regardless of how they
