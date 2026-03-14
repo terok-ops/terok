@@ -7,23 +7,27 @@ from __future__ import annotations
 
 import pytest
 
-from ..helpers import NEW_TASK_MARKER
+from constants import EXAMPLE_UPSTREAM_URL
+
+from ..helpers import NEW_TASK_MARKER, TerokIntegrationEnv
 
 pytestmark = pytest.mark.needs_host_features
 
-PROJECT_CONFIG = """
+PROJECT_CONFIG = f"""
 project:
   id: demo
   security_class: online
 git:
-  upstream_url: https://example.com/demo.git
+  upstream_url: {EXAMPLE_UPSTREAM_URL}
 """
 
 
 class TestTaskLifecycle:
     """Verify task creation, status, rename, and archive flows."""
 
-    def test_task_new_creates_workspace_and_lists_tasks(self, terok_env) -> None:
+    def test_task_new_creates_workspace_and_lists_tasks(
+        self, terok_env: TerokIntegrationEnv
+    ) -> None:
         """``task new`` writes the workspace layout used by later container runs."""
         terok_env.write_project("demo", PROJECT_CONFIG)
 
@@ -40,7 +44,7 @@ class TestTaskLifecycle:
         assert "fix-login-bug created" in listed.stdout
         assert "docs-sweep created" in listed.stdout
 
-    def test_task_rename_status_and_archive_delete(self, terok_env) -> None:
+    def test_task_rename_status_and_archive_delete(self, terok_env: TerokIntegrationEnv) -> None:
         """A task can be renamed, inspected, deleted, and listed from the archive."""
         terok_env.write_project("demo", PROJECT_CONFIG)
         terok_env.run_cli("task", "new", "demo", "--name", "Draft")

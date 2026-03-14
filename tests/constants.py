@@ -49,6 +49,12 @@ TEST_EGRESS_URL = "http://example.com"
 EGRESS_DOMAIN = "example.com"
 """Domain name used in egress filtering tests."""
 
+TEST_UPSTREAM_URL = "https://example.com/source.git"
+"""Upstream URL used in project-derivation integration tests."""
+
+EXAMPLE_UPSTREAM_URL = "https://example.com/demo.git"
+"""Upstream URL used in task-lifecycle integration tests."""
+
 
 def localhost_url(port: int) -> str:
     """Build an ``http://127.0.0.1:{port}/`` URL."""

@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Fixtures and skip helpers for integration tests.
@@ -36,6 +35,8 @@ try:
     from terok_shield import Shield, ShieldConfig, ShieldMode
 except ImportError:  # pragma: no cover - optional integration dependency
     Shield = ShieldConfig = ShieldMode = None  # type: ignore[assignment]
+
+SHIELD_MISSING_SKIP_REASON = "terok_shield not installed"
 
 
 def _has(binary: str) -> bool:
@@ -141,7 +142,7 @@ def shield_env(tmp_path: Path) -> dict[str, Path]:
 def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
     """Standard ShieldConfig for integration tests with per-task state_dir."""
     if ShieldConfig is None or ShieldMode is None:
-        pytest.skip("terok_shield not installed")
+        pytest.skip(SHIELD_MISSING_SKIP_REASON)
     return ShieldConfig(
         state_dir=shield_env["state_dir"],
         mode=ShieldMode.HOOK,
@@ -155,7 +156,7 @@ def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
 def shield(shield_config: ShieldConfig) -> Shield:
     """Shield with a mock runner for no-podman integration tests."""
     if Shield is None:
-        pytest.skip("terok_shield not installed")
+        pytest.skip(SHIELD_MISSING_SKIP_REASON)
     return Shield(shield_config, runner=MockRunner())
 
 
@@ -163,7 +164,7 @@ def shield(shield_config: ShieldConfig) -> Shield:
 def real_shield(shield_config: ShieldConfig) -> Shield:
     """Shield with the real subprocess runner for Podman integration tests."""
     if Shield is None:
-        pytest.skip("terok_shield not installed")
+        pytest.skip(SHIELD_MISSING_SKIP_REASON)
     return Shield(shield_config)
 
 
