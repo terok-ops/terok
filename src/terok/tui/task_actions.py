@@ -607,14 +607,18 @@ class TaskActionsMixin:
         """Drop the shield (bypass mode) for the current task."""
         self._action_shield_toggle("down", shield_down)
 
+    def _notify_shield_bypassed(self) -> bool:
+        """Warn the user and return ``True`` if the shield bypass is active."""
+        if not get_shield_bypass_firewall_no_protection():
+            return False
+        from ..lib.security.shield import SHIELD_SECURITY_HINT
+
+        self.notify(f"Shield unavailable (bypass_firewall_no_protection). {SHIELD_SECURITY_HINT}")
+        return True
+
     def _action_shield_up(self) -> None:
         """Raise the shield (deny-all) for the current task."""
-        if get_shield_bypass_firewall_no_protection():
-            from ..lib.security.shield import SHIELD_SECURITY_HINT
-
-            self.notify(
-                f"Shield unavailable (bypass_firewall_no_protection). {SHIELD_SECURITY_HINT}"
-            )
+        if self._notify_shield_bypassed():
             return
         self._action_shield_toggle("up", shield_up)
 
@@ -634,12 +638,7 @@ class TaskActionsMixin:
 
     def action_shield_up_from_main(self) -> None:
         """Raise the shield from the main screen."""
-        if get_shield_bypass_firewall_no_protection():
-            from ..lib.security.shield import SHIELD_SECURITY_HINT
-
-            self.notify(
-                f"Shield unavailable (bypass_firewall_no_protection). {SHIELD_SECURITY_HINT}"
-            )
+        if self._notify_shield_bypassed():
             return
         self._action_shield_toggle("up", shield_up)
 
