@@ -382,14 +382,20 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             self.assertNotIn("TEROK_SESSION_FILE", wrapper, f"{name} should not set session env")
 
     def test_wrappers_do_not_inject_permission_flags(self) -> None:
-        """Wrappers must not inject permission flags — env vars and /etc/ config handle it."""
+        """No wrapper injects permission flags — env vars and /etc/ config handle it."""
+        from terok.lib.containers.agents import _generate_claude_wrapper
+
         project = _make_project()
         for name, p in HEADLESS_PROVIDERS.items():
-            if name == "claude":
-                continue
-            wrapper = generate_agent_wrapper(p, project, has_agents=False)
+            claude_fn = _generate_claude_wrapper if name == "claude" else None
+            wrapper = generate_agent_wrapper(
+                p, project, has_agents=False, claude_wrapper_fn=claude_fn
+            )
             self.assertNotIn("TEROK_UNRESTRICTED", wrapper, f"{name} should not check unrestricted")
             self.assertNotIn("_approve_args", wrapper, f"{name} should not have approve args")
+            self.assertNotIn(
+                "--dangerously-skip-permissions", wrapper, f"{name} should not inject perm flags"
+            )
 
     def test_codex_no_auto_approve_env(self) -> None:
         """Codex uses /etc/codex/requirements.toml, not env vars."""

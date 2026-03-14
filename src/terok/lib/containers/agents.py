@@ -134,7 +134,7 @@ def _subagents_to_json(
 def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
     """Generate the terok-agent.sh wrapper function content for Claude.
 
-    Always includes git env vars, --add-dir /, and --agents.
+    Always includes git env vars and --add-dir /; includes --agents when configured.
 
     The --add-dir / flag gives Claude full filesystem access inside the
     container. The container itself is the security boundary (Podman
