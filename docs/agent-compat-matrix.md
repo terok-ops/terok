@@ -36,7 +36,7 @@ launched by Toad do not see `TEROK_UNRESTRICTED` and use their own defaults.
 | Agent | terok wrapper | `auto_approve_flags` | `auto_approve_env` | ACP covered? |
 |-------|-------------|---------------------|-------------------|--------------|
 | Claude | `--dangerously-skip-permissions` | Yes | — | **No** |
-| Vibe | `--agent auto-approve` | Yes | — | **No** (env var not set) |
+| Vibe | `--auto-approve` (bug: should be `--agent auto-approve`) | Yes | — | **No** (env var not set) |
 | Blablador | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
 | OpenCode | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
 | Codex | `--dangerously-bypass-approvals-and-sandbox` | Yes | — | **No** |
@@ -426,3 +426,10 @@ Primary sources used for this research. Check these when re-verifying.
 - CHANGELOG.md entries: v0.0.397 (ACP introduction), v0.0.400 (ACP permission flags), v0.0.411 (autopilot GA), v0.0.422 (config renames, JSONL output)
 - Issues: #179 (global tool config, open), #307 (permissions proposal, open), #1020 (`permissions.allow` cleared on startup), #1607 (ACP per-session permissions gap)
 - SDK docs: `PermissionHandler.ApproveAll` default behaviour
+
+### terok internals
+
+- `src/terok/lib/containers/headless_providers.py` — `HeadlessProvider` registry with `auto_approve_flags` and `auto_approve_env` per agent; wrapper generation via `_generate_generic_wrapper()`
+- `src/terok/lib/containers/agents.py` — `_generate_claude_wrapper()`, `AgentConfigSpec`
+- `src/terok/lib/containers/task_runners.py` — `TEROK_UNRESTRICTED` env var injection
+- `docs/developer.md` — "Agent Permission Mode Architecture" section
