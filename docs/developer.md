@@ -295,7 +295,16 @@ Tests are written using `unittest` and run with `pytest`.
 **Run tests before pushing** (or at least before opening a PR):
 
 ```bash
-make test      # Run full test suite with coverage
+make test      # Run the fast suite with coverage (excludes integration tests)
+```
+
+Integration tests live under `tests/integration/` and have dedicated targets:
+
+```bash
+make test-integration-host     # Filesystem/process workflows, no podman/network
+make test-integration-network  # Network-dependent integration tests
+make test-integration-podman   # Podman-dependent integration tests
+make test-integration          # All integration tests
 ```
 
 **Check module boundaries** if you changed cross-module imports:
@@ -316,7 +325,11 @@ make check     # Runs lint + test + tach + docstrings + deadcode + reuse
 |---------|-------------|-------------|
 | `make lint` | Check linting and formatting | Before every commit |
 | `make format` | Auto-fix lint issues and format | When lint fails |
-| `make test` | Run tests with coverage | Before pushing |
+| `make test` | Run the fast test suite with coverage (excludes integration) | Before pushing |
+| `make test-integration-host` | Run host-only integration tests | During integration test development |
+| `make test-integration-network` | Run network integration tests | When touching network-dependent flows |
+| `make test-integration-podman` | Run podman integration tests | When touching container-dependent flows |
+| `make test-integration` | Run all integration tests | Before opening a PR that changes integration flows |
 | `make tach` | Check module boundary rules | After changing imports |
 | `make docstrings` | Check docstring coverage (95% min) | After adding public APIs |
 | `make deadcode` | Detect unused code | Before opening a PR |
@@ -435,4 +448,3 @@ The release workflow triggers on `v*` tags automatically — it builds the wheel
 ### Version Display
 
 Between releases, `poetry-dynamic-versioning` generates PEP 440 versions from git tags automatically (e.g. `0.4.0.post3.dev0+gabcdef`). The TUI title bar shows a shortened form: `v0.4.0+` when past a release, `v0.4.0` at a tagged release.
-

@@ -1,12 +1,24 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Fixtures for shield integration tests.
+"""Fixtures and skip helpers for integration tests.
 
-Overrides the root autouse ``_mock_shield_helpers`` so the real
-``terok_shield`` library is exercised, and provides isolated shield
-environments via temporary per-task state directories.
+This directory currently hosts two integration layers:
+
+- shield integration tests that exercise the real ``terok_shield`` library
+- workflow-oriented terok CLI integration tests under ``cli/``, ``projects/``,
+  and ``tasks/``
+
+Environment requirements are expressed via pytest markers:
+
+- ``needs_host_features``: real host/filesystem/process behavior only
+- ``needs_network``: outbound network connectivity required
+- ``needs_podman``: podman must be available on the host
+- ``needs_root``: root-only nftables/shield checks
 """
+
+from __future__ import annotations
 
 import json
 import os
@@ -15,26 +27,40 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from terok_shield import Shield, ShieldConfig, ShieldMode
 
 from constants import GATE_PORT, TEST_IP
 
-# ── Skip decorators ────────────────────────────────────────
+from .helpers import TerokIntegrationEnv
 
-skip_if_no_podman = pytest.mark.skipif(shutil.which("podman") is None, reason="podman not found")
+try:
+    from terok_shield import Shield, ShieldConfig, ShieldMode
+except ImportError:  # pragma: no cover - optional integration dependency
+    Shield = ShieldConfig = ShieldMode = None  # type: ignore[assignment]
+
+
+def _has(binary: str) -> bool:
+    """Return whether *binary* is available on ``PATH``."""
+    return shutil.which(binary) is not None
+
+
+# ── Generic skip decorators ───────────────────────────────
+
+git_missing = pytest.mark.skipif(not _has("git"), reason="git not installed")
+skip_if_no_podman = pytest.mark.skipif(not _has("podman"), reason="podman not found")
+podman_missing = pytest.mark.skipif(not _has("podman"), reason="podman not installed")
 skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
 
 
-# ── Autouse override ──────────────────────────────────────
+# ── Autouse override for shield tests ─────────────────────
 
 
 @pytest.fixture(autouse=True)
 def _mock_shield_helpers() -> Iterator[None]:
-    """Override root conftest: let real shield helpers execute."""
+    """Override root conftest so real shield helpers execute."""
     yield
 
 
-# ── Mock CommandRunner ────────────────────────────────────
+# ── Mock shield CommandRunner ─────────────────────────────
 
 
 class MockRunner:
@@ -92,7 +118,7 @@ class MockRunner:
         return "12345"
 
     def dig_all(self, domain: str, *, timeout: int = 10) -> list[str]:
-        """Return test IP for any domain."""
+        """Return the test IP for any domain."""
         return [TEST_IP]
 
 
@@ -101,12 +127,7 @@ class MockRunner:
 
 @pytest.fixture()
 def shield_env(tmp_path: Path) -> dict[str, Path]:
-    """Create an isolated per-task shield state directory.
-
-    Returns a dict with the task_dir and state_dir paths.
-    The shield state_dir is ``task_dir / "shield"`` matching the
-    production ``_state_dir()`` layout.
-    """
+    """Create an isolated per-task shield state directory."""
     task_dir = tmp_path / "tasks" / "test-task"
     state_dir = task_dir / "shield"
     state_dir.mkdir(parents=True)
@@ -116,12 +137,11 @@ def shield_env(tmp_path: Path) -> dict[str, Path]:
     }
 
 
-# ── Standard test config ─────────────────────────────────
-
-
 @pytest.fixture()
 def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
     """Standard ShieldConfig for integration tests with per-task state_dir."""
+    if ShieldConfig is None or ShieldMode is None:
+        pytest.skip("terok_shield not installed")
     return ShieldConfig(
         state_dir=shield_env["state_dir"],
         mode=ShieldMode.HOOK,
@@ -131,18 +151,19 @@ def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
     )
 
 
-# ── Shield instances ──────────────────────────────────────
-
-
 @pytest.fixture()
 def shield(shield_config: ShieldConfig) -> Shield:
-    """Shield with a mock runner — for no-podman integration tests."""
+    """Shield with a mock runner for no-podman integration tests."""
+    if Shield is None:
+        pytest.skip("terok_shield not installed")
     return Shield(shield_config, runner=MockRunner())
 
 
 @pytest.fixture()
 def real_shield(shield_config: ShieldConfig) -> Shield:
-    """Shield with the real subprocess runner — for Podman integration tests."""
+    """Shield with the real subprocess runner for Podman integration tests."""
+    if Shield is None:
+        pytest.skip("terok_shield not installed")
     return Shield(shield_config)
 
 
@@ -150,3 +171,34 @@ def real_shield(shield_config: ShieldConfig) -> Shield:
 def mock_runner() -> MockRunner:
     """Return a MockRunner instance for tests that need to customise it."""
     return MockRunner()
+
+
+# ── Isolated terok CLI environment ────────────────────────
+
+
+@pytest.fixture
+def terok_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TerokIntegrationEnv:
+    """Return an isolated terok config/state environment for a test."""
+    home_dir = tmp_path / "home"
+    xdg_config_home = tmp_path / "xdg-config"
+    system_config_root = tmp_path / "config"
+    state_root = tmp_path / "state"
+
+    for path in (home_dir, xdg_config_home, system_config_root, state_root):
+        path.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+    monkeypatch.setenv("TEROK_CONFIG_DIR", str(system_config_root))
+    monkeypatch.setenv("TEROK_STATE_DIR", str(state_root))
+
+    env = TerokIntegrationEnv(
+        base_dir=tmp_path,
+        home_dir=home_dir,
+        xdg_config_home=xdg_config_home,
+        system_config_root=system_config_root,
+        state_root=state_root,
+    )
+    env.user_projects_root.mkdir(parents=True, exist_ok=True)
+    env.global_presets_root.mkdir(parents=True, exist_ok=True)
+    return env

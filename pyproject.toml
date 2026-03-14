@@ -77,6 +77,8 @@ addopts = "-v --tb=short"
 markers = [
   "needs_podman: requires podman on PATH",
   "needs_root: requires root for nftables",
+  "needs_host_features: real host/filesystem/process integration, no network or podman required",
+  "needs_network: requires outbound network connectivity",
 ]
 
 [tool.poetry.scripts]

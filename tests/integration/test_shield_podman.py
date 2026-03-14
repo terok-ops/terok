@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tier 2 integration tests: full end-to-end with real Podman.
@@ -14,7 +15,9 @@ import subprocess
 import uuid
 
 import pytest
-from terok_shield import Shield
+
+terok_shield = pytest.importorskip("terok_shield")
+Shield = terok_shield.Shield
 
 from constants import EGRESS_DOMAIN, TEST_EGRESS_URL, TEST_IP_RFC5737
 

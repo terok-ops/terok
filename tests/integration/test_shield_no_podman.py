@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tier 1 integration tests: real terok_shield library, mock runner.
@@ -13,7 +14,12 @@ Uses the per-task Shield class API (state_dir from ShieldConfig).
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from terok_shield import Shield, ShieldConfig, ShieldMode
+import pytest
+
+terok_shield = pytest.importorskip("terok_shield")
+Shield = terok_shield.Shield
+ShieldConfig = terok_shield.ShieldConfig
+ShieldMode = terok_shield.ShieldMode
 
 from constants import GATE_PORT, HOST_ALIAS_LOOPBACK, HOST_ALIAS_SLIRP
 

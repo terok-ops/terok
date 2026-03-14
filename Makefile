@@ -1,4 +1,4 @@
-.PHONY: all lint format test test-integration test-integration-podman tach docstrings complexity deadcode reuse check install install-dev clean spdx
+.PHONY: all lint format test test-integration test-integration-host test-integration-network test-integration-podman tach docstrings complexity deadcode reuse check install install-dev clean spdx
 
 all: check
 
@@ -19,6 +19,14 @@ test:
 # Run integration tests (tier 2 auto-skips without podman)
 test-integration:
 	poetry run pytest tests/integration/ -v
+
+# Run host-only integration tests (filesystem/process workflows; no podman/network)
+test-integration-host:
+	poetry run pytest tests/integration/ -m "needs_host_features and not needs_network and not needs_podman" -v
+
+# Run network integration tests (no podman)
+test-integration-network:
+	poetry run pytest tests/integration/ -m "needs_network and not needs_podman" -v
 
 # Run only podman integration tests (for local runs with podman)
 test-integration-podman:
