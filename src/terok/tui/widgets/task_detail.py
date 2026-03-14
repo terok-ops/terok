@@ -12,6 +12,7 @@ from textual.widgets import Static
 
 from ...lib.containers.task_display import STATUS_DISPLAY, mode_info
 from ...lib.containers.tasks import TaskMeta
+from ...lib.security.shield import SHIELD_SECURITY_HINT
 from ...lib.util.emoji import render_emoji
 
 _LOCALHOST = "127.0.0.1"
@@ -100,6 +101,8 @@ def render_task_details(
                 Text(task.shield_state.lower(), style=Style(color=shield_color)),
             )
         )
+        if task.shield_state in {"DISABLED", "INACTIVE"}:
+            lines.append(Text(f"           {SHIELD_SECURITY_HINT}", style=Style(color=error_color)))
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))

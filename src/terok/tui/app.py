@@ -830,7 +830,15 @@ if _HAS_TEXTUAL:
                 if error:
                     self.notify(f"Shield action failed: {error}")
                 else:
-                    self.notify(f"Shield updated for task {task_id}")
+                    # Extract action from worker name ("shield-action:down:pid:tid")
+                    parts = (worker.name or "").split(":")
+                    action = parts[1] if len(parts) >= 2 else ""
+                    if action == "down":
+                        from ..lib.security.shield import SHIELD_SECURITY_HINT
+
+                        self.notify(f"Shield dropped for task {task_id}. {SHIELD_SECURITY_HINT}")
+                    else:
+                        self.notify(f"Shield updated for task {task_id}")
                 # Refresh shield state after action
                 if (
                     self.current_task

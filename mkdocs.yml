@@ -84,6 +84,7 @@ nav:
     - Container Lifecycle: container-lifecycle.md
     - Shared Directories: shared-dirs.md
     - Security Modes: git-gate-and-security-modes.md
+    - Shield Security: shield-security.md
     - Login Design: login-design.md
     - Packaging: packaging.md
   - Developer Guide:

@@ -64,6 +64,7 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.facade",
+    "terok.lib.security.shield",
     "terok.lib.util.emoji",
 ]
 
@@ -628,6 +629,7 @@ from = ["terok.lib.security.ssh"]
 [[interfaces]]
 expose = [
     "NftNotFoundError",
+    "SHIELD_SECURITY_HINT",
     "ShieldState",
     "down",
     "make_shield",
