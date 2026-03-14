@@ -605,6 +605,8 @@ class TaskActionsMixin:
 
     def _action_shield_down(self) -> None:
         """Drop the shield (bypass mode) for the current task."""
+        if self._notify_shield_bypassed():
+            return
         self._action_shield_toggle("down", shield_down)
 
     def _notify_shield_bypassed(self) -> bool:
@@ -634,6 +636,8 @@ class TaskActionsMixin:
 
     def action_shield_down_from_main(self) -> None:
         """Drop the shield from the main screen."""
+        if self._notify_shield_bypassed():
+            return
         self._action_shield_toggle("down", shield_down)
 
     def action_shield_up_from_main(self) -> None:
