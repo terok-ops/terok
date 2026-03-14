@@ -19,7 +19,7 @@ local LLM via OpenCode; Tier-3: Copilot.
 | Blablador | (inherits OpenCode) | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | needs wrapper (#410) | `OPENCODE_PERMISSION` env var |
 | OpenCode | — | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | `opencode acp` (native) | `OPENCODE_PERMISSION` env var |
 | Codex | `--yolo` | — | `approval_policy` + `sandbox_mode` in config.toml | `codex-acp` (npm) | `/etc/codex/config.toml` |
-| Copilot | `--yolo` | — | — (unstable) | `copilot --acp` (native) | spawn with `--yolo --acp` |
+| Copilot | `--allow-all-tools` | — | — (unstable) | `copilot --acp` (native) | spawn with `--allow-all-tools --acp` |
 
 ### Current terok status and ACP gap
 
@@ -32,7 +32,7 @@ by Toad bypass the wrappers and need separate mechanisms:
 | Vibe | `--auto-approve` (bug: should be `--agent auto-approve`) | — | **No** |
 | Blablador | — | `OPENCODE_PERMISSION` | **Partially** |
 | OpenCode | — | `OPENCODE_PERMISSION` | **Partially** |
-| Codex | `--yolo` | — | **No** |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` | — | **No** |
 | Copilot | `--allow-all-tools` | — | **No** |
 
 ### Recommended ACP implementation
@@ -96,10 +96,10 @@ Enterprise: `/etc/codex/requirements.toml` can restrict allowed policies.
 
 ### Copilot
 
-No env vars or stable config for permissions. `--yolo`/`--allow-all-tools`
-work with `--acp` at spawn time. No per-session ACP permission control
-(upstream gap #1607). `-p` auto-denies permissions — must combine with
-`--allow-all-tools`.
+No env vars or stable config for permissions. `--allow-all-tools` (tool
+auto-approval) and `--yolo` (alias for `--allow-all`, includes paths/URLs)
+both work with `--acp` at spawn time. terok uses `--allow-all-tools`. No
+per-session ACP permission control (upstream gap #1607).
 
 ## Sources
 
