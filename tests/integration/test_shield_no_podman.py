@@ -223,3 +223,49 @@ class TestTaskRunnerShieldIntegration:
         assert "--annotation" in captured_cmd
         assert "--cap-drop" in captured_cmd
         assert any("terok.shield.profiles" in a for a in captured_cmd)
+
+        # Restricted mode (no TEROK_UNRESTRICTED) → no-new-privileges
+        secopt_indices = [i for i, v in enumerate(captured_cmd) if v == "--security-opt"]
+        secopt_values = [captured_cmd[i + 1] for i in secopt_indices]
+        assert "no-new-privileges" in secopt_values
+
+    def test_unrestricted_skips_no_new_privileges(self, shield_env: dict[str, Path]) -> None:
+        """Unrestricted containers must NOT set no-new-privileges (sudo needed)."""
+        captured_cmd: list[str] = []
+
+        def capture_run(cmd: list[str], **_kwargs) -> None:
+            captured_cmd.extend(cmd)
+
+        task_dir = shield_env["task_dir"]
+        with (
+            patch("os.geteuid", return_value=1000),
+            patch("subprocess.run", side_effect=capture_run),
+            patch(
+                "terok.lib.containers.task_runners._podman_userns_args",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.containers.task_runners.gpu_run_args",
+                return_value=[],
+            ),
+            # Mock shield away to isolate terok's own --security-opt logic
+            patch(
+                "terok.lib.containers.task_runners._shield_pre_start_impl",
+                return_value=[],
+            ),
+        ):
+            from terok.lib.containers.task_runners import _run_container
+            from terok.lib.core.projects import ProjectConfig
+
+            project = MagicMock(spec=ProjectConfig)
+
+            _run_container(
+                cname="integ-test-ctr",
+                image="alpine:latest",
+                env={"TEROK_UNRESTRICTED": "1"},
+                volumes=[],
+                project=project,
+                task_dir=task_dir,
+            )
+
+        assert "--security-opt" not in captured_cmd

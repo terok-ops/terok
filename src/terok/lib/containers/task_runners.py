@@ -255,6 +255,8 @@ def _run_container(
 
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
+    if "TEROK_UNRESTRICTED" not in env:
+        cmd += ["--security-opt", "no-new-privileges"]
     cmd += _shield_pre_start_impl(cname, task_dir)
     cmd += gpu_run_args(project)
     if extra_args:
