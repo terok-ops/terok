@@ -91,9 +91,9 @@ is needed (#410).
 ### Codex
 
 `/etc/codex/requirements.toml` has highest precedence (cannot be overridden
-by user config or CLI flags). Read by both CLI and `codex-acp`. User config
-at `~/.codex/config.toml` and project config at `.codex/config.toml` are
-lower precedence. `codex-acp` also accepts `-c key=value` overrides.
+by user config, CLI flags, or `-c` overrides). Read by both CLI and
+`codex-acp`. User config at `~/.codex/config.toml` and project config at
+`.codex/config.toml` are lower precedence.
 
 ### Copilot
 

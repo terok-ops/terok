@@ -312,14 +312,14 @@ fi
 # file-based config.  Env-var-based agents (Vibe, OpenCode, Copilot) are
 # handled by task_runners.py injecting env vars into the container.
 # Both mechanisms are read by agents regardless of launch path (CLI or ACP).
-if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then
+if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then
   # Claude: managed-settings.json has highest precedence, per-container.
-  if [ -d /etc/claude-code ]; then
+  if [[ -d /etc/claude-code ]]; then
     printf '{"permissions":{"defaultMode":"bypassPermissions"}}\n' \
       > /etc/claude-code/managed-settings.json
   fi
   # Codex: requirements.toml has highest precedence, per-container.
-  if [ -d /etc/codex ]; then
+  if [[ -d /etc/codex ]]; then
     printf 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n' \
       > /etc/codex/requirements.toml
   fi

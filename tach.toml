@@ -573,7 +573,7 @@ expose = ["parse_md_agent", "prepare_agent_config_dir", "AgentConfigSpec"]
 from = ["terok.lib.containers.agents"]
 
 [[interfaces]]
-expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "CLIOverrides", "WrapperConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
+expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "CLIOverrides", "WrapperConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers", "collect_all_auto_approve_env"]
 from = ["terok.lib.containers.headless_providers"]
 
 [[interfaces]]
