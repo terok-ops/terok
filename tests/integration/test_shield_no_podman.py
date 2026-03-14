@@ -265,3 +265,77 @@ class TestTaskRunnerShieldIntegration:
             )
 
         assert "--security-opt" not in captured_cmd
+
+    def _run_bypass_container(self, shield_env: dict[str, Path], network_mode: str) -> list[str]:
+        """Helper: run _run_container with bypass active and given network mode."""
+        captured_cmd: list[str] = []
+
+        def capture_run(cmd: list[str], **_kwargs) -> None:
+            captured_cmd.extend(cmd)
+
+        task_dir = shield_env["task_dir"]
+        with (
+            patch("os.geteuid", return_value=1000),
+            patch("subprocess.run", side_effect=capture_run),
+            patch(
+                "terok.lib.containers.task_runners._podman_userns_args",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.containers.task_runners.gpu_run_args",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.containers.task_runners.get_shield_bypass_firewall_no_protection",
+                return_value=True,
+            ),
+            patch(
+                "terok.lib.containers.task_runners.get_gate_server_port",
+                return_value=GATE_PORT,
+            ),
+            patch(
+                "terok.lib.containers.task_runners._detect_rootless_network_mode",
+                return_value=network_mode,
+            ),
+            # Shield must NOT be called at all when bypass is active
+            patch(
+                "terok.lib.containers.task_runners._shield_pre_start_impl",
+                side_effect=AssertionError("shield must not be called"),
+            ),
+        ):
+            from terok.lib.containers.task_runners import _run_container
+            from terok.lib.core.projects import ProjectConfig
+
+            project = MagicMock(spec=ProjectConfig)
+
+            _run_container(
+                cname="bypass-test-ctr",
+                image="alpine:latest",
+                env={},
+                volumes=[],
+                project=project,
+                task_dir=task_dir,
+            )
+        return captured_cmd
+
+    def test_bypass_uses_pasta_networking(self, shield_env: dict[str, Path]) -> None:
+        """Bypass on pasta: injects --network=pasta:-T,<port> and --add-host."""
+        cmd = self._run_bypass_container(shield_env, "pasta")
+        assert f"pasta:-T,{GATE_PORT}" in cmd
+        assert "--add-host" in cmd
+        host_idx = cmd.index("--add-host")
+        assert cmd[host_idx + 1] == HOST_ALIAS_LOOPBACK
+        # No shield args
+        assert "--annotation" not in cmd
+        assert "--cap-drop" not in cmd
+
+    def test_bypass_uses_slirp4netns_networking(self, shield_env: dict[str, Path]) -> None:
+        """Bypass on slirp4netns: injects --network=slirp4netns:... and --add-host."""
+        cmd = self._run_bypass_container(shield_env, "slirp4netns")
+        assert "slirp4netns:allow_host_loopback=true" in cmd
+        assert "--add-host" in cmd
+        host_idx = cmd.index("--add-host")
+        assert cmd[host_idx + 1] == HOST_ALIAS_SLIRP
+        # No shield args
+        assert "--annotation" not in cmd
+        assert "--cap-drop" not in cmd

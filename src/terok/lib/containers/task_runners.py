@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -14,7 +15,10 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ..core.config import get_shield_bypass_firewall_no_protection
+from ..core.config import (
+    get_gate_server_port,
+    get_shield_bypass_firewall_no_protection,
+)
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
 from ..security.shield import (
@@ -57,6 +61,52 @@ if TYPE_CHECKING:
 
 _LOCALHOST = "127.0.0.1"
 _SENSITIVE_KEY_RE = re.compile(r"(?i)(KEY|TOKEN|SECRET|API|PASSWORD|PRIVATE)")
+
+# --- DANGEROUS TRANSITIONAL OVERRIDE helpers (bypass_firewall_no_protection) ---
+# Standalone network setup for when the shield is completely skipped.
+# Mirrors the networking portion of terok-shield's HookMode.pre_start()
+# but is fully independent — works even if the shield package is broken.
+# Delete this block when the bypass option is removed.
+
+_SLIRP_GATEWAY = "10.0.2.2"
+
+
+def _detect_rootless_network_mode() -> str:
+    """Detect whether podman uses pasta or slirp4netns for rootless networking."""
+    try:
+        out = subprocess.run(
+            ["podman", "info", "-f", "{{.Host.RootlessNetworkCmd}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        cmd = out.stdout.strip()
+        return cmd if cmd in ("pasta", "slirp4netns") else "pasta"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return "pasta"
+
+
+def _bypass_network_args(gate_port: int) -> list[str]:
+    """Return podman network args for the bypass path (no shield, no OCI hooks).
+
+    Replicates the networking that terok-shield's HookMode normally provides
+    but without nftables rules, annotations, hooks, or cap-drops.
+    """
+    if os.geteuid() == 0:
+        return []
+    if _detect_rootless_network_mode() == "slirp4netns":
+        return [
+            "--network",
+            "slirp4netns:allow_host_loopback=true",
+            "--add-host",
+            f"host.containers.internal:{_SLIRP_GATEWAY}",
+        ]
+    return [
+        "--network",
+        f"pasta:-T,{gate_port}",
+        "--add-host",
+        f"host.containers.internal:{_LOCALHOST}",
+    ]
 
 
 def _redact_env_args(cmd: list[str]) -> list[str]:
@@ -245,19 +295,24 @@ def _run_container(
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
     """
+    cmd: list[str] = ["podman", "run", "-d"]
+    cmd += _podman_userns_args()
+    if "TEROK_UNRESTRICTED" not in env:
+        cmd += ["--security-opt", "no-new-privileges"]
+
     # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
-    # Print a loud banner so the user cannot miss that the firewall is off.
+    # Skip the shield entirely and use traditional podman networking so
+    # that the gate server port is forwarded via pasta.  Completely
+    # independent of terok-shield; easy to delete once no longer needed.
     if get_shield_bypass_firewall_no_protection():
         print(
             "\n!! SHIELD BYPASSED — egress firewall DISABLED "
             f"(shield.bypass_firewall_no_protection is set) !!\n{SHIELD_SECURITY_HINT}\n"
         )
+        cmd += _bypass_network_args(get_gate_server_port())
+    else:
+        cmd += _shield_pre_start_impl(cname, task_dir)
 
-    cmd: list[str] = ["podman", "run", "-d"]
-    cmd += _podman_userns_args()
-    if "TEROK_UNRESTRICTED" not in env:
-        cmd += ["--security-opt", "no-new-privileges"]
-    cmd += _shield_pre_start_impl(cname, task_dir)
     cmd += gpu_run_args(project)
     if extra_args:
         cmd += extra_args
