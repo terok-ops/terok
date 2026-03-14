@@ -42,7 +42,7 @@ requests = ">=2.31"
 rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.2.4/terok_shield-0.2.4-py3-none-any.whl"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.3.0/terok_shield-0.3.0-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.22158.41"

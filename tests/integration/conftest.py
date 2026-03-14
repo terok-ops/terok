@@ -54,7 +54,12 @@ class MockRunner:
     ) -> str:
         """Handle known commands, return empty string for others."""
         if cmd[:2] == ["podman", "info"]:
-            return json.dumps({"host": {"rootlessNetworkCmd": self._rootless_mode}})
+            return json.dumps(
+                {
+                    "host": {"rootlessNetworkCmd": self._rootless_mode},
+                    "version": {"Version": "5.6.0"},
+                }
+            )
         if cmd[0] == "dig":
             return f"{TEST_IP}\n"
         if cmd[0] == "nft" or cmd[:2] == ["podman", "inspect"]:

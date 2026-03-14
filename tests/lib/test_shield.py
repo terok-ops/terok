@@ -7,7 +7,14 @@ import unittest
 import warnings
 from unittest.mock import MagicMock, patch
 
-from terok_shield import NftNotFoundError, Shield, ShieldMode, ShieldState
+from terok_shield import (
+    EnvironmentCheck,
+    NftNotFoundError,
+    Shield,
+    ShieldMode,
+    ShieldNeedsSetup,
+    ShieldState,
+)
 
 from constants import GATE_PORT, MOCK_CONFIG_ROOT, MOCK_TASK_DIR
 from terok.lib.security.shield import (
@@ -15,9 +22,12 @@ from terok.lib.security.shield import (
     _normalize_profiles,
     _profiles_dir,
     _state_dir,
+    check_environment,
     down,
     make_shield,
     pre_start,
+    run_setup,
+    setup_hooks_direct,
     state,
     status,
     up,
@@ -316,3 +326,120 @@ class TestNoBypassStatus(unittest.TestCase):
         """status() output must NOT contain bypass_firewall_no_protection."""
         result = status()
         self.assertNotIn("bypass_firewall_no_protection", result)
+
+
+# ---------------------------------------------------------------------------
+# check_environment
+# ---------------------------------------------------------------------------
+
+
+class TestCheckEnvironment(unittest.TestCase):
+    """Tests for check_environment()."""
+
+    @patch("terok.lib.security.shield.make_shield")
+    def test_forwards_result(self, mock_make: MagicMock) -> None:
+        """check_environment delegates to Shield.check_environment."""
+        expected = EnvironmentCheck(ok=True, health="ok", podman_version=(5, 6, 0))
+        mock_shield = MagicMock(spec=Shield)
+        mock_shield.check_environment.return_value = expected
+        mock_make.return_value = mock_shield
+
+        result = check_environment()
+
+        self.assertEqual(result, expected)
+        mock_shield.check_environment.assert_called_once()
+
+    @patch(_BYPASS_PATCH, return_value=True)
+    def test_bypass_returns_synthetic(self, _bypass: MagicMock) -> None:
+        """check_environment returns synthetic result when bypass is active."""
+        result = check_environment()
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.health, "bypass")
+        self.assertTrue(any("bypass" in i for i in result.issues))
+
+
+# ---------------------------------------------------------------------------
+# pre_start catching ShieldNeedsSetup
+# ---------------------------------------------------------------------------
+
+
+class TestPreStartShieldNeedsSetup(unittest.TestCase):
+    """pre_start converts ShieldNeedsSetup to SystemExit."""
+
+    @patch("terok.lib.security.shield.make_shield")
+    def test_raises_system_exit(self, mock_make: MagicMock) -> None:
+        """ShieldNeedsSetup becomes SystemExit with setup hint."""
+        mock_shield = MagicMock(spec=Shield)
+        mock_shield.pre_start.side_effect = ShieldNeedsSetup("hooks not installed")
+        mock_make.return_value = mock_shield
+
+        with self.assertRaises(SystemExit) as ctx:
+            pre_start("ctr", MOCK_TASK_DIR)
+
+        msg = str(ctx.exception)
+        self.assertIn("hooks not installed", msg)
+        self.assertIn("terokctl shield setup", msg)
+
+
+# ---------------------------------------------------------------------------
+# run_setup
+# ---------------------------------------------------------------------------
+
+
+class TestRunSetup(unittest.TestCase):
+    """Tests for run_setup()."""
+
+    @patch("terok.lib.security.shield.subprocess.run")
+    def test_calls_subprocess_default(self, mock_run: MagicMock) -> None:
+        """run_setup() calls python -m terok_shield setup."""
+        run_setup()
+        args = mock_run.call_args[0][0]
+        self.assertIn("terok_shield", args)
+        self.assertIn("setup", args)
+        self.assertNotIn("--root", args)
+        self.assertNotIn("--user", args)
+
+    @patch("terok.lib.security.shield.subprocess.run")
+    def test_calls_subprocess_root(self, mock_run: MagicMock) -> None:
+        """run_setup(root=True) passes --root flag."""
+        run_setup(root=True)
+        args = mock_run.call_args[0][0]
+        self.assertIn("--root", args)
+
+    @patch("terok.lib.security.shield.subprocess.run")
+    def test_calls_subprocess_user(self, mock_run: MagicMock) -> None:
+        """run_setup(user=True) passes --user flag."""
+        run_setup(user=True)
+        args = mock_run.call_args[0][0]
+        self.assertIn("--user", args)
+
+
+# ---------------------------------------------------------------------------
+# setup_hooks_direct
+# ---------------------------------------------------------------------------
+
+
+class TestSetupHooksDirect(unittest.TestCase):
+    """Tests for setup_hooks_direct()."""
+
+    @patch("terok.lib.security.shield.ensure_containers_conf_hooks_dir")
+    @patch("terok.lib.security.shield.setup_global_hooks")
+    def test_user_mode(self, mock_setup: MagicMock, mock_conf: MagicMock) -> None:
+        """User-local installs to USER_HOOKS_DIR and configures containers.conf."""
+        setup_hooks_direct(root=False)
+
+        mock_setup.assert_called_once()
+        # Should NOT use sudo for user mode
+        _, kwargs = mock_setup.call_args
+        self.assertFalse(kwargs.get("use_sudo", False))
+        mock_conf.assert_called_once()
+
+    @patch("terok.lib.security.shield.setup_global_hooks")
+    def test_root_mode(self, mock_setup: MagicMock) -> None:
+        """Root installs to system_hooks_dir with sudo."""
+        setup_hooks_direct(root=True)
+
+        mock_setup.assert_called_once()
+        _, kwargs = mock_setup.call_args
+        self.assertTrue(kwargs.get("use_sudo", False))

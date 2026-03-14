@@ -13,7 +13,7 @@ from textual.widgets import Static
 
 from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.core.projects import ProjectConfig
-from ...lib.facade import GateServerStatus, GateStalenessInfo
+from ...lib.facade import EnvironmentCheck, GateServerStatus, GateStalenessInfo
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 
@@ -51,6 +51,7 @@ def render_project_details(
     staleness: GateStalenessInfo | None = None,
     css_variables: dict[str, str] | None = None,
     gate_server_status: GateServerStatus | None = None,
+    shield_env: EnvironmentCheck | None = None,
 ) -> Text:
     """Render project details as a Rich Text object."""
     if project is None or state is None:
@@ -136,6 +137,19 @@ def render_project_details(
     else:
         instr_s = Text("default", style=dim_style)
 
+    # Shield status line
+    if shield_env is not None:
+        _shield_colors = {
+            "ok": success_color,
+            "setup-needed": error_color,
+            "stale-hooks": warning_color,
+            "bypass": warning_color,
+        }
+        shield_color = _shield_colors.get(shield_env.health, error_color)
+        shield_s = Text(shield_env.health, style=Style(color=shield_color))
+    else:
+        shield_s = Text("unknown", style=Style(dim=True))
+
     lines = [
         Text(f"Project:   {project.id} {badges}"),
         Text(upstream),
@@ -144,6 +158,7 @@ def render_project_details(
         Text.assemble("Images:      ", images_s),
         Text.assemble("SSH dir:     ", ssh_s),
         Text.assemble("Git gate:    ", gate_s),
+        Text.assemble("Shield:      ", shield_s),
         Text.assemble("Instruct:    ", instr_s),
         tasks_line,
     ]
@@ -220,6 +235,7 @@ class ProjectState(Static):
         task_count: int | None = None,
         staleness: GateStalenessInfo | None = None,
         gate_server_status: GateServerStatus | None = None,
+        shield_env: EnvironmentCheck | None = None,
     ) -> None:
         """Display fully loaded project details including infrastructure status."""
         self.update(
@@ -230,5 +246,6 @@ class ProjectState(Static):
                 staleness,
                 _get_css_variables(self),
                 gate_server_status=gate_server_status,
+                shield_env=shield_env,
             )
         )

@@ -96,6 +96,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
                 continue
             _add_arg(sp, arg)
 
+    # Manually register setup (standalone_only in registry, needs subprocess passthrough)
+    p_setup = sub.add_parser("setup", help="Install global OCI hooks (podman < 5.6.0)")
+    p_setup.add_argument("--root", action="store_true", help="System-wide (sudo)")
+    p_setup.add_argument("--user", action="store_true", help="User-local")
+
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle shield commands.  Returns True if handled."""
@@ -103,6 +108,14 @@ def dispatch(args: argparse.Namespace) -> bool:
         return False
 
     cmd_name = args.shield_cmd
+
+    # setup is standalone_only and needs subprocess passthrough (no registry handler)
+    if cmd_name == "setup":
+        from ...lib.facade import shield_run_setup
+
+        shield_run_setup(root=args.root, user=args.user)
+        return True
+
     cmd_lookup = {cmd.name: cmd for cmd in COMMANDS if not cmd.standalone_only}
     cmd_def = cmd_lookup.get(cmd_name)
     if cmd_def is None or cmd_def.handler is None:

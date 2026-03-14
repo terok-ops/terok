@@ -49,6 +49,7 @@ from ..lib.containers.tasks import sanitize_task_name, validate_task_name
 from ..lib.core.config import is_experimental
 from ..lib.core.projects import ProjectConfig
 from ..lib.facade import (
+    EnvironmentCheck,
     GateServerStatus,
     GateStalenessInfo,
     check_units_outdated,
@@ -1228,3 +1229,174 @@ class TaskDetailsScreen(screen.Screen[str | None]):
     def action_dismiss(self) -> None:
         """Close the task details screen without selecting an action."""
         self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
+# Shield helpers
+# ---------------------------------------------------------------------------
+
+
+_SHIELD_HEALTH_STYLES: dict[str, str] = {
+    "ok": "green",
+    "setup-needed": "red",
+    "stale-hooks": "yellow",
+    "bypass": "yellow",
+}
+
+
+def render_shield_status(env_check: EnvironmentCheck | None) -> Text:
+    """Render shield environment check as a Rich Text object."""
+    if env_check is None:
+        return Text("Shield environment status unknown.")
+
+    color = _SHIELD_HEALTH_STYLES.get(env_check.health, "red")
+    health_s = Text(env_check.health, style=Style(color=color))
+
+    version_str = ".".join(str(v) for v in env_check.podman_version)
+    lines = [
+        Text.assemble("Health:    ", health_s),
+        Text(f"Podman:    {version_str}"),
+        Text(f"Hooks:     {env_check.hooks}"),
+    ]
+
+    if env_check.issues:
+        lines.append(Text(""))
+        lines.append(Text("Issues:"))
+        for issue in env_check.issues:
+            lines.append(Text(f"  - {issue}"))
+
+    if env_check.setup_hint:
+        lines.append(Text(""))
+        lines.append(Text(env_check.setup_hint, style=Style(dim=True)))
+
+    return Text("\n").join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Shield Screen
+# ---------------------------------------------------------------------------
+
+
+class ShieldScreen(screen.Screen[str | None]):
+    """Full-page screen for viewing shield environment status."""
+
+    BINDINGS = [
+        _modal_binding("escape", "dismiss", "Back"),
+        _modal_binding("q", "dismiss", "Back"),
+        _modal_binding("s", "shield_setup", "Setup global hooks"),
+        _modal_binding("r", "shield_refresh", "Refresh status"),
+    ]
+
+    CSS = (
+        """
+    ShieldScreen {
+        layout: vertical;
+        background: $background;
+    }
+    """
+        + _DETAIL_SCREEN_CSS
+    )
+
+    def __init__(self, env_check: EnvironmentCheck | None = None) -> None:
+        """Store environment check result for rendering."""
+        super().__init__()
+        self._env_check = env_check
+
+    def compose(self) -> ComposeResult:
+        """Build the detail pane and action list for shield management."""
+        detail_pane = Static(id="detail-content")
+        detail_pane.border_title = "Shield Environment"
+        detail_pane.border_subtitle = "Esc to close"
+        yield detail_pane
+
+        yield OptionList(
+            Option("\\[s]etup global hooks", id="shield_setup"),
+            None,
+            Option("\\[r]efresh status", id="shield_refresh"),
+            id="actions-list",
+        )
+
+    def on_mount(self) -> None:
+        """Render shield status and focus the action list."""
+        self._render_status()
+        actions = self.query_one("#actions-list", OptionList)
+        actions.focus()
+
+    def _render_status(self) -> None:
+        """Update the detail pane with current status."""
+        detail_widget = self.query_one("#detail-content", Static)
+        detail_widget.update(render_shield_status(self._env_check))
+
+    def _refresh_status(self) -> None:
+        """Re-fetch status and update the display."""
+        from ..lib.facade import shield_check_environment
+
+        try:
+            self._env_check = shield_check_environment()
+        except Exception:
+            self._env_check = None
+        self._render_status()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle action selection from the option list."""
+        option_id = event.option_id
+        if option_id == "shield_refresh":
+            self._refresh_status()
+        elif option_id:
+            self.dismiss(option_id)
+
+    def action_dismiss(self) -> None:
+        """Close the screen without selecting an action."""
+        self.dismiss(None)
+
+    def action_shield_setup(self) -> None:
+        """Trigger shield setup flow."""
+        self.dismiss("shield_setup")
+
+    def action_shield_refresh(self) -> None:
+        """Refresh the status display."""
+        self._refresh_status()
+
+
+class ShieldSetupScreen(screen.ModalScreen[str | None]):
+    """Modal screen for choosing root vs user hook installation."""
+
+    BINDINGS = [
+        _modal_binding("escape", "dismiss", "Cancel"),
+        _modal_binding("r", "choose_root", "System-wide (sudo)"),
+        _modal_binding("u", "choose_user", "User-local"),
+    ]
+
+    CSS = """
+    ShieldSetupScreen {
+        align: center middle;
+    }
+    ShieldSetupScreen > Vertical {
+        width: 60;
+        height: auto;
+        max-height: 12;
+        border: round $primary;
+        background: $surface;
+        padding: 1 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        """Build the setup choice dialog."""
+        with Vertical():
+            yield Static("Install global OCI hooks\n")
+            yield Static("  [r] System-wide (uses sudo)")
+            yield Static("  [u] User-local")
+            yield Static("\n  [Esc] Cancel")
+
+    def action_dismiss(self) -> None:
+        """Cancel without choosing."""
+        self.dismiss(None)
+
+    def action_choose_root(self) -> None:
+        """Select system-wide installation."""
+        self.dismiss("root")
+
+    def action_choose_user(self) -> None:
+        """Select user-local installation."""
+        self.dismiss("user")

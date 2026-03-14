@@ -8,15 +8,24 @@ Creates per-task :class:`Shield` instances from the terok global config.
 Each task gets its own ``state_dir`` under ``{task_dir}/shield/``.
 """
 
+import subprocess
+import sys
+import tempfile
 import warnings
 from pathlib import Path
 
 from terok_shield import (
+    USER_HOOKS_DIR,
+    EnvironmentCheck,  # noqa: F401 — re-exported
     NftNotFoundError,  # noqa: F401 — re-exported
     Shield,
     ShieldConfig,
     ShieldMode,
+    ShieldNeedsSetup,  # noqa: F401 — re-exported
     ShieldState,  # noqa: F401 — re-exported
+    ensure_containers_conf_hooks_dir,
+    setup_global_hooks,
+    system_hooks_dir,
 )
 
 from ..core.config import (
@@ -107,11 +116,17 @@ def pre_start(container: str, task_dir: Path) -> list[str]:
 
     Returns an empty list (no firewall args) when the dangerous
     ``bypass_firewall_no_protection`` override is active.
+
+    Raises :class:`SystemExit` with setup instructions when the
+    podman environment requires one-time hook installation.
     """
     if get_shield_bypass_firewall_no_protection():
         warnings.warn(_BYPASS_WARNING, stacklevel=2)
         return []
-    return make_shield(task_dir).pre_start(container)
+    try:
+        return make_shield(task_dir).pre_start(container)
+    except ShieldNeedsSetup as exc:
+        raise SystemExit(f"{exc}\n\nRun 'terokctl shield setup' to install global hooks.") from None
 
 
 def down(container: str, task_dir: Path) -> None:
@@ -158,3 +173,51 @@ def status() -> dict:
         # DANGEROUS TRANSITIONAL OVERRIDE — surface prominently in status output
         result["bypass_firewall_no_protection"] = True
     return result
+
+
+def check_environment() -> EnvironmentCheck:
+    """Check the podman environment for shield compatibility.
+
+    Constructs a temporary :class:`Shield` and calls
+    :meth:`Shield.check_environment`.  Returns a synthetic
+    :class:`EnvironmentCheck` with bypass info when the dangerous
+    ``bypass_firewall_no_protection`` override is active.
+    """
+    if get_shield_bypass_firewall_no_protection():
+        return EnvironmentCheck(
+            ok=False,
+            health="bypass",
+            issues=["bypass_firewall_no_protection is active — firewall disabled"],
+        )
+    with tempfile.TemporaryDirectory() as tmp:
+        return make_shield(Path(tmp)).check_environment()
+
+
+def run_setup(*, root: bool = False, user: bool = False) -> None:
+    """Run ``terok-shield setup`` as a subprocess (interactive, inherits stdio).
+
+    Delegates to ``python -m terok_shield setup`` so that sudo prompts
+    and other interactive output are passed through to the terminal.
+    """
+    cmd = [sys.executable, "-m", "terok_shield", "setup"]
+    if root:
+        cmd.append("--root")
+    if user:
+        cmd.append("--user")
+    subprocess.run(cmd, check=True)
+
+
+def setup_hooks_direct(*, root: bool = False) -> None:
+    """Install global hooks via the terok-shield Python API (no subprocess).
+
+    Suitable for TUI callers that need direct control.  Installs hooks
+    to the system directory (with sudo) when *root* is True, otherwise
+    to the user directory.
+    """
+    if root:
+        target = system_hooks_dir()
+        setup_global_hooks(target, use_sudo=True)
+    else:
+        target = USER_HOOKS_DIR
+        setup_global_hooks(target)
+        ensure_containers_conf_hooks_dir(target)

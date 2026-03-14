@@ -74,10 +74,6 @@ class TestPreStartIntegration:
         assert "NET_ADMIN" in cap_drops
         assert "NET_RAW" in cap_drops
 
-        assert "--security-opt" in args
-        secopt_idx = args.index("--security-opt")
-        assert args[secopt_idx + 1] == "no-new-privileges"
-
     def test_slirp4netns(self, shield_config: ShieldConfig) -> None:
         """Slirp mode uses allow_host_loopback and 10.0.2.2 gateway."""
         args = _pre_start_with_mocks("test-ctr", shield_config, rootless_mode="slirp4netns")

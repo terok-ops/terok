@@ -202,6 +202,53 @@ class TestDispatch(unittest.TestCase):
         self.assertIn("No IPs allowed", err.getvalue())
 
 
+class TestSetupSubcommand(unittest.TestCase):
+    """Tests for the manually registered setup subcommand."""
+
+    def setUp(self) -> None:
+        """Create a parser with shield subparsers."""
+        self.parser = argparse.ArgumentParser()
+        subs = self.parser.add_subparsers(dest="cmd")
+        register(subs)
+
+    def test_setup_registered(self) -> None:
+        """setup subcommand is registered and parses."""
+        args = self.parser.parse_args(["shield", "setup"])
+        self.assertEqual(args.shield_cmd, "setup")
+
+    def test_setup_root_flag(self) -> None:
+        """setup --root flag is parsed."""
+        args = self.parser.parse_args(["shield", "setup", "--root"])
+        self.assertTrue(args.root)
+        self.assertFalse(args.user)
+
+    def test_setup_user_flag(self) -> None:
+        """setup --user flag is parsed."""
+        args = self.parser.parse_args(["shield", "setup", "--user"])
+        self.assertFalse(args.root)
+        self.assertTrue(args.user)
+
+
+class TestSetupDispatch(unittest.TestCase):
+    """Tests for setup command dispatch."""
+
+    @patch("terok.lib.facade.shield_run_setup")
+    def test_setup_root_dispatch(self, mock_setup: MagicMock) -> None:
+        """dispatch calls shield_run_setup(root=True) for --root."""
+        args = argparse.Namespace(cmd="shield", shield_cmd="setup", root=True, user=False)
+        result = dispatch(args)
+        self.assertTrue(result)
+        mock_setup.assert_called_once_with(root=True, user=False)
+
+    @patch("terok.lib.facade.shield_run_setup")
+    def test_setup_user_dispatch(self, mock_setup: MagicMock) -> None:
+        """dispatch calls shield_run_setup(user=True) for --user."""
+        args = argparse.Namespace(cmd="shield", shield_cmd="setup", root=False, user=True)
+        result = dispatch(args)
+        self.assertTrue(result)
+        mock_setup.assert_called_once_with(root=False, user=True)
+
+
 class TestResolveTask(unittest.TestCase):
     """Tests for _resolve_task()."""
 
