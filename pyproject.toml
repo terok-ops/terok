@@ -4,7 +4,7 @@ build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry]
 name = "terok"
-version = "0.6.0"
+version = "0.6.1"
 description = "Manage containerized projects and per-run tasks with Podman"
 readme = "README.md"
 license = "Apache-2.0"
