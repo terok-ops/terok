@@ -41,6 +41,7 @@ class TaskList(ListView):
         ("P", "app.copy_diff_prev", "Diff PREV"),
         ("A", "app.run_autopilot_from_main", "Autopilot"),
         ("c", "app.run_cli_from_main", "CLI"),
+        ("w", "app.run_toad_from_main", "Toad"),
         ("l", "app.login_from_main", "Login"),
         ("f", "app.follow_logs_from_main", "Logs"),
         ("X", "app.delete_task_from_main", "Delete"),

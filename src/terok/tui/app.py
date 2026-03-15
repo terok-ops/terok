@@ -130,6 +130,7 @@ if _HAS_TEXTUAL:
 
     TASK_ACTION_HANDLERS: dict[str, str] = {
         "task_start_cli": "_action_task_start_cli",
+        "task_start_toad": "_action_task_start_toad",
         "task_start_web": "_action_task_start_web",
         "task_start_autopilot": "_action_task_start_autopilot",
         "new": "action_new_task",

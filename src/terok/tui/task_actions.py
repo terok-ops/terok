@@ -222,6 +222,33 @@ class TaskActionsMixin:
 
         await self._run_suspended(work, refresh="tasks")
 
+    async def _action_task_start_toad(self) -> None:
+        """Create a new task and immediately run Toad serve."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskNameScreen(default_name=default_name),
+            self._on_task_start_toad_name,
+        )
+
+    async def _on_task_start_toad_name(self, name: str | None) -> None:
+        """Handle name result from TaskNameScreen for Toad task start."""
+        if name is None or not self.current_project_id:
+            return
+        pid = self.current_project_id
+
+        def work() -> None:
+            """Create a new task and immediately launch Toad serve."""
+            task_id = task_new(pid, name=name)
+            self._focus_task_after_creation(pid, task_id)
+            print(f"\nStarting Toad for {pid}/{task_id}...\n")
+            task_run_toad(pid, task_id)
+
+        await self._run_suspended(work, refresh="tasks")
+
     async def _action_task_start_web(self) -> None:
         """Create a new task and immediately run Web UI."""
         if not is_experimental():
@@ -645,6 +672,10 @@ class TaskActionsMixin:
     async def action_run_cli_from_main(self) -> None:
         """Start a new CLI task from the main screen."""
         await self._action_task_start_cli()
+
+    async def action_run_toad_from_main(self) -> None:
+        """Start a new Toad task from the main screen."""
+        await self._action_task_start_toad()
 
     async def action_delete_task_from_main(self) -> None:
         """Delete the selected task from the main screen."""
