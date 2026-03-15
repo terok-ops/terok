@@ -24,10 +24,10 @@ def _set_toad_theme(theme: str) -> None:
             config = {}
     if not isinstance(config, dict):
         config = {}
-    if config.get("ui", {}).get("theme") == theme:
-        return
     if not isinstance(config.get("ui"), dict):
         config["ui"] = {}
+    if config["ui"].get("theme") == theme:
+        return
     config["ui"]["theme"] = theme
     TOAD_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     TOAD_CONFIG.write_text(json.dumps(config, indent=4) + "\n")

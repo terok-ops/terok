@@ -94,6 +94,27 @@ class TestSetToadTheme:
             assert result["ui"]["theme"] == "dracula"
             assert result["shell"]["x"] == 1
 
+    def test_recovers_from_malformed_json(self, blablatoad_module) -> None:
+        """Recovers gracefully when config contains invalid JSON."""
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "toad.json"
+            config_path.write_text("{not valid json!!!")
+            with patch.object(blablatoad_module, "TOAD_CONFIG", config_path):
+                blablatoad_module._set_toad_theme("dracula")
+            result = json.loads(config_path.read_text())
+            assert result["ui"]["theme"] == "dracula"
+
+    def test_replaces_non_dict_ui(self, blablatoad_module) -> None:
+        """Replaces non-dict ui value while preserving other keys."""
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "toad.json"
+            config_path.write_text(json.dumps({"ui": "not-a-dict", "shell": {"x": 1}}))
+            with patch.object(blablatoad_module, "TOAD_CONFIG", config_path):
+                blablatoad_module._set_toad_theme("dracula")
+            result = json.loads(config_path.read_text())
+            assert result["ui"] == {"theme": "dracula"}
+            assert result["shell"]["x"] == 1
+
     def test_skips_write_when_already_set(self, blablatoad_module) -> None:
         """Does not rewrite config when theme already matches."""
         with tempfile.TemporaryDirectory() as td:
