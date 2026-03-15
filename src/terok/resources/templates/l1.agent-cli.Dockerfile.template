@@ -87,12 +87,13 @@ RUN chmod +x /usr/local/share/terok/terok-git-identity.sh
 COPY scripts/hilfe /usr/local/bin/hilfe
 RUN chmod +x /usr/local/bin/hilfe
 
-# Copy blablador wrappers (OpenCode-based CLI + ACP)
+# Copy blablador wrappers (OpenCode-based CLI + ACP) and blablatoad (toad + blablador ACP)
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/blablador-acp /usr/local/bin/blablador-acp
+COPY scripts/blablatoad /usr/local/bin/blablatoad
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
-RUN chmod +x /usr/local/bin/blablador /usr/local/bin/blablador-acp /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
+RUN chmod +x /usr/local/bin/blablador /usr/local/bin/blablador-acp /usr/local/bin/blablatoad /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
 
 # update-all-the-things: refresh all packages without full image rebuild
 COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
