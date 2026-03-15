@@ -65,6 +65,7 @@ build_image() {
 
     echo "==> Building $image from $file"
     podman build -t "$image" -f "$file" "$REPO_ROOT"
+    return 0
 }
 
 run_tests() {
@@ -119,6 +120,7 @@ run_tests() {
         "
 
     echo "==> $name: done"
+    return 0
 }
 
 BUILD_ONLY=false
