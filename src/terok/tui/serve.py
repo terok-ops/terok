@@ -5,20 +5,31 @@
 
 import sys
 
+_DEFAULT_HOST = "localhost"
+_DEFAULT_PORT = 8566
+
+
+def _valid_port(value: str) -> int:
+    """Validate that *value* is a valid TCP port number (1–65535)."""
+    port = int(value)
+    if port < 1 or port > 65535:
+        raise ValueError
+    return port
+
 
 def main() -> None:
     """Launch the Terok TUI as a web application.
 
     Uses textual-serve to expose the TUI over HTTP/WebSocket so it can
     be accessed from a browser.  Accepts ``--host`` and ``--port`` to
-    override the default listen address (localhost:8566).
+    override the default listen address.
     """
     try:
         from textual_serve.server import Server
     except ImportError:
         print(
             "terok-web requires the 'textual-serve' package.\n"
-            "Install it with: pip install textual-serve",
+            "Install it with: pip install 'terok[web]'",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -31,14 +42,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--host",
-        default="localhost",
-        help="Host to bind to (default: localhost)",
+        default=_DEFAULT_HOST,
+        help=f"Host to bind to (default: {_DEFAULT_HOST})",
     )
     parser.add_argument(
         "--port",
-        type=int,
-        default=8566,
-        help="Port to listen on (default: 8566)",
+        type=_valid_port,
+        default=_DEFAULT_PORT,
+        help=f"Port to listen on (default: {_DEFAULT_PORT})",
     )
     args = parser.parse_args()
 
