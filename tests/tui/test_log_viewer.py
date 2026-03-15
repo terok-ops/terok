@@ -4,12 +4,12 @@
 """Tests for the TUI log viewer screen and formatters."""
 
 import json
-from unittest import TestCase, main, mock
+from unittest import mock
 
 from tui_test_helpers import import_log_viewer
 
 
-class TuiLogFormatterTests(TestCase):
+class TestTuiLogFormatter:
     """Tests for _TuiLogFormatter (Rich Text output, no Textual stubs needed)."""
 
     def _make_formatter(self, **kwargs):
@@ -20,9 +20,9 @@ class TuiLogFormatterTests(TestCase):
         fmt = self._make_formatter()
         line = json.dumps({"type": "system", "subtype": "init", "session_id": "abc123"})
         result = fmt.feed_line(line)
-        self.assertEqual(len(result), 1)
-        self.assertIn("abc123", str(result[0]))
-        self.assertEqual(result[0].style.color.name, "blue")
+        assert len(result) == 1
+        assert "abc123" in str(result[0])
+        assert result[0].style.color.name == "blue"
 
     def test_system_init_with_model_and_tools(self) -> None:
         fmt = self._make_formatter()
@@ -36,10 +36,10 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(line)
-        self.assertEqual(len(result), 1)
+        assert len(result) == 1
         text = str(result[0])
-        self.assertIn("model=claude-4", text)
-        self.assertIn("2 tools available", text)
+        assert "model=claude-4" in text
+        assert "2 tools available" in text
 
     def test_assistant_text_block_streaming(self) -> None:
         fmt = self._make_formatter(streaming=True)
@@ -51,7 +51,7 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(start)
-        self.assertEqual(result, [])
+        assert result == []
 
         # Delta with text
         delta = json.dumps(
@@ -61,13 +61,13 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(delta)
-        self.assertEqual(result, [])
+        assert result == []
 
         # Stop
         stop = json.dumps({"type": "content_block_stop"})
         result = fmt.feed_line(stop)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(str(result[0]), "Hello world")
+        assert len(result) == 1
+        assert str(result[0]) == "Hello world"
 
     def test_tool_use_block_streaming(self) -> None:
         fmt = self._make_formatter(streaming=True)
@@ -79,9 +79,9 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(start)
-        self.assertEqual(len(result), 1)
-        self.assertIn("[tool] Read", str(result[0]))
-        self.assertEqual(result[0].style.color.name, "blue")
+        assert len(result) == 1
+        assert "[tool] Read" in str(result[0])
+        assert result[0].style.color.name == "blue"
 
         # Input delta
         delta = json.dumps(
@@ -91,14 +91,14 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(delta)
-        self.assertEqual(result, [])
+        assert result == []
 
         # Stop — should produce yellow tool input
         stop = json.dumps({"type": "content_block_stop"})
         result = fmt.feed_line(stop)
-        self.assertEqual(len(result), 1)
-        self.assertIn("file", str(result[0]))
-        self.assertEqual(result[0].style.color.name, "yellow")
+        assert len(result) == 1
+        assert "file" in str(result[0])
+        assert result[0].style.color.name == "yellow"
 
     def test_coalesced_assistant_non_streaming(self) -> None:
         fmt = self._make_formatter(streaming=False)
@@ -114,10 +114,10 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(line)
-        self.assertEqual(len(result), 3)  # text + tool label + tool input
-        self.assertEqual(str(result[0]), "I will help you.")
-        self.assertIn("[tool] Bash", str(result[1]))
-        self.assertIn("cmd", str(result[2]))
+        assert len(result) == 3  # text + tool label + tool input
+        assert str(result[0]) == "I will help you."
+        assert "[tool] Bash" in str(result[1])
+        assert "cmd" in str(result[2])
 
     def test_user_tool_result_green(self) -> None:
         fmt = self._make_formatter()
@@ -137,9 +137,9 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(line)
-        self.assertTrue(len(result) >= 1)
-        self.assertIn("[tool_result]", str(result[0]))
-        self.assertEqual(result[0].style.color.name, "green")
+        assert len(result) >= 1
+        assert "[tool_result]" in str(result[0])
+        assert result[0].style.color.name == "green"
 
     def test_user_tool_error_red(self) -> None:
         fmt = self._make_formatter()
@@ -159,9 +159,9 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(line)
-        self.assertTrue(len(result) >= 1)
-        self.assertIn("[tool_error]", str(result[0]))
-        self.assertEqual(result[0].style.color.name, "red")
+        assert len(result) >= 1
+        assert "[tool_error]" in str(result[0])
+        assert result[0].style.color.name == "red"
 
     def test_result_summary_on_finish(self) -> None:
         fmt = self._make_formatter()
@@ -176,31 +176,31 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(line)
-        self.assertEqual(result, [])
+        assert result == []
 
         finish_result = fmt.finish()
-        self.assertEqual(len(finish_result), 1)
+        assert len(finish_result) == 1
         text = str(finish_result[0])
-        self.assertIn("[result]", text)
-        self.assertIn("turns=3", text)
-        self.assertIn("cost=$0.0123", text)
-        self.assertIn("duration=5.0s", text)
-        self.assertIn("tokens=100in/50out", text)
-        self.assertEqual(finish_result[0].style.color.name, "yellow")
+        assert "[result]" in text
+        assert "turns=3" in text
+        assert "cost=$0.0123" in text
+        assert "duration=5.0s" in text
+        assert "tokens=100in/50out" in text
+        assert finish_result[0].style.color.name == "yellow"
 
     def test_malformed_json_passthrough(self) -> None:
         fmt = self._make_formatter()
         result = fmt.feed_line("this is not JSON at all")
-        self.assertEqual(len(result), 1)
-        self.assertEqual(str(result[0]), "this is not JSON at all")
+        assert len(result) == 1
+        assert str(result[0]) == "this is not JSON at all"
         # No style (default) — Rich uses empty string for unstyled Text
-        self.assertIn(result[0].style, ("", None))
+        assert result[0].style in ("", None)
 
     def test_empty_line_skipped(self) -> None:
         fmt = self._make_formatter()
-        self.assertEqual(fmt.feed_line(""), [])
-        self.assertEqual(fmt.feed_line("   "), [])
-        self.assertEqual(fmt.feed_line("\n"), [])
+        assert fmt.feed_line("") == []
+        assert fmt.feed_line("   ") == []
+        assert fmt.feed_line("\n") == []
 
     def test_long_result_truncated(self) -> None:
         fmt = self._make_formatter()
@@ -222,13 +222,13 @@ class TuiLogFormatterTests(TestCase):
         # Find the content text (second element after label)
         content_texts = [str(t) for t in result]
         joined = " ".join(content_texts)
-        self.assertIn("...", joined)
+        assert "..." in joined
         # Should be truncated to 500 chars
         for t in result:
             text = str(t)
             if text.startswith("  x"):
                 # Content line: "  " + truncated text
-                self.assertLessEqual(len(text), 502)  # "  " + 497 + "..."
+                assert len(text) <= 502  # "  " + 497 + "..."
 
     def test_streaming_events_ignored_when_non_streaming(self) -> None:
         fmt = self._make_formatter(streaming=False)
@@ -239,7 +239,7 @@ class TuiLogFormatterTests(TestCase):
             }
         )
         result = fmt.feed_line(start)
-        self.assertEqual(result, [])
+        assert result == []
 
     def test_finish_flushes_text_block(self) -> None:
         fmt = self._make_formatter(streaming=True)
@@ -263,8 +263,8 @@ class TuiLogFormatterTests(TestCase):
         )
         # Finish should flush
         result = fmt.finish()
-        self.assertEqual(len(result), 1)
-        self.assertEqual(str(result[0]), "partial")
+        assert len(result) == 1
+        assert str(result[0]) == "partial"
 
     def test_tool_result_with_list_content(self) -> None:
         fmt = self._make_formatter()
@@ -286,7 +286,7 @@ class TuiLogFormatterTests(TestCase):
         )
         result = fmt.feed_line(line)
         joined = " ".join(str(t) for t in result)
-        self.assertIn("part1 part2", joined)
+        assert "part1 part2" in joined
 
     def test_tool_input_truncates_long_values(self) -> None:
         fmt = self._make_formatter(streaming=False)
@@ -303,11 +303,11 @@ class TuiLogFormatterTests(TestCase):
         )
         result = fmt.feed_line(line)
         input_texts = [str(t) for t in result if "content:" in str(t)]
-        self.assertTrue(len(input_texts) > 0)
-        self.assertIn("...", input_texts[0])
+        assert len(input_texts) > 0
+        assert "..." in input_texts[0]
 
 
-class PlainTextTuiFormatterTests(TestCase):
+class TestPlainTextTuiFormatter:
     """Tests for _PlainTextTuiFormatter."""
 
     def _make_formatter(self):
@@ -317,25 +317,25 @@ class PlainTextTuiFormatterTests(TestCase):
     def test_plain_text_passthrough(self) -> None:
         fmt = self._make_formatter()
         result = fmt.feed_line("hello world")
-        self.assertEqual(len(result), 1)
-        self.assertEqual(str(result[0]), "hello world")
+        assert len(result) == 1
+        assert str(result[0]) == "hello world"
 
     def test_plain_text_empty_line(self) -> None:
         fmt = self._make_formatter()
-        self.assertEqual(fmt.feed_line(""), [])
-        self.assertEqual(fmt.feed_line("  "), [])
+        assert fmt.feed_line("") == []
+        assert fmt.feed_line("  ") == []
 
     def test_plain_text_strips_trailing_newline(self) -> None:
         fmt = self._make_formatter()
         result = fmt.feed_line("hello\n")
-        self.assertEqual(str(result[0]), "hello")
+        assert str(result[0]) == "hello"
 
     def test_plain_text_finish_returns_empty(self) -> None:
         fmt = self._make_formatter()
-        self.assertEqual(fmt.finish(), [])
+        assert fmt.finish() == []
 
 
-class LogViewerScreenConstructionTests(TestCase):
+class TestLogViewerScreenConstruction:
     """Tests for LogViewerScreen construction (with Textual stubs)."""
 
     def test_construction_follow_mode(self) -> None:
@@ -347,11 +347,11 @@ class LogViewerScreenConstructionTests(TestCase):
             container_name="proj1-run-42",
         )
         screen = mod.LogViewerScreen(ref, follow=True)
-        self.assertEqual(screen.project_id, "proj1")
-        self.assertEqual(screen.task_id, "42")
-        self.assertEqual(screen.mode, "run")
-        self.assertEqual(screen.container_name, "proj1-run-42")
-        self.assertTrue(screen.follow)
+        assert screen.project_id == "proj1"
+        assert screen.task_id == "42"
+        assert screen.mode == "run"
+        assert screen.container_name == "proj1-run-42"
+        assert screen.follow
 
     def test_construction_static_mode(self) -> None:
         mod = import_log_viewer()
@@ -362,8 +362,8 @@ class LogViewerScreenConstructionTests(TestCase):
             container_name="proj1-cli-7",
         )
         screen = mod.LogViewerScreen(ref, follow=False)
-        self.assertFalse(screen.follow)
-        self.assertEqual(screen.mode, "cli")
+        assert not screen.follow
+        assert screen.mode == "cli"
 
     def test_construction_default_follow(self) -> None:
         mod = import_log_viewer()
@@ -374,7 +374,7 @@ class LogViewerScreenConstructionTests(TestCase):
             container_name="p-run-1",
         )
         screen = mod.LogViewerScreen(ref)
-        self.assertTrue(screen.follow)
+        assert screen.follow
 
     def test_stop_event_initialized(self) -> None:
         mod = import_log_viewer()
@@ -385,11 +385,11 @@ class LogViewerScreenConstructionTests(TestCase):
             container_name="p-run-1",
         )
         screen = mod.LogViewerScreen(ref)
-        self.assertFalse(screen._stop_event.is_set())
-        self.assertIsNone(screen._process)
+        assert not screen._stop_event.is_set()
+        assert screen._process is None
 
 
-class StreamLogsTests(TestCase):
+class TestStreamLogs:
     """Tests for LogViewerScreen._stream_logs (binary I/O with manual line splitting)."""
 
     def _make_screen(self, mode="cli", follow=True, provider=None):
@@ -442,9 +442,9 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertIn("line one", texts)
-        self.assertIn("line two", texts)
-        self.assertIn("line three", texts)
+        assert "line one" in texts
+        assert "line two" in texts
+        assert "line three" in texts
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -464,7 +464,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertIn("drained line", texts)
+        assert "drained line" in texts
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -483,8 +483,8 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertIn("complete", texts)
-        self.assertIn("partial", texts)
+        assert "complete" in texts
+        assert "partial" in texts
 
     @mock.patch("subprocess.Popen")
     def test_stop_event_skips_drain(self, mock_popen):
@@ -506,7 +506,7 @@ class StreamLogsTests(TestCase):
 
         # Nothing should be posted (stop_event was set before entering the loop)
         content_texts = [str(t) for t in screen._posted if "Log stream ended" not in str(t)]
-        self.assertEqual(content_texts, [])
+        assert content_texts == []
 
     @mock.patch("subprocess.Popen", side_effect=FileNotFoundError)
     def test_podman_not_found(self, mock_popen):
@@ -516,7 +516,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertTrue(any("podman not found" in t for t in texts))
+        assert any("podman not found" in t for t in texts)
 
     @mock.patch("subprocess.Popen", side_effect=OSError("connection refused"))
     def test_oserror_on_launch(self, mock_popen):
@@ -526,7 +526,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertTrue(any("connection refused" in t for t in texts))
+        assert any("connection refused" in t for t in texts)
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -548,7 +548,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertTrue(any("Log stream ended" in t for t in texts))
+        assert any("Log stream ended" in t for t in texts)
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -570,8 +570,8 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         texts = [str(t) for t in screen._posted]
-        self.assertTrue(any("sess1" in t for t in texts))
-        self.assertTrue(any("claude-4" in t for t in texts))
+        assert any("sess1" in t for t in texts)
+        assert any("claude-4" in t for t in texts)
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -589,7 +589,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         cmd = mock_popen.call_args[0][0]
-        self.assertIn("-f", cmd)
+        assert "-f" in cmd
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -607,7 +607,7 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         cmd = mock_popen.call_args[0][0]
-        self.assertNotIn("-f", cmd)
+        assert "-f" not in cmd
 
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
@@ -633,7 +633,3 @@ class StreamLogsTests(TestCase):
         screen._stream_logs()
 
         proc.terminate.assert_called_once()
-
-
-if __name__ == "__main__":
-    main()

@@ -13,8 +13,9 @@ actual shell script behavior.
 import os
 import subprocess
 import tempfile
-import unittest
 from pathlib import Path
+
+import pytest
 
 
 def get_init_script_path() -> Path:
@@ -195,13 +196,13 @@ def run_init_script(
     )
 
 
-class InitScriptBranchSelectionTests(unittest.TestCase):
+class TestInitScriptBranchSelection:
     """Test that init-ssh-and-repo.sh respects GIT_BRANCH setting."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method: object) -> None:
         self.init_script = get_init_script_path()
         if not self.init_script.exists():
-            self.skipTest(f"Init script not found at {self.init_script}")
+            pytest.skip(f"Init script not found at {self.init_script}")
 
     def test_initial_clone_uses_git_branch_not_remote_default(self) -> None:
         """Test that initial clone checks out GIT_BRANCH, not the remote's default HEAD.
@@ -235,21 +236,20 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             )
 
             # Script should succeed
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Workspace should be on 'dev', not 'master'
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(
-                current_branch,
-                "dev",
+            message = (
                 f"Expected branch 'dev' but got '{current_branch}'. "
                 f"Script should use GIT_BRANCH, not remote's default HEAD.\n"
-                f"stdout: {result.stdout}\nstderr: {result.stderr}",
+                f"stdout: {result.stdout}\nstderr: {result.stderr}"
             )
+            assert current_branch == "dev", message
 
             # Verify we have the dev branch content
             content = get_file_content(workspace_path, "README.md")
-            self.assertEqual(content, "# dev")
+            assert content == "# dev"
 
     def test_initial_clone_falls_back_to_cloned_default_if_branch_missing(self) -> None:
         """Test fallback to cloned default branch when GIT_BRANCH doesn't exist."""
@@ -272,15 +272,15 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Should warn about missing branch
-            self.assertIn("WARNING", result.stdout)
-            self.assertIn("nonexistent", result.stdout)
+            assert "WARNING" in result.stdout
+            assert "nonexistent" in result.stdout
 
             # Should stay on the cloned default branch (main) since nonexistent doesn't exist
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "main")
+            assert current_branch == "main"
 
     def test_initial_clone_fails_if_workspace_not_empty(self) -> None:
         """Initial clone should fail fast when workspace is pre-populated."""
@@ -303,10 +303,10 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertNotEqual(result.returncode, 0, "Script should fail on non-empty workspace")
+            assert result.returncode != 0, "Script should fail on non-empty workspace"
             combined = f"{result.stdout}\n{result.stderr}"
-            self.assertIn("is not empty before initial clone", combined)
-            self.assertNotIn("branch master not found", combined)
+            assert "is not empty before initial clone" in combined
+            assert "branch master not found" not in combined
 
     def test_initial_clone_removes_marker_and_succeeds(self) -> None:
         """Initial clone should remove the new-task marker using normal init flow."""
@@ -330,10 +330,10 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
-            self.assertFalse(marker_path.exists(), "Marker should be removed by init script")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
+            assert not marker_path.exists(), "Marker should be removed by init script"
             # Clone should succeed and workspace should become a git checkout.
-            self.assertTrue((workspace_path / ".git").exists())
+            assert (workspace_path / ".git").exists()
 
     def test_initial_clone_uses_remote_default_if_git_branch_unset(self) -> None:
         """Test that remote's default branch is used when GIT_BRANCH is not set."""
@@ -360,11 +360,11 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Should be on 'master' (the remote's default HEAD)
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "master")
+            assert current_branch == "master"
 
     def test_online_mode_with_clone_from_uses_git_branch(self) -> None:
         """Test online mode: clone from gate, repoint to upstream, use GIT_BRANCH.
@@ -401,11 +401,11 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Should be on 'dev'
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "dev")
+            assert current_branch == "dev"
 
             # Origin should point to upstream, not gate
             origin_url = subprocess.run(
@@ -415,7 +415,7 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 check=True,
                 env=get_clean_git_env(),
             ).stdout.strip()
-            self.assertEqual(origin_url, f"file://{upstream_path}")
+            assert origin_url == f"file://{upstream_path}"
 
     def test_new_task_marker_resets_to_git_branch(self) -> None:
         """Test that new task marker triggers reset to GIT_BRANCH."""
@@ -439,7 +439,7 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             )
 
             # Verify we're on master initially
-            self.assertEqual(get_current_branch(workspace_path), "master")
+            assert get_current_branch(workspace_path) == "master"
 
             # Create the new task marker (simulates terokctl task new)
             marker_path = workspace_path / ".new-task-marker"
@@ -455,14 +455,14 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Should now be on 'dev' after reset
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "dev")
+            assert current_branch == "dev"
 
             # Marker should be removed
-            self.assertFalse(marker_path.exists())
+            assert not marker_path.exists()
 
     def test_restarted_task_preserves_local_branch(self) -> None:
         """Test that restarted task (no marker) preserves local state."""
@@ -514,23 +514,23 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Should still be on 'dev' (preserved)
             current_branch = get_current_branch(workspace_path)
-            self.assertEqual(current_branch, "dev")
+            assert current_branch == "dev"
 
             # Local file should still exist
-            self.assertTrue((workspace_path / "local.txt").exists())
+            assert (workspace_path / "local.txt").exists()
 
 
-class GatekeepingModeOriginTests(unittest.TestCase):
+class TestGatekeepingModeOrigin:
     """Test that gatekeeping mode correctly sets origin to gate."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method: object) -> None:
         self.init_script = get_init_script_path()
         if not self.init_script.exists():
-            self.skipTest(f"Init script not found at {self.init_script}")
+            pytest.skip(f"Init script not found at {self.init_script}")
 
     def test_gatekeeping_mode_fixes_origin_to_gate(self) -> None:
         """Test that origin is always set to gate in gatekeeping mode (file:// URL)."""
@@ -563,7 +563,7 @@ class GatekeepingModeOriginTests(unittest.TestCase):
                 check=True,
                 env=git_env,
             ).stdout.strip()
-            self.assertIn("upstream", origin_before)
+            assert "upstream" in origin_before
 
             # Run init in gatekeeping mode (file:// URL = gatekeeping)
             result = run_init_script(
@@ -576,7 +576,7 @@ class GatekeepingModeOriginTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            assert result.returncode == 0, f"Script failed: {result.stderr}"
 
             # Origin should now point to gate
             origin_after = subprocess.run(
@@ -586,8 +586,4 @@ class GatekeepingModeOriginTests(unittest.TestCase):
                 check=True,
                 env=git_env,
             ).stdout.strip()
-            self.assertEqual(origin_after, f"file://{gate_path}")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert origin_after == f"file://{gate_path}"
