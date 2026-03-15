@@ -56,6 +56,11 @@ class TerokIntegrationEnv:
         return self.xdg_config_home / "terok" / "presets"
 
     @property
+    def envs_base_dir(self) -> Path:
+        """Return the isolated shared env mount base directory."""
+        return self.state_root / "envs"
+
+    @property
     def system_projects_root(self) -> Path:
         """Return the isolated system projects root."""
         return self.system_config_root / "projects"
@@ -148,6 +153,10 @@ class TerokIntegrationEnv:
     def task_archive_root(self, project_id: str) -> Path:
         """Return the archive root for deleted tasks."""
         return self.state_root / "projects" / project_id / "archive"
+
+    def gate_path(self, project_id: str) -> Path:
+        """Return the host-side gate mirror path for ``project_id``."""
+        return self.state_root / "gate" / f"{project_id}.git"
 
 
 def _hook_diagnostics(extra_args: list[str]) -> str:

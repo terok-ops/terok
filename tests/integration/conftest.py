@@ -89,6 +89,7 @@ def _target_host_port(url: str) -> tuple[str, int]:
 git_missing = pytest.mark.skipif(not _has("git"), reason="git not installed")
 podman_missing = pytest.mark.skipif(not _has("podman"), reason="podman not installed")
 nft_missing = pytest.mark.skipif(not _find_nft(), reason="nft not installed")
+ssh_keygen_missing = pytest.mark.skipif(not _has("ssh-keygen"), reason="ssh-keygen not installed")
 skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
 
 
