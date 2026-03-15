@@ -150,6 +150,18 @@ class TestTask:
         meta.update(updates)
         meta_path.write_text(yaml.safe_dump(meta))
 
+    @staticmethod
+    def _task_list_output(project_id: str, states: dict[str, str | None], **filters: str) -> str:
+        """Run ``task_list`` with mocked container states and capture stdout."""
+        with unittest.mock.patch(
+            "terok.lib.containers.tasks.get_all_task_states",
+            return_value=states,
+        ):
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, **filters)
+        return buf.getvalue()
+
     def test_task_list_no_filters(self) -> None:
         """task_list with no filters prints all tasks."""
         project_id = "proj_list"
@@ -163,15 +175,7 @@ class TestTask:
             self._patch_task_meta(ctx, project_id, "1", mode="cli")
             self._patch_task_meta(ctx, project_id, "2", mode="web")
 
-            # Mock container states: task 1 running, task 2 exited (→ stopped)
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"1": "running", "2": "exited"},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id)
-            output = buf.getvalue()
+            output = self._task_list_output(project_id, {"1": "running", "2": "exited"})
             # Task IDs are right-aligned to 3 characters
             assert re.search(r"(?m)^- {3}1:", output)
             assert "running" in output
@@ -191,15 +195,9 @@ class TestTask:
             self._patch_task_meta(ctx, project_id, "1", mode="cli")
             self._patch_task_meta(ctx, project_id, "2", mode="cli")
 
-            # Mock: task 1 running, task 2 exited (→ stopped)
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"1": "running", "2": "exited"},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id, status="running")
-            output = buf.getvalue()
+            output = self._task_list_output(
+                project_id, {"1": "running", "2": "exited"}, status="running"
+            )
             # Task IDs are right-aligned to 3 characters
             assert re.search(r"(?m)^- {3}1:", output)
             assert "running" in output
@@ -233,19 +231,15 @@ class TestTask:
                 }
                 (meta_dir / f"{tid}.yml").write_text(yaml.safe_dump(meta))
 
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={
+            output = self._task_list_output(
+                project_id,
+                {
                     "1": "running",
                     "2": "exited",
                     "10": "running",
                     "100": "running",
                 },
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id)
-            output = buf.getvalue()
+            )
             # 1-digit: 2 leading spaces; 2-digit: 1 leading space; 3-digit: none
             assert re.search(r"(?m)^- {3}1:", output)
             assert re.search(r"(?m)^- {3}2:", output)
@@ -265,14 +259,7 @@ class TestTask:
             self._patch_task_meta(ctx, project_id, "1", mode="cli")
             self._patch_task_meta(ctx, project_id, "2", mode="web")
 
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"2": None},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id, mode="web")
-            output = buf.getvalue()
+            output = self._task_list_output(project_id, {"2": None}, mode="web")
             assert "1:" not in output
             assert "2:" in output
 
@@ -289,14 +276,7 @@ class TestTask:
             self._patch_task_meta(ctx, project_id, "1", preset="claude")
             self._patch_task_meta(ctx, project_id, "2", preset="codex")
 
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"1": None, "2": None},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id, agent="claude")
-            output = buf.getvalue()
+            output = self._task_list_output(project_id, {"1": None, "2": None}, agent="claude")
             assert "1:" in output
             assert "2:" not in output
 
@@ -318,16 +298,10 @@ class TestTask:
             ]:
                 self._patch_task_meta(ctx, project_id, tid, mode=mode)
 
-            # Mock: tasks 1,2 running, task 3 exited (→ stopped)
             # mode filter narrows to cli first, then status=running keeps only task 1
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"1": "running", "3": "exited"},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id, status="running", mode="cli")
-            output = buf.getvalue()
+            output = self._task_list_output(
+                project_id, {"1": "running", "3": "exited"}, status="running", mode="cli"
+            )
             assert "1:" in output
             assert "2:" not in output
             assert "3:" not in output
@@ -342,14 +316,8 @@ class TestTask:
             task_new(project_id)
 
             # New task has no mode → effective status is "created", not "running"
-            with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_all_task_states",
-                return_value={"1": None},
-            ):
-                buf = StringIO()
-                with redirect_stdout(buf):
-                    task_list(project_id, status="running")
-            assert "No tasks found" in buf.getvalue()
+            output = self._task_list_output(project_id, {"1": None}, status="running")
+            assert "No tasks found" in output
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)

@@ -6,18 +6,56 @@
 import json
 from unittest import mock
 
+import pytest
 from tui_test_helpers import import_log_viewer
+
+
+def make_tui_formatter(**kwargs: object) -> object:
+    """Build the structured TUI formatter under test."""
+    return import_log_viewer()._TuiLogFormatter(**kwargs)
+
+
+def make_plain_text_formatter() -> object:
+    """Build the plain-text fallback formatter under test."""
+    return import_log_viewer()._PlainTextTuiFormatter()
+
+
+def make_log_viewer_screen(
+    *, mode: str = "cli", follow: bool = True, provider: str | None = None
+) -> object:
+    """Build a LogViewerScreen with captured posted output."""
+    mod = import_log_viewer()
+    ref = mod.TaskContainerRef(
+        project_id="p",
+        task_id="1",
+        mode=mode,
+        container_name="p-cli-1",
+        provider=provider,
+    )
+    screen = mod.LogViewerScreen(ref, follow=follow)
+    screen._posted = []
+    screen._post_text = lambda text: screen._posted.append(text)
+    screen._update_footer_static = lambda: None
+    return screen
+
+
+def make_mock_stdout(data: bytes) -> mock.MagicMock:
+    """Create a stdout-like mock that serves buffered bytes via ``read1``."""
+    import io
+
+    buf = io.BytesIO(data)
+    stdout = mock.MagicMock(wraps=buf)
+    stdout.read1 = buf.read1 if hasattr(buf, "read1") else buf.read
+    stdout.read = buf.read
+    stdout.fileno = mock.MagicMock(return_value=99)
+    return stdout
 
 
 class TestTuiLogFormatter:
     """Tests for _TuiLogFormatter (Rich Text output, no Textual stubs needed)."""
 
-    def _make_formatter(self, **kwargs):
-        mod = import_log_viewer()
-        return mod._TuiLogFormatter(**kwargs)
-
     def test_system_init_blue_text(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps({"type": "system", "subtype": "init", "session_id": "abc123"})
         result = fmt.feed_line(line)
         assert len(result) == 1
@@ -25,7 +63,7 @@ class TestTuiLogFormatter:
         assert result[0].style.color.name == "blue"
 
     def test_system_init_with_model_and_tools(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps(
             {
                 "type": "system",
@@ -42,7 +80,7 @@ class TestTuiLogFormatter:
         assert "2 tools available" in text
 
     def test_assistant_text_block_streaming(self) -> None:
-        fmt = self._make_formatter(streaming=True)
+        fmt = make_tui_formatter(streaming=True)
         # Start text block
         start = json.dumps(
             {
@@ -70,7 +108,7 @@ class TestTuiLogFormatter:
         assert str(result[0]) == "Hello world"
 
     def test_tool_use_block_streaming(self) -> None:
-        fmt = self._make_formatter(streaming=True)
+        fmt = make_tui_formatter(streaming=True)
         # Start tool_use block
         start = json.dumps(
             {
@@ -101,7 +139,7 @@ class TestTuiLogFormatter:
         assert result[0].style.color.name == "yellow"
 
     def test_coalesced_assistant_non_streaming(self) -> None:
-        fmt = self._make_formatter(streaming=False)
+        fmt = make_tui_formatter(streaming=False)
         line = json.dumps(
             {
                 "type": "assistant",
@@ -120,7 +158,7 @@ class TestTuiLogFormatter:
         assert "cmd" in str(result[2])
 
     def test_user_tool_result_green(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps(
             {
                 "type": "user",
@@ -142,7 +180,7 @@ class TestTuiLogFormatter:
         assert result[0].style.color.name == "green"
 
     def test_user_tool_error_red(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps(
             {
                 "type": "user",
@@ -164,7 +202,7 @@ class TestTuiLogFormatter:
         assert result[0].style.color.name == "red"
 
     def test_result_summary_on_finish(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps(
             {
                 "type": "result",
@@ -189,21 +227,19 @@ class TestTuiLogFormatter:
         assert finish_result[0].style.color.name == "yellow"
 
     def test_malformed_json_passthrough(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         result = fmt.feed_line("this is not JSON at all")
         assert len(result) == 1
         assert str(result[0]) == "this is not JSON at all"
         # No style (default) — Rich uses empty string for unstyled Text
         assert result[0].style in ("", None)
 
-    def test_empty_line_skipped(self) -> None:
-        fmt = self._make_formatter()
-        assert fmt.feed_line("") == []
-        assert fmt.feed_line("   ") == []
-        assert fmt.feed_line("\n") == []
+    @pytest.mark.parametrize("line", ["", "   ", "\n"])
+    def test_empty_line_skipped(self, line: str) -> None:
+        assert make_tui_formatter().feed_line(line) == []
 
     def test_long_result_truncated(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         long_text = "x" * 600
         line = json.dumps(
             {
@@ -231,7 +267,7 @@ class TestTuiLogFormatter:
                 assert len(text) <= 502  # "  " + 497 + "..."
 
     def test_streaming_events_ignored_when_non_streaming(self) -> None:
-        fmt = self._make_formatter(streaming=False)
+        fmt = make_tui_formatter(streaming=False)
         start = json.dumps(
             {
                 "type": "content_block_start",
@@ -242,7 +278,7 @@ class TestTuiLogFormatter:
         assert result == []
 
     def test_finish_flushes_text_block(self) -> None:
-        fmt = self._make_formatter(streaming=True)
+        fmt = make_tui_formatter(streaming=True)
         # Start a text block
         fmt.feed_line(
             json.dumps(
@@ -267,7 +303,7 @@ class TestTuiLogFormatter:
         assert str(result[0]) == "partial"
 
     def test_tool_result_with_list_content(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_tui_formatter()
         line = json.dumps(
             {
                 "type": "user",
@@ -289,7 +325,7 @@ class TestTuiLogFormatter:
         assert "part1 part2" in joined
 
     def test_tool_input_truncates_long_values(self) -> None:
-        fmt = self._make_formatter(streaming=False)
+        fmt = make_tui_formatter(streaming=False)
         long_val = "v" * 250
         line = json.dumps(
             {
@@ -310,29 +346,23 @@ class TestTuiLogFormatter:
 class TestPlainTextTuiFormatter:
     """Tests for _PlainTextTuiFormatter."""
 
-    def _make_formatter(self):
-        mod = import_log_viewer()
-        return mod._PlainTextTuiFormatter()
-
     def test_plain_text_passthrough(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_plain_text_formatter()
         result = fmt.feed_line("hello world")
         assert len(result) == 1
         assert str(result[0]) == "hello world"
 
-    def test_plain_text_empty_line(self) -> None:
-        fmt = self._make_formatter()
-        assert fmt.feed_line("") == []
-        assert fmt.feed_line("  ") == []
+    @pytest.mark.parametrize("line", ["", "  "])
+    def test_plain_text_empty_line(self, line: str) -> None:
+        assert make_plain_text_formatter().feed_line(line) == []
 
     def test_plain_text_strips_trailing_newline(self) -> None:
-        fmt = self._make_formatter()
+        fmt = make_plain_text_formatter()
         result = fmt.feed_line("hello\n")
         assert str(result[0]) == "hello"
 
     def test_plain_text_finish_returns_empty(self) -> None:
-        fmt = self._make_formatter()
-        assert fmt.finish() == []
+        assert make_plain_text_formatter().finish() == []
 
 
 class TestLogViewerScreenConstruction:
@@ -392,42 +422,14 @@ class TestLogViewerScreenConstruction:
 class TestStreamLogs:
     """Tests for LogViewerScreen._stream_logs (binary I/O with manual line splitting)."""
 
-    def _make_screen(self, mode="cli", follow=True, provider=None):
-        mod = import_log_viewer()
-        ref = mod.TaskContainerRef(
-            project_id="p",
-            task_id="1",
-            mode=mode,
-            container_name="p-cli-1",
-            provider=provider,
-        )
-        screen = mod.LogViewerScreen(ref, follow=follow)
-        # Collect posted Text objects instead of calling into Textual
-        screen._posted: list[object] = []
-        screen._post_text = lambda t: screen._posted.append(t)
-        screen._update_footer_static = lambda: None
-        return screen
-
-    def _make_mock_stdout(self, data: bytes):
-        """Create a mock stdout that returns data via read1(), then empty."""
-        import io
-
-        buf = io.BytesIO(data)
-        # Wrap so it has read1 like a real BufferedReader
-        stdout = mock.MagicMock(wraps=buf)
-        stdout.read1 = buf.read1 if hasattr(buf, "read1") else buf.read
-        stdout.read = buf.read
-        stdout.fileno = mock.MagicMock(return_value=99)
-        return stdout
-
     @mock.patch("subprocess.Popen")
     @mock.patch("select.select")
     def test_streams_lines_from_process(self, mock_select, mock_popen):
         """Lines produced by the subprocess are posted via _post_text."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         data = b"line one\nline two\nline three\n"
-        stdout = self._make_mock_stdout(data)
+        stdout = make_mock_stdout(data)
 
         proc = mock.MagicMock()
         proc.stdout = stdout
@@ -450,10 +452,10 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_drains_remaining_on_process_exit(self, mock_select, mock_popen):
         """When the process exits, remaining buffered data is drained."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         # Process exits immediately with data still in pipe
-        stdout = self._make_mock_stdout(b"drained line\n")
+        stdout = make_mock_stdout(b"drained line\n")
 
         proc = mock.MagicMock()
         proc.stdout = stdout
@@ -470,9 +472,9 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_trailing_partial_line_flushed(self, mock_select, mock_popen):
         """A trailing line without newline is still processed."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
-        stdout = self._make_mock_stdout(b"complete\npartial")
+        stdout = make_mock_stdout(b"complete\npartial")
 
         proc = mock.MagicMock()
         proc.stdout = stdout
@@ -489,9 +491,9 @@ class TestStreamLogs:
     @mock.patch("subprocess.Popen")
     def test_stop_event_skips_drain(self, mock_popen):
         """When stop_event is set, the drain loop is skipped."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
-        stdout = self._make_mock_stdout(b"line1\nline2\nline3\n")
+        stdout = make_mock_stdout(b"line1\nline2\nline3\n")
 
         proc = mock.MagicMock()
         proc.stdout = stdout
@@ -511,7 +513,7 @@ class TestStreamLogs:
     @mock.patch("subprocess.Popen", side_effect=FileNotFoundError)
     def test_podman_not_found(self, mock_popen):
         """FileNotFoundError is caught and an error message is posted."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         screen._stream_logs()
 
@@ -521,7 +523,7 @@ class TestStreamLogs:
     @mock.patch("subprocess.Popen", side_effect=OSError("connection refused"))
     def test_oserror_on_launch(self, mock_popen):
         """OSError on Popen is caught and an error message is posted."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         screen._stream_logs()
 
@@ -532,7 +534,7 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_oserror_during_read_breaks_loop(self, mock_select, mock_popen):
         """OSError during select/read breaks the loop cleanly."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         stdout = mock.MagicMock()
         stdout.read = mock.MagicMock(return_value=b"")
@@ -554,12 +556,12 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_uses_claude_formatter_for_run_mode(self, mock_select, mock_popen):
         """Run mode with claude provider uses the structured formatter."""
-        screen = self._make_screen(mode="run", provider="claude")
+        screen = make_log_viewer_screen(mode="run", provider="claude")
 
         log_line = json.dumps(
             {"type": "system", "subtype": "init", "session_id": "sess1", "model": "claude-4"}
         )
-        stdout = self._make_mock_stdout(log_line.encode() + b"\n")
+        stdout = make_mock_stdout(log_line.encode() + b"\n")
 
         proc = mock.MagicMock()
         proc.stdout = stdout
@@ -577,9 +579,9 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_follow_flag_in_command(self, mock_select, mock_popen):
         """Follow mode appends -f to the podman logs command."""
-        screen = self._make_screen(follow=True)
+        screen = make_log_viewer_screen(follow=True)
 
-        stdout = self._make_mock_stdout(b"")
+        stdout = make_mock_stdout(b"")
         proc = mock.MagicMock()
         proc.stdout = stdout
         proc.poll = mock.MagicMock(return_value=0)
@@ -595,9 +597,9 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_no_follow_flag_when_static(self, mock_select, mock_popen):
         """Static mode (follow=False) does not include -f."""
-        screen = self._make_screen(follow=False)
+        screen = make_log_viewer_screen(follow=False)
 
-        stdout = self._make_mock_stdout(b"")
+        stdout = make_mock_stdout(b"")
         proc = mock.MagicMock()
         proc.stdout = stdout
         proc.poll = mock.MagicMock(return_value=0)
@@ -613,7 +615,7 @@ class TestStreamLogs:
     @mock.patch("select.select")
     def test_process_terminated_in_finally(self, mock_select, mock_popen):
         """If the process is still running when an exception occurs, it gets terminated."""
-        screen = self._make_screen()
+        screen = make_log_viewer_screen()
 
         stdout = mock.MagicMock()
         # Make read1 raise to trigger the except→break path

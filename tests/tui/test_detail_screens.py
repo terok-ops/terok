@@ -55,6 +55,19 @@ def make_task_screen(*, has_tasks: bool, mode: str | None = None) -> object:
     return screen
 
 
+def render_task_details_text(**overrides: object) -> str:
+    """Render task details and return plain text for substring assertions."""
+    widgets = import_widgets()
+    task = make_task(widgets, **overrides)
+    return str(widgets.render_task_details(task, project_id="proj1"))
+
+
+def format_task_label(**overrides: object) -> str:
+    """Format a task label using the shared TaskMeta defaults."""
+    widgets = import_widgets()
+    return widgets.TaskList()._format_task_label(make_task(widgets, **overrides))
+
+
 def run(coro: object) -> object:
     """Run an async test coroutine."""
     return asyncio.run(coro)
@@ -76,6 +89,28 @@ def make_creation_app(app_class: type) -> object:
     instance.refresh_tasks = mock.AsyncMock()
     instance.push_screen = fake_push_screen
     return instance
+
+
+def make_sync_gate_app(app_class: type) -> object:
+    """Build a TUI app instance prepared for gate-sync workflows."""
+    instance = app_class()
+    instance.current_project_id = "proj1"
+    instance.notify = mock.Mock()
+    instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+    instance._print_sync_gate_ssh_help = mock.Mock()
+    instance._refresh_project_state = mock.Mock()
+    return instance
+
+
+def make_gate_server_status(
+    *, mode: str = "systemd", running: bool = True, port: int = GATE_PORT
+) -> mock.Mock:
+    """Build a gate-server status mock with common defaults."""
+    status = mock.Mock()
+    status.mode = mode
+    status.running = running
+    status.port = port
+    return status
 
 
 def _task_action_cases() -> list[tuple[str, str]]:
@@ -188,186 +223,146 @@ class TestRenderHelpers:
         text_str = str(result)
         assert "Exit code: 0" in text_str
 
-    def test_render_task_details_with_work_status(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="10",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            work_status="coding",
-            work_message="Implementing JWT validation",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Work:" in text_str
-        assert "coding" in text_str
-        assert "Implementing JWT validation" in text_str
+    @pytest.mark.parametrize(
+        ("overrides", "present", "absent"),
+        [
+            pytest.param(
+                {
+                    "task_id": "10",
+                    "mode": "run",
+                    "work_status": "coding",
+                    "work_message": "Implementing JWT validation",
+                },
+                ["Work:", "coding", "Implementing JWT validation"],
+                [],
+                id="work-status-with-message",
+            ),
+            pytest.param(
+                {"task_id": "11", "mode": "run", "work_status": "testing"},
+                ["Work:", "testing"],
+                [],
+                id="work-status-no-message",
+            ),
+            pytest.param(
+                {"task_id": "12", "mode": "cli"},
+                [],
+                ["Work:"],
+                id="no-work-status",
+            ),
+        ],
+    )
+    def test_render_task_details_work_status_variants(
+        self, overrides: dict[str, object], present: list[str], absent: list[str]
+    ) -> None:
+        text = render_task_details_text(**overrides)
+        for needle in present:
+            assert needle in text
+        for needle in absent:
+            assert needle not in text
 
-    def test_render_task_details_work_status_without_message(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="11",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            work_status="testing",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Work:" in text_str
-        assert "testing" in text_str
+    @pytest.mark.parametrize(
+        ("overrides", "present", "absent"),
+        [
+            pytest.param(
+                {"task_id": "20", "mode": "run", "unrestricted": True},
+                ["Perms:     unrestricted"],
+                [],
+                id="unrestricted",
+            ),
+            pytest.param(
+                {"task_id": "21", "mode": "run", "unrestricted": False},
+                ["Perms:     restricted"],
+                ["Perms:     unrestricted"],
+                id="restricted",
+            ),
+        ],
+    )
+    def test_render_task_details_permission_variants(
+        self, overrides: dict[str, object], present: list[str], absent: list[str]
+    ) -> None:
+        text = render_task_details_text(**overrides)
+        for needle in present:
+            assert needle in text
+        for needle in absent:
+            assert needle not in text
 
-    def test_render_task_details_no_work_status(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="12",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Work:" not in text_str
+    @pytest.mark.parametrize(
+        ("shield_state", "present", "absent"),
+        [
+            pytest.param(
+                "DISABLED",
+                ["Shield:", "disabled", "shield-security"],
+                [],
+                id="disabled",
+            ),
+            pytest.param(
+                "INACTIVE",
+                ["inactive", "shield-security"],
+                [],
+                id="inactive",
+            ),
+            pytest.param(
+                "UP",
+                ["up"],
+                ["shield-security"],
+                id="up",
+            ),
+        ],
+    )
+    def test_render_task_details_shield_variants(
+        self, shield_state: str, present: list[str], absent: list[str]
+    ) -> None:
+        text = render_task_details_text(task_id="99", shield_state=shield_state)
+        for needle in present:
+            assert needle in text
+        for needle in absent:
+            assert needle not in text
 
-    def test_render_task_details_unrestricted(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="20",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            unrestricted=True,
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Perms:     unrestricted" in text_str
+    @pytest.mark.parametrize(
+        ("overrides", "present", "absent"),
+        [
+            pytest.param(
+                {"task_id": "13", "mode": "run", "work_status": "debugging"},
+                ["work=debugging"],
+                [],
+                id="with-work-status",
+            ),
+            pytest.param(
+                {"task_id": "14", "mode": "cli"},
+                [],
+                ["work="],
+                id="without-work-status",
+            ),
+            pytest.param(
+                {"task_id": "3", "mode": "run"},
+                ["🚀"],
+                [],
+                id="autopilot",
+            ),
+        ],
+    )
+    def test_format_task_label_variants(
+        self, overrides: dict[str, object], present: list[str], absent: list[str]
+    ) -> None:
+        label = format_task_label(**overrides)
+        for needle in present:
+            assert needle in label
+        for needle in absent:
+            assert needle not in label
 
-    def test_render_task_details_restricted(self) -> None:
+    @pytest.mark.parametrize(
+        ("overrides", "expected"),
+        [
+            pytest.param({"task_id": "1", "mode": "run", "exit_code": 1}, 1, id="explicit-exit"),
+            pytest.param({"task_id": "1", "mode": "cli"}, None, id="default-none"),
+        ],
+    )
+    def test_task_meta_exit_code_variants(
+        self, overrides: dict[str, object], expected: int | None
+    ) -> None:
         widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="21",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            unrestricted=False,
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Perms:     restricted" in text_str
-        assert "Perms:     unrestricted" not in text_str
-
-    def test_render_task_details_shield_disabled(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="99",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            shield_state="DISABLED",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "Shield:" in text_str
-        assert "disabled" in text_str
-        assert "shield-security" in text_str
-
-    def test_render_task_details_shield_inactive_shows_hint(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="98",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            shield_state="INACTIVE",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "inactive" in text_str
-        assert "shield-security" in text_str
-
-    def test_render_task_details_shield_up_no_hint(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="97",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            shield_state="UP",
-        )
-        result = widgets.render_task_details(task, project_id="proj1")
-        text_str = str(result)
-        assert "up" in text_str
-        assert "shield-security" not in text_str
-
-    def test_format_task_label_with_work_status(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="13",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-            work_status="debugging",
-        )
-        task_list = widgets.TaskList()
-        label = task_list._format_task_label(task)
-        assert "work=debugging" in label
-
-    def test_format_task_label_no_work_status(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="14",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-        )
-        task_list = widgets.TaskList()
-        label = task_list._format_task_label(task)
-        assert "work=" not in label
-
-    def test_format_task_label_autopilot(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="3",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            container_state="running",
-        )
-        task_list = widgets.TaskList()
-        label = task_list._format_task_label(task)
-        assert "🚀" in label
-
-    def test_task_meta_exit_code_field(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="1",
-            mode="run",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            exit_code=1,
-        )
-        assert task.exit_code == 1
-
-    def test_task_meta_exit_code_default_none(self) -> None:
-        widgets = import_widgets()
-        task = widgets.TaskMeta(
-            task_id="1",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-        )
-        assert task.exit_code is None
+        task = make_task(widgets, **overrides)
+        assert task.exit_code == expected
 
 
 class TestScreenConstruction:
@@ -375,9 +370,7 @@ class TestScreenConstruction:
 
     def test_project_details_screen_construction(self) -> None:
         screens, _ = import_screens()
-
-        project = mock.Mock()
-        project.id = "proj1"
+        project = make_project(id="proj1")
         staleness = mock.Mock()
 
         screen = screens.ProjectDetailsScreen(
@@ -393,15 +386,7 @@ class TestScreenConstruction:
 
     def test_task_details_screen_construction(self) -> None:
         screens, widgets = import_screens()
-
-        task = widgets.TaskMeta(
-            task_id="7",
-            mode="cli",
-            workspace=MOCK_WORKSPACE,
-            web_port=None,
-            backend="codex",
-            container_state="running",
-        )
+        task = make_task(widgets, task_id="7", backend="codex")
 
         screen = screens.TaskDetailsScreen(
             task=task,
@@ -414,16 +399,10 @@ class TestScreenConstruction:
         assert screen._project_id == "proj1"
         assert not screen._image_old
 
-    def test_auth_actions_screen_construction(self) -> None:
+    @pytest.mark.parametrize("screen_name", ["AuthActionsScreen", "AutopilotPromptScreen"])
+    def test_simple_screen_construction(self, screen_name: str) -> None:
         screens, _ = import_screens()
-
-        screen = screens.AuthActionsScreen()
-        assert screen is not None
-
-    def test_autopilot_prompt_screen_construction(self) -> None:
-        screens, _ = import_screens()
-        screen = screens.AutopilotPromptScreen()
-        assert screen is not None
+        assert getattr(screens, screen_name)() is not None
 
     def test_agent_selection_screen_construction(self) -> None:
         screens, _ = import_screens()
@@ -826,13 +805,7 @@ class TestGateSyncAction:
 
     def test_action_sync_gate_handles_system_exit_without_exiting_tui(self) -> None:
         _, AppClass = import_app()
-
-        instance = AppClass()
-        instance.current_project_id = "proj1"
-        instance.notify = mock.Mock()
-        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
-        instance._print_sync_gate_ssh_help = mock.Mock()
-        instance._refresh_project_state = mock.Mock()
+        instance = make_sync_gate_app(AppClass)
         fake_gate = mock.Mock()
         fake_gate.sync = mock.Mock(side_effect=SystemExit("auth failed"))
         action_globals = AppClass._action_sync_gate.__globals__
@@ -847,7 +820,7 @@ class TestGateSyncAction:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            asyncio.run(AppClass._action_sync_gate(instance))
+            run(AppClass._action_sync_gate(instance))
 
         fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_called_once_with("proj1")
@@ -856,13 +829,7 @@ class TestGateSyncAction:
 
     def test_action_sync_gate_success_notifies_and_refreshes(self) -> None:
         _, AppClass = import_app()
-
-        instance = AppClass()
-        instance.current_project_id = "proj1"
-        instance.notify = mock.Mock()
-        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
-        instance._print_sync_gate_ssh_help = mock.Mock()
-        instance._refresh_project_state = mock.Mock()
+        instance = make_sync_gate_app(AppClass)
         fake_gate = mock.Mock()
         fake_gate.sync = mock.Mock(return_value={"success": True, "created": False, "errors": []})
         action_globals = AppClass._action_sync_gate.__globals__
@@ -877,7 +844,7 @@ class TestGateSyncAction:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            asyncio.run(AppClass._action_sync_gate(instance))
+            run(AppClass._action_sync_gate(instance))
 
         fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_not_called()
@@ -890,8 +857,7 @@ class TestProjectScreenNoneState:
 
     def test_project_screen_stores_none_state(self) -> None:
         screens, _ = import_screens()
-        project = mock.Mock()
-        project.id = "proj1"
+        project = make_project(id="proj1")
         screen = screens.ProjectDetailsScreen(project=project, state=None, task_count=3)
         assert screen._state is None
         assert screen._task_count == 3
@@ -902,10 +868,7 @@ class TestGateServerScreen:
 
     def test_gate_server_screen_construction(self) -> None:
         screens, _ = import_screens()
-        status = mock.Mock()
-        status.mode = "systemd"
-        status.running = True
-        status.port = GATE_PORT
+        status = make_gate_server_status()
         screen = screens.GateServerScreen(status)
         assert screen._status == status
 
@@ -966,10 +929,7 @@ class TestRenderGateServerStatus:
 
     def test_render_gate_server_status_running(self) -> None:
         screens, _ = import_screens()
-        status = mock.Mock()
-        status.mode = "systemd"
-        status.running = True
-        status.port = GATE_PORT
+        status = make_gate_server_status()
         with mock.patch.object(screens, "check_units_outdated", return_value=None):
             result = screens.render_gate_server_status(status)
         text_str = str(result)
@@ -979,10 +939,7 @@ class TestRenderGateServerStatus:
 
     def test_render_gate_server_status_stopped(self) -> None:
         screens, _ = import_screens()
-        status = mock.Mock()
-        status.mode = "none"
-        status.running = False
-        status.port = GATE_PORT
+        status = make_gate_server_status(mode="none", running=False)
         with mock.patch.object(screens, "check_units_outdated", return_value=None):
             result = screens.render_gate_server_status(status)
         text_str = str(result)
@@ -991,10 +948,7 @@ class TestRenderGateServerStatus:
 
     def test_render_gate_server_status_outdated(self) -> None:
         screens, _ = import_screens()
-        status = mock.Mock()
-        status.mode = "systemd"
-        status.running = True
-        status.port = GATE_PORT
+        status = make_gate_server_status()
         with mock.patch.object(
             screens, "check_units_outdated", return_value="Units outdated (v1 vs v3)"
         ):
