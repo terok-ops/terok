@@ -32,7 +32,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from tests.testfs import CONFIG_ROOT_NAME, HOME_DIR_NAME, STATE_ROOT_NAME, XDG_CONFIG_HOME_NAME
-from tests.testnet import ALLOWED_TARGET_HTTP, GATE_PORT, TEST_IP
+from tests.testnet import ALLOWED_TARGET_DOMAIN, ALLOWED_TARGET_HTTP, GATE_PORT, TEST_IP
 
 from .helpers import (
     PODMAN_CONTAINER_PREFIX,
@@ -174,6 +174,17 @@ def _pull_image() -> None:
 @pytest.fixture(scope="session")
 def _verify_connectivity() -> None:
     """Fail fast when the host cannot reach the real egress test target."""
+    try:
+        socket.getaddrinfo(ALLOWED_TARGET_DOMAIN, None)
+    except OSError as exc:
+        pytest.fail(
+            f"Pre-flight: cannot resolve {ALLOWED_TARGET_DOMAIN} from the host.\n"
+            "Fix host DNS resolution before running egress integration tests.\n"
+            "Domain-allow tests rely on resolving the allowlisted hostname before applying "
+            "the firewall rules.\n"
+            f"Error: {exc}"
+        )
+
     host, port = _target_host_port(ALLOWED_TARGET_HTTP)
     try:
         connection = socket.create_connection((host, port), timeout=5)
