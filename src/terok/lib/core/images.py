@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Container image tag conventions for the terok layer system (L0/L1/L2)."""
@@ -16,7 +17,7 @@ def _base_tag(base_image: str) -> str:
     if not tag:
         tag = "ubuntu-24.04"
     if len(tag) > 120:
-        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        digest = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
         tag = f"{tag[:111]}-{digest}"
     return tag
 

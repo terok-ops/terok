@@ -11,6 +11,7 @@ __pycache__/
 reports/
 .complexipy_cache/
 docs/test_map.md
+docs/ci_map.md
 
 /.idea
 .coverage

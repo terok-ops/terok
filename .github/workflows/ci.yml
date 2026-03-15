@@ -1,5 +1,8 @@
 name: CI
 
+# Pin third-party actions to full commit SHAs for supply-chain security.
+# GitHub-owned actions (actions/*) may use version tags.
+
 on:
   push:
     branches: [master]
@@ -31,23 +34,6 @@ jobs:
         with:
           args: format --check
 
-  boundary-check:
-    if: github.repository == 'terok-ai/terok'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install tach
-        run: pip install -r .github/requirements-ci.txt
-
-      - name: Check module boundaries
-        run: tach check
-
   docstring-coverage:
     if: github.repository == 'terok-ai/terok'
     runs-on: ubuntu-latest
@@ -59,7 +45,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install docstr-coverage
+      - name: Install tools
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check docstring coverage
@@ -76,12 +62,48 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install vulture
+      - name: Install tools
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check for dead code
         run: vulture src/terok/ vulture_whitelist.py --min-confidence 80
 
+  tach:
+    if: github.repository == 'terok-ai/terok'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Check module boundaries
+        run: tach check
+
+  security:
+    if: github.repository == 'terok-ai/terok'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Run SAST scan
+        run: bandit -r src/terok/ -ll
+
+  # Keep host-only integration tests in CI, but outside the Sonar-producing workflow.
+  # That keeps the Sonar path fast while still exercising Linux host features on PRs.
   integration-tests-host:
     name: Integration tests (host)
     if: github.repository == 'terok-ai/terok'

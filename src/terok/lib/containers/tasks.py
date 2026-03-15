@@ -152,7 +152,7 @@ def _default_categories_for_project(project_id: str) -> list[str]:
     import namer
 
     categories = sorted(namer.list_categories())
-    seed = int(hashlib.md5(project_id.encode()).hexdigest(), 16)
+    seed = int(hashlib.md5(project_id.encode(), usedforsecurity=False).hexdigest(), 16)
     rng = random.Random(seed)
     return rng.sample(categories, min(3, len(categories)))
 

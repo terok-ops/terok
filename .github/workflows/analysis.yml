@@ -1,5 +1,10 @@
 name: Tests & Analysis
 
+# Pin third-party actions to full commit SHAs for supply-chain security.
+# GitHub-owned actions (actions/*) may use version tags.
+# This workflow groups the fast, source-tree-only checks that feed SonarQube Cloud.
+# Host/PODMAN integration coverage stays in other workflows so Sonar does not wait for it.
+
 on:
   push:
     branches: [master]
@@ -7,7 +12,11 @@ on:
     branches: [master]
 
 jobs:
+  # Unit tests are the authoritative producer of reports/coverage.xml.
+  # On pull requests they also capture a tiny PR metadata artifact so the
+  # privileged workflow_run-based Sonar scan can analyze fork PRs safely.
   unit-tests:
+    name: Unit tests
     if: github.repository == 'terok-ai/terok'
     runs-on: ubuntu-latest
     steps:
@@ -43,12 +52,43 @@ jobs:
       - name: Run unit tests
         run: make test-unit
 
+      - name: Upload coverage for SonarQube Cloud
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: reports/coverage.xml
+          retention-days: 1
+
+      - name: Save PR metadata
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+          PR_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p reports/pr
+          printf '%s\n' "$PR_NUMBER" > reports/pr/number
+          printf '%s\n' "$PR_BASE" > reports/pr/base
+          printf '%s\n' "$PR_REF" > reports/pr/ref
+          printf '%s\n' "$PR_REPO" > reports/pr/repo
+          printf '%s\n' "$PR_SHA" > reports/pr/sha
+
+      - name: Upload PR metadata
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr
+          path: reports/pr/
+          retention-days: 1
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./reports/coverage.xml
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
@@ -56,3 +96,89 @@ jobs:
         with:
           files: ./reports/unit.junit.xml
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Ruff and Bandit run as separate jobs so they show up as distinct checks in GitHub UI
+  # and so Sonar can import their JSON reports without hiding them inside a unit-test job.
+  ruff:
+    name: Ruff
+    if: github.repository == 'terok-ai/terok'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Write Ruff report
+        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3
+        with:
+          args: check --exit-zero --output-format=json --output-file=reports/ruff-report.json .
+
+      - name: Upload Ruff report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff
+          path: reports/ruff-report.json
+          retention-days: 1
+
+  bandit:
+    name: Bandit
+    if: github.repository == 'terok-ai/terok'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Write Bandit report
+        run: bandit -r src/terok/ --exit-zero -f json -o reports/bandit-report.json
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit
+          path: reports/bandit-report.json
+          retention-days: 1
+
+  # Same-repo pushes and pull requests can scan directly here because the run has access
+  # to SONAR_TOKEN. Fork PRs are handled by sonar_pr.yml via workflow_run, using the
+  # artifacts uploaded above, because GitHub does not expose secrets to fork PR runs.
+  sonar:
+    name: SonarQube Cloud
+    if: github.repository == 'terok-ai/terok' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    needs: [unit-tests, ruff, bandit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: coverage
+          path: reports
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: ruff
+          path: reports
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: bandit
+          path: reports
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

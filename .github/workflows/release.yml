@@ -1,16 +1,19 @@
 name: Release
 
+# Pin third-party actions to full commit SHAs for supply-chain security.
+# GitHub-owned actions (actions/*) may use version tags.
+
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    if: github.repository == 'terok-ai/terok'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
         with:

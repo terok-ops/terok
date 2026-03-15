@@ -1,0 +1,96 @@
+name: Sonar PR
+
+# Pin third-party actions to full commit SHAs for supply-chain security.
+# GitHub-owned actions (actions/*) may use version tags.
+# Fork pull requests cannot access SONAR_TOKEN in the original PR-triggered run.
+# This follow-up workflow runs in the base repository context, downloads only the
+# previously generated artifacts, checks out the exact PR commit, and runs Sonar
+# without re-running untrusted test commands under repository secrets.
+
+on:
+  workflow_run:
+    workflows: ["Tests & Analysis"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  # Restrict this workflow to fork PRs only. Same-repo PRs already scan directly in
+  # analysis.yml, and pushes scan there as well.
+  sonar:
+    name: SonarQube Cloud
+    if: github.repository == 'terok-ai/terok' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: pr
+          path: reports/pr
+
+      - name: Load PR metadata
+        env:
+          EXPECTED_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          read -r PR_NUMBER < reports/pr/number
+          read -r PR_BASE < reports/pr/base
+          read -r PR_REF < reports/pr/ref
+          read -r PR_REPO < reports/pr/repo
+          read -r PR_SHA < reports/pr/sha
+
+          test "$PR_REPO" = "$EXPECTED_REPO"
+          test "$PR_SHA" = "$EXPECTED_SHA"
+
+          {
+            printf 'PR_NUMBER=%s\n' "$PR_NUMBER"
+            printf 'PR_BASE=%s\n' "$PR_BASE"
+            printf 'PR_REF=%s\n' "$PR_REF"
+            printf 'PR_REPO=%s\n' "$PR_REPO"
+            printf 'PR_SHA=%s\n' "$PR_SHA"
+          } >> "$GITHUB_ENV"
+
+      # Checkout happens after metadata is loaded so the workflow can analyze the PR's
+      # exact head commit while still running under the trusted base-repo workflow context.
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.PR_REPO }}
+          ref: ${{ env.PR_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: coverage
+          path: reports
+
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: ruff
+          path: reports
+
+      - uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: bandit
+          path: reports
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.pullrequest.key=${{ env.PR_NUMBER }}
+            -Dsonar.pullrequest.branch=${{ env.PR_REF }}
+            -Dsonar.pullrequest.base=${{ env.PR_BASE }}
+            -Dsonar.scm.revision=${{ env.PR_SHA }}

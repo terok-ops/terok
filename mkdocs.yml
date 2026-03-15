@@ -53,6 +53,7 @@ plugins:
         - docs/gen_ref_pages.py
         - docs/gen_quality_report.py
         - docs/gen_config_reference.py
+        - docs/gen_ci_map.py
         - docs/gen_test_map.py
   - literate-nav:
       nav_file: SUMMARY.md
@@ -94,6 +95,7 @@ nav:
     - Contributing: developer.md
     - Agent Compatibility Matrix: agent-compat-matrix.md
     - Integration Test Map: test_map.md
+    - CI Workflow Map: ci_map.md
     - Code Quality: quality-report.md
     - Brainstorming:
       - Agent Helpers: brainstorming/todo-agent-helpers.md

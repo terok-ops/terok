@@ -312,6 +312,7 @@ make test-integration-network  # Network-dependent integration tests
 make test-integration-podman   # Podman-dependent integration tests
 make test-integration          # All integration tests
 make test-integration-map      # Generate docs/test_map.md from pytest collection
+make ci-map                    # Generate docs/ci_map.md from workflow YAML
 ```
 
 **Check module boundaries** if you changed cross-module imports:
@@ -323,7 +324,14 @@ make tach      # Verify tach.toml boundary rules
 To run all checks (equivalent to CI):
 
 ```bash
-make check     # Runs lint + test + tach + docstrings + deadcode + reuse
+make check     # Runs lint + test + tach + security + docstrings + deadcode + reuse
+```
+
+Security scanning and Sonar report generation also have dedicated targets:
+
+```bash
+make security      # Run Bandit with CI-equivalent settings
+make sonar-inputs  # Generate coverage + Ruff + Bandit reports under reports/
 ```
 
 ### Available Make Targets
@@ -339,11 +347,14 @@ make check     # Runs lint + test + tach + docstrings + deadcode + reuse
 | `make test-integration-podman` | Run podman integration tests | When touching container-dependent flows |
 | `make test-integration` | Run all integration tests | Before opening a PR that changes integration flows |
 | `make test-integration-map` | Generate the integration test map page | After reorganizing integration tests |
+| `make ci-map` | Generate the CI workflow map page | After changing GitHub workflows |
 | `make tach` | Check module boundary rules | After changing imports |
+| `make security` | Run the Bandit SAST scan | Before opening a PR that changes CI/security-sensitive code |
+| `make sonar-inputs` | Generate Sonar-imported reports under `reports/` | When validating Sonar inputs locally |
 | `make docstrings` | Check docstring coverage (95% min) | After adding public APIs |
 | `make deadcode` | Detect unused code | Before opening a PR |
 | `make reuse` | Check REUSE/SPDX license compliance | Before opening a PR |
-| `make check` | Run all checks (lint + test + tach + docstrings + deadcode + reuse) | Before opening a PR |
+| `make check` | Run all checks (lint + test + tach + security + docstrings + deadcode + reuse) | Before opening a PR |
 | `make docs` | Serve documentation locally | When editing docs |
 | `make install-dev` | Install all dependencies | Initial setup |
 | `make clean` | Remove build artifacts | When needed |

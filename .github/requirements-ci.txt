@@ -3,3 +3,4 @@
 docstr-coverage>=2.3.2,<3.0.0
 tach>=0.33.3,<0.35.0
 vulture>=2.12,<3.0.0
+bandit>=1.7,<2.0.0

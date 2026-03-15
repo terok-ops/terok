@@ -66,7 +66,7 @@ def _install_completions(shell: str | None) -> None:
     target = _INSTALL_TARGETS[shell]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        shellcode(["terokctl"], shell=shell, use_defaults=True) + "\n",
+        shellcode(["terokctl"], shell=shell, use_defaults=True) + "\n",  # nosec B604
         encoding="utf-8",
     )
     print(f"Installed {shell} completions to {target}")
@@ -108,7 +108,7 @@ def dispatch(args: argparse.Namespace) -> bool:
     if args.action == "install":
         _install_completions(getattr(args, "shell", None))
     else:
-        print(shellcode(["terokctl"], shell=args.action, use_defaults=True))
+        print(shellcode(["terokctl"], shell=args.action, use_defaults=True))  # nosec B604
     return True
 
 
