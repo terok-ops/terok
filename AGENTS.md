@@ -135,6 +135,26 @@ curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ai_terok&issueSt
 
 No authentication is needed (public project). The PR number can be found in the GitHub PR URL or from `gh pr view --json number`.
 
+## Git & GitHub Workflow
+
+- **Upstream repo**: `terok-ai/terok` (canonical; PRs target here)
+- **Origin repo**: `sliwowitz/terok` (fork; branches are pushed here)
+- **Remote setup**: `upstream` = `terok-ai/terok`, `origin` = `sliwowitz/terok`
+- **PR target**: Always open PRs against `upstream/master` (`terok-ai/terok:master`)
+- **Branch workflow**: Create feature branch locally, rebase on `upstream/master`, push to `origin`, open PR against `upstream/master`
+- **Branch naming**: Use conventional prefixes: `feat/`, `fix/`, `chore/`, `docs/`
+- **Commit messages**: Use [Conventional Commits](https://www.conventionalcommits.org/) format (`feat:`, `fix:`, `chore:`, `docs:`, etc.)
+- **Issue tracker**: GitHub Issues on `terok-ai/terok`
+
+```bash
+# Typical PR workflow
+git fetch upstream
+git checkout -b feat/my-feature upstream/master
+# ... make changes, commit ...
+git push origin feat/my-feature
+gh pr create --repo terok-ai/terok --base master --head sliwowitz:feat/my-feature
+```
+
 ## Important Files
 
 - `docs/developer.md`: Detailed architecture and implementation guide

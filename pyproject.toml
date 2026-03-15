@@ -43,6 +43,7 @@ requests = ">=2.31"
 rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
+textual-serve = ">=1.1.0"
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.3.0/terok_shield-0.3.0-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
@@ -86,6 +87,7 @@ markers = [
 [tool.poetry.scripts]
 terokctl = "terok.cli.main:main"
 terok = "terok.tui.app:main"
+terok-web = "terok.tui.serve:main"
 terok-gate = "terok.gate.server:main"
 
 [tool.ruff]

@@ -1098,11 +1098,14 @@ if _HAS_TEXTUAL:
             set_emoji_enabled(False)
 
         # Determine tmux mode: explicit flag > config default > False
+        # Web mode (textual-serve) is never wrapped in tmux.
         use_tmux = (
             args.tmux if hasattr(args, "tmux") and args.tmux is not None else get_tui_default_tmux()
         )
 
-        if use_tmux:
+        from .shell_launch import is_web_mode
+
+        if use_tmux and not is_web_mode():
             _launch_in_tmux()
             return
         TerokTUI().run()
