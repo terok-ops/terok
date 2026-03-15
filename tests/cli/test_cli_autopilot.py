@@ -220,6 +220,42 @@ class RunCliTests(unittest.TestCase):
                 unrestricted=None,
             )
 
+    def test_task_run_toad(self) -> None:
+        """task run-toad passes args to task_run_toad."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["terok", "task", "run-toad", "myproject", "1"],
+            ),
+            unittest.mock.patch("terok.cli.commands.task.task_run_toad") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once_with(
+                "myproject",
+                "1",
+                agents=None,
+                preset=None,
+                unrestricted=None,
+            )
+
+    def test_task_run_toad_with_agent(self) -> None:
+        """task run-toad --agent passes agents to task_run_toad."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["terok", "task", "run-toad", "myproject", "1", "--agent", "debugger"],
+            ),
+            unittest.mock.patch("terok.cli.commands.task.task_run_toad") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once_with(
+                "myproject",
+                "1",
+                agents=["debugger"],
+                preset=None,
+                unrestricted=None,
+            )
+
     def test_task_run_web_with_agent_selection(self) -> None:
         """task run-web --agent passes agents to task_run_web."""
         with (

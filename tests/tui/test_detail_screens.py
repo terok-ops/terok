@@ -554,8 +554,9 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.dismiss.assert_called_once_with("toad")
 
     def test_uppercase_w_dispatches_task_start_web_with_experimental(self) -> None:
-        from terok.lib.core.config import set_experimental
+        from terok.lib.core.config import is_experimental, set_experimental
 
+        previous = is_experimental()
         set_experimental(True)
         try:
             screens, _ = import_screens()
@@ -565,7 +566,7 @@ class TaskScreenKeyBindingTests(TestCase):
             screen.on_key(event)
             screen.dismiss.assert_called_once_with("task_start_web")
         finally:
-            set_experimental(False)
+            set_experimental(previous)
 
     def test_lowercase_r_works_with_tasks(self) -> None:
         screens, _ = import_screens()

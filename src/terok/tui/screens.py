@@ -1129,8 +1129,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
                 options.append(Option("view \\[f]ormatted logs", id="follow_logs"))
             options.append(None)
             options.append(Option("run \\[c]li agent", id="cli"))
-            if is_experimental():
-                options.append(Option("run \\[w]eb UI", id="web"))
+            options.append(Option("run \\[w]eb Toad (browser)", id="toad"))
             options.append(Option("\\[r]estart container", id="restart"))
             if (
                 self._task_meta

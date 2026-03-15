@@ -194,6 +194,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     t_run_toad = tsub.add_parser("run-toad", help="Run Toad multi-agent TUI (browser access)")
     _add_project_task_args(t_run_toad)
+    t_run_toad.add_argument(
+        "--agent",
+        dest="selected_agents",
+        action="append",
+        default=None,
+        help="Include a non-default agent by name (repeatable)",
+    )
     t_run_toad.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
     _add_restriction_flags(t_run_toad)
 
@@ -233,12 +240,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Create a new task and immediately run it (default: CLI mode)",
     )
     _add_project_arg(t_start)
-    t_start.add_argument(
+    _start_mode = t_start.add_mutually_exclusive_group()
+    _start_mode.add_argument(
         "--web",
         action="store_true",
         help=argparse.SUPPRESS,
     )
-    t_start.add_argument(
+    _start_mode.add_argument(
         "--toad",
         action="store_true",
         help="Start Toad multi-agent TUI (browser access)",
@@ -384,6 +392,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         task_run_toad(
             args.project_id,
             args.task_id,
+            agents=getattr(args, "selected_agents", None),
             preset=getattr(args, "preset", None),
             unrestricted=_resolve_unrestricted(args),
         )
@@ -412,7 +421,9 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         preset = getattr(args, "preset", None)
         restriction = _resolve_unrestricted(args)
         if getattr(args, "toad", False):
-            task_run_toad(args.project_id, task_id, preset=preset, unrestricted=restriction)
+            task_run_toad(
+                args.project_id, task_id, agents=selected, preset=preset, unrestricted=restriction
+            )
         elif args.web:
             task_run_web(
                 args.project_id,

@@ -169,6 +169,29 @@ class TaskStartTests(unittest.TestCase):
             "proj3", "3", backend="codex", agents=None, preset=None, unrestricted=None
         )
 
+    @unittest.mock.patch("terok.cli.commands.task.task_run_toad")
+    @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="10")
+    def test_task_start_toad_mode(self, mock_new, mock_run_toad) -> None:
+        from terok.cli.main import main
+
+        with unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1", "--toad"]):
+            main()
+
+        mock_new.assert_called_once_with("proj1", name=None)
+        mock_run_toad.assert_called_once_with(
+            "proj1", "10", agents=None, preset=None, unrestricted=None
+        )
+
+    def test_task_start_web_and_toad_mutually_exclusive(self) -> None:
+        """task start --web --toad should fail."""
+        from terok.cli.main import main
+
+        with (
+            unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1", "--web", "--toad"]),
+            self.assertRaises(SystemExit),
+        ):
+            main()
+
     def test_task_start_web_requires_experimental(self) -> None:
         """task start --web without --experimental should exit."""
         from terok.cli.main import main
