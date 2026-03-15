@@ -120,6 +120,7 @@ SHARED_MOUNTS: tuple[SharedMount, ...] = (
         "opencode_data", "_opencode-data", "OpenCode data", "/home/dev/.local/share/opencode"
     ),
     SharedMount("opencode_state", "_opencode-state", "OpenCode state", "/home/dev/.local/state"),
+    SharedMount("toad", "_toad-config", "Toad config", "/home/dev/.config/toad"),
     SharedMount("gh", "_gh-config", "GitHub CLI config", "/home/dev/.config/gh"),
     SharedMount("glab", "_glab-config", "GitLab CLI config", "/home/dev/.config/glab-cli"),
 )

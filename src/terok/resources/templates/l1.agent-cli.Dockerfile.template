@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/usr/local/bin
 
-# === Root operations ===
+# === Root operations (stable — cached across agent rebuilds) ===
 USER root
 ENV HOME=/root
 
@@ -39,69 +39,14 @@ RUN pip install --break-system-packages ast-grep-cli
 # Used to install Toad with its own Python 3.14 without touching system Python.
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# Install mistral-vibe and mistralai SDK using pipx as root, ensuring PATH is set up
-RUN set -eux; \
-    pipx install mistral-vibe; \
-    pipx inject mistral-vibe mistralai
-
-# Install GitHub CLI (gh) from official APT repository
-RUN set -eux; \
-    curl -sSL -o /tmp/githubcli-archive-keyring.gpg \
-      "https://cli.github.com/packages/githubcli-archive-keyring.gpg"; \
-    install -o root -g root -m 644 /tmp/githubcli-archive-keyring.gpg /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends gh; \
-    rm -rf /var/lib/apt/lists/* /tmp/githubcli-archive-keyring.gpg
-
-# Install GitLab CLI (glab) from official GitLab releases
-RUN set -eux; \
-    GLAB_VERSION=$(curl -sSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest" \
-      | grep -o '"tag_name":"v[^"]*"' | head -1 | sed 's/"tag_name":"v//;s/"//'); \
-    ARCH=$(dpkg --print-architecture); \
-    DEB_NAME="glab_${GLAB_VERSION}_linux_${ARCH}.deb"; \
-    curl -sSL -o /tmp/glab.deb \
-      "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/${DEB_NAME}"; \
-    curl -sSL -o /tmp/checksums.txt \
-      "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/checksums.txt"; \
-    grep "  ${DEB_NAME}$" /tmp/checksums.txt | sed "s|${DEB_NAME}|/tmp/glab.deb|" | sha256sum -c -; \
-    dpkg -i /tmp/glab.deb; \
-    rm -f /tmp/glab.deb /tmp/checksums.txt
-
 # Pre-create managed config directories for per-task permission mode.
 # init-ssh-and-repo.sh writes config here when TEROK_UNRESTRICTED=1.
 # Owned by dev so no sudo is needed at runtime.
 RUN mkdir -p /etc/claude-code && chown dev:dev /etc/claude-code
 
-# Copy setup script for codex auth (port forwarding for OAuth callbacks)
-COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
-RUN chmod +x /usr/local/bin/setup-codex-auth.sh
-
-# Copy OpenCode session plugin for terok session resume
-RUN mkdir -p /usr/local/share/terok
-COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
-COPY scripts/terok-git-identity.sh /usr/local/share/terok/terok-git-identity.sh
-RUN chmod +x /usr/local/share/terok/terok-git-identity.sh
-
-# Container help banner (available as `hilfe` command, also sourced on login)
-COPY scripts/hilfe /usr/local/bin/hilfe
-RUN chmod +x /usr/local/bin/hilfe
-
-# Copy agent wrappers (blablador CLI + ACP, blablatoad, toad launcher)
-COPY scripts/blablador /usr/local/bin/blablador
-COPY scripts/blablador-acp /usr/local/bin/blablador-acp
-COPY scripts/blablatoad /usr/local/bin/blablatoad
-COPY scripts/toad /usr/local/bin/toad
-COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
-COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
-RUN chmod +x /usr/local/bin/blablador /usr/local/bin/blablador-acp /usr/local/bin/blablatoad /usr/local/bin/toad /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
-
-# update-all-the-things: refresh all packages without full image rebuild
-COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
-COPY scripts/update-all-the-things /usr/local/bin/update-all-the-things
-RUN chmod +x /usr/local/bin/allthethings.sh /usr/local/bin/update-all-the-things
-
-# Configure shell environment and PATH for agent CLIs
+# Configure shell environment and PATH for agent CLIs.
+# This generates static text referencing scripts by path (resolved at runtime,
+# not build time), so it can safely live above the cache bust point.
 RUN set -eux; \
     printf '%s\n' \
       '# Add user-installed agent CLIs to PATH' \
@@ -144,16 +89,77 @@ RUN set -eux; \
 # Symlink for terok project config (resolved at runtime via mount).
 RUN ln -s /home/dev/.terok/terok-agent.sh /etc/profile.d/zz-terok-project.sh
 
-# === User operations ===
+# === Cache bust point ===
+# Changing AGENT_CACHE_BUST invalidates all layers below: terok scripts,
+# agent CLIs (gh, glab, vibe, codex, copilot, claude, opencode, toad),
+# and ACP adapters.  Only system packages (apt, nodejs, python, pipx,
+# uv, yq, ast-grep) and shell config are cached above.
+ARG AGENT_CACHE_BUST=0
+
+# terok scripts (refreshed on agent rebuild)
+# Note: AGENT_CACHE_BUST is referenced here to make cache invalidation explicit,
+# though Docker invalidates all layers below a changed ARG regardless.
+RUN mkdir -p /usr/local/share/terok && echo "cache-bust: ${AGENT_CACHE_BUST}" > /dev/null
+COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
+COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
+COPY scripts/terok-git-identity.sh /usr/local/share/terok/terok-git-identity.sh
+COPY scripts/hilfe /usr/local/bin/hilfe
+COPY scripts/blablador /usr/local/bin/blablador
+COPY scripts/blablador-acp /usr/local/bin/blablador-acp
+COPY scripts/blablatoad /usr/local/bin/blablatoad
+COPY scripts/toad /usr/local/bin/toad
+COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
+COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
+COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
+COPY scripts/update-all-the-things /usr/local/bin/update-all-the-things
+RUN chmod +x \
+    /usr/local/bin/setup-codex-auth.sh \
+    /usr/local/share/terok/terok-git-identity.sh \
+    /usr/local/bin/hilfe \
+    /usr/local/bin/blablador \
+    /usr/local/bin/blablador-acp \
+    /usr/local/bin/blablatoad \
+    /usr/local/bin/toad \
+    /usr/local/bin/vibe-model-sync \
+    /usr/local/bin/mistral-model-sync.py \
+    /usr/local/bin/allthethings.sh \
+    /usr/local/bin/update-all-the-things
+
+# Root-level agent installs (need apt/pipx — refreshed on agent rebuild)
+RUN set -eux; \
+    pipx install mistral-vibe; \
+    pipx inject mistral-vibe mistralai
+
+# Install GitHub CLI (gh) from official APT repository
+RUN set -eux; \
+    curl -sSL -o /tmp/githubcli-archive-keyring.gpg \
+      "https://cli.github.com/packages/githubcli-archive-keyring.gpg"; \
+    install -o root -g root -m 644 /tmp/githubcli-archive-keyring.gpg /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gh; \
+    rm -rf /var/lib/apt/lists/* /tmp/githubcli-archive-keyring.gpg
+
+# Install GitLab CLI (glab) from official GitLab releases
+RUN set -eux; \
+    GLAB_VERSION=$(curl -sSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest" \
+      | jq -r '.tag_name | ltrimstr("v")'); \
+    ARCH=$(dpkg --print-architecture); \
+    DEB_NAME="glab_${GLAB_VERSION}_linux_${ARCH}.deb"; \
+    curl -sSL -o /tmp/glab.deb \
+      "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/${DEB_NAME}"; \
+    curl -sSL -o /tmp/checksums.txt \
+      "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/checksums.txt"; \
+    grep "  ${DEB_NAME}$" /tmp/checksums.txt | sed "s|${DEB_NAME}|/tmp/glab.deb|" | sha256sum -c -; \
+    dpkg -i /tmp/glab.deb; \
+    rm -f /tmp/glab.deb /tmp/checksums.txt
+
+# === User operations (agent installs) ===
 ENV HOME=/home/dev
 ENV NPM_CONFIG_PREFIX=/home/dev/.npm-packages \
     PATH=/home/dev/.npm-packages/bin:/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH
 USER dev
 WORKDIR /home/dev
-
-# Cache bust point - changing AGENT_CACHE_BUST invalidates all layers below
-# Used by `terokctl build --agents` to rebuild from L0 with fresh agents
-ARG AGENT_CACHE_BUST=0
 
 # Install AI agent CLIs as dev user
 RUN mkdir -p "$NPM_CONFIG_PREFIX" && npm config set prefix "$NPM_CONFIG_PREFIX"
