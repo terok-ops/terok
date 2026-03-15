@@ -27,6 +27,7 @@ from terok.tui.clipboard import (
     get_clipboard_helper_status,
 )
 from test_utils import mock_git_config, parse_meta_value, project_env, write_project
+from testfs import CONTAINER_SSH_DIR
 from testnet import localhost_url
 
 
@@ -343,7 +344,7 @@ class TestTask:
             gate_mounts = [v for v in volumes if "gate" in v.split(":")[0]]
             assert gate_mounts == []
             # Verify SSH is NOT mounted by default in gatekeeping mode
-            ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
+            ssh_mounts = [v for v in volumes if str(CONTAINER_SSH_DIR) in v]
             assert ssh_mounts == []
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
@@ -378,7 +379,7 @@ class TestTask:
             assert "http://" in env["CODE_REPO"]
             assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
             # Verify SSH IS mounted when mount_in_gatekeeping is true
-            _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
+            _assert_volume_mount(volumes, f"{ssh_dir}:{CONTAINER_SSH_DIR}", ":z")
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -408,7 +409,7 @@ class TestTask:
             assert env["TEROK_GIT_AUTHORSHIP"] == "agent-human"
             assert "http://" in env["CLONE_FROM"]
             assert f"@host.containers.internal:9418/{project_id}.git" in env["CLONE_FROM"]
-            _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
+            _assert_volume_mount(volumes, f"{ssh_dir}:{CONTAINER_SSH_DIR}", ":z")
 
     def test_build_task_env_uses_configured_git_authorship(self) -> None:
         """Task containers receive the resolved Git authorship mode."""

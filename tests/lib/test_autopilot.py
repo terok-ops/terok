@@ -20,6 +20,17 @@ from typing import TYPE_CHECKING
 import pytest
 import yaml
 
+from testfs import (
+    CONTAINER_CLAUDE_MEMORY_OVERRIDE,
+    CONTAINER_CLAUDE_SESSION_PATH,
+    CONTAINER_TEROK_MOUNT_Z,
+    FAKE_PROJECT_GATE_DIR,
+    FAKE_PROJECT_ROOT,
+    FAKE_PROJECT_TASKS_ROOT,
+    NONEXISTENT_AGENT_PATH,
+    NONEXISTENT_FILE_PATH,
+)
+
 if TYPE_CHECKING:
     from terok.lib.core.projects import ProjectConfig
 
@@ -366,7 +377,7 @@ class TestSubagentsToJson:
 
     def test_missing_file_skipped(self) -> None:
         """Missing file references are skipped."""
-        subagents = [{"file": "/nonexistent/agent.md", "default": True}]
+        subagents = [{"file": str(NONEXISTENT_AGENT_PATH), "default": True}]
         result = json.loads(_subagents_to_json(subagents))
         assert result == {}
 
@@ -399,7 +410,7 @@ class TestParseMdAgent:
             assert result["prompt"] == "Just a prompt."
 
     def test_nonexistent_file(self) -> None:
-        result = parse_md_agent("/nonexistent/file.md")
+        result = parse_md_agent(str(NONEXISTENT_FILE_PATH))
         assert result == {}
 
 
@@ -409,9 +420,9 @@ class TestGenerateClaudeWrapper:
     def _make_project(self) -> ProjectConfig:
         return make_project_config(
             project_id="testproj",
-            root=Path("/tmp/testproj"),
-            tasks_root=Path("/tmp/testproj/tasks"),
-            gate_path=Path("/tmp/testproj/gate"),
+            root=FAKE_PROJECT_ROOT,
+            tasks_root=FAKE_PROJECT_TASKS_ROOT,
+            gate_path=FAKE_PROJECT_GATE_DIR,
         )
 
     def test_basic_wrapper(self) -> None:
@@ -486,7 +497,7 @@ class TestGenerateClaudeWrapper:
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
         assert (
             "export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE="
-            '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"' in wrapper
+            f'"{CONTAINER_CLAUDE_MEMORY_OVERRIDE}"' in wrapper
         )
 
 
@@ -534,9 +545,17 @@ class TestWriteSessionHook:
         """If equivalent hook exists, keep existing file content unchanged."""
         with tempfile.TemporaryDirectory() as td:
             settings_path = Path(td) / "settings.json"
-            original = (
-                '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"python3 -c \\"import json,sys; '
-                "print(json.load(sys.stdin)['session_id'])\\\" > /home/dev/.terok/claude-session.txt\"}]}]}}"
+            hook_command = (
+                "python3 -c \"import json,sys; print(json.load(sys.stdin)['session_id'])\""
+                f" > {CONTAINER_CLAUDE_SESSION_PATH}"
+            )
+            original = json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [{"hooks": [{"type": "command", "command": hook_command}]}]
+                    }
+                },
+                separators=(",", ":"),
             )
             settings_path.write_text(original, encoding="utf-8")
 
@@ -581,9 +600,9 @@ class TestPrepareAgentConfigDir:
         """Instructions text is written to instructions.md in agent-config dir."""
         project = make_project_config(
             project_id="test-proj",
-            root=Path("/tmp/test"),
+            root=FAKE_PROJECT_ROOT,
             tasks_root=Path(tempfile.mkdtemp()),
-            gate_path=Path("/tmp/test/gate"),
+            gate_path=FAKE_PROJECT_GATE_DIR,
         )
         agent_config_dir = prepare_agent_config(
             project, "test-task-1", instructions="Custom instructions here."
@@ -597,9 +616,9 @@ class TestPrepareAgentConfigDir:
         """Default instructions.md written when instructions is None."""
         project = make_project_config(
             project_id="test-proj",
-            root=Path("/tmp/test"),
+            root=FAKE_PROJECT_ROOT,
             tasks_root=Path(tempfile.mkdtemp()),
-            gate_path=Path("/tmp/test/gate"),
+            gate_path=FAKE_PROJECT_GATE_DIR,
         )
         agent_config_dir = prepare_agent_config(project, "test-task-2")
         instr_path = agent_config_dir / "instructions.md"
@@ -612,9 +631,9 @@ class TestPrepareAgentConfigDir:
         """Claude wrapper includes --append-system-prompt when instructions are provided."""
         project = make_project_config(
             project_id="test-proj",
-            root=Path("/tmp/test"),
+            root=FAKE_PROJECT_ROOT,
             tasks_root=Path(tempfile.mkdtemp()),
-            gate_path=Path("/tmp/test/gate"),
+            gate_path=FAKE_PROJECT_GATE_DIR,
         )
         agent_config_dir = prepare_agent_config(
             project, "test-task-3", instructions="Test instructions."
@@ -653,7 +672,7 @@ class TestTaskRunHeadless:
                 write_runner_project(base, "proj_mount"),
                 HeadlessRunRequest("proj_mount", "test prompt"),
             )
-            assert "/home/dev/.terok:Z" in " ".join(result.run_mock.call_args[0][0])
+            assert CONTAINER_TEROK_MOUNT_Z in " ".join(result.run_mock.call_args[0][0])
 
     def test_headless_generates_agent_wrapper(self) -> None:
         """task_run_headless generates terok-agent.sh in agent-config dir."""

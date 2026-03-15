@@ -15,6 +15,7 @@ import pytest
 from terok.lib.containers.agent_config import build_agent_config_stack, resolve_agent_config
 from terok.lib.core.projects import list_presets, load_preset, load_project
 from test_utils import mock_git_config, write_project
+from testfs import CONTAINER_INSTRUCTIONS_PATH
 
 
 def _env(
@@ -609,7 +610,7 @@ class TestInjectOpencodeInstructions:
 
             assert config_path.is_file()
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
             assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_idempotent_when_already_present(self) -> None:
@@ -622,7 +623,7 @@ class TestInjectOpencodeInstructions:
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
 
     def test_preserves_existing_instructions(self) -> None:
         """Appends to existing instructions list without removing entries."""
@@ -638,7 +639,7 @@ class TestInjectOpencodeInstructions:
             data = json.loads(config_path.read_text(encoding="utf-8"))
             assert data["instructions"] == [
                 "/some/other/file.md",
-                "/home/dev/.terok/instructions.md",
+                str(CONTAINER_INSTRUCTIONS_PATH),
             ]
 
     def test_preserves_existing_config_keys(self) -> None:
@@ -656,7 +657,7 @@ class TestInjectOpencodeInstructions:
             data = json.loads(config_path.read_text(encoding="utf-8"))
             assert data["model"] == "test/model"
             assert data["provider"] == {"test": {}}
-            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
 
     def test_creates_parent_directories(self) -> None:
         """Creates parent directories if they do not exist."""
@@ -668,7 +669,7 @@ class TestInjectOpencodeInstructions:
 
             assert config_path.is_file()
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
             assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_handles_invalid_json(self) -> None:
@@ -681,7 +682,7 @@ class TestInjectOpencodeInstructions:
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
             assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_preserves_existing_schema(self) -> None:

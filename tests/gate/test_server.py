@@ -28,6 +28,7 @@ from terok.gate.server import (
     _parse_content_length,
     _validate_token_data,
 )
+from testfs import NONEXISTENT_TOKENS_PATH
 from testnet import GATE_PORT, LOCALHOST_PEER
 
 VALID_TOKEN_DATA = {"validtoken": {"project": "proj-a", "task": "1"}}
@@ -133,7 +134,7 @@ class TestTokenStore:
             assert TokenStore(token_file).validate(token) == expected
 
     def test_missing_file_returns_none(self) -> None:
-        assert TokenStore(Path("/nonexistent/tokens.json")).validate("any") is None
+        assert TokenStore(NONEXISTENT_TOKENS_PATH).validate("any") is None
 
     def test_mtime_reload(self) -> None:
         """Token store reloads when file mtime changes."""

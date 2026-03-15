@@ -13,6 +13,7 @@ import pytest
 from terok.lib.containers.environment import _security_mode_env_and_volumes
 from terok.lib.core.projects import load_project
 from test_utils import mock_git_config, project_env
+from testfs import FAKE_SSH_DIR
 
 GATE_SERVER_PORT = 9418
 
@@ -110,7 +111,7 @@ def test_gatekeeping_missing_gate_raises() -> None:
     with mock_git_config(), project_env(_GATEKEEPING_YAML, project_id="gk-proj", with_gate=False):
         project = load_project("gk-proj")
         with pytest.raises(SystemExit, match="gate-sync"):
-            _security_mode_env_and_volumes(project, Path("/tmp/ssh"), "1")
+            _security_mode_env_and_volumes(project, FAKE_SSH_DIR, "1")
 
 
 def test_gatekeeping_server_not_running_raises() -> None:

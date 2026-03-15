@@ -18,6 +18,7 @@ from terok.lib.wizards.new_project import (
     generate_config,
     run_wizard,
 )
+from testfs import mock_wizard_project_file
 
 
 def wizard_values(
@@ -248,7 +249,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             True,
             True,
             True,
-            Path("/tmp/proj1/project.yml"),
+            mock_wizard_project_file("proj1"),
             id="edit-and-init",
         ),
         pytest.param(
@@ -257,7 +258,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             True,
             True,
             False,
-            Path("/tmp/proj2/project.yml"),
+            mock_wizard_project_file("proj2"),
             id="skip-edit-and-init",
         ),
         pytest.param(
@@ -266,7 +267,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             False,
             True,
             False,
-            Path("/tmp/proj3/project.yml"),
+            mock_wizard_project_file("proj3"),
             id="no-init-fn",
         ),
         pytest.param(
@@ -275,7 +276,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             False,
             True,
             False,
-            Path("/tmp/proj4/project.yml"),
+            mock_wizard_project_file("proj4"),
             id="cancel-after-generate",
         ),
         pytest.param(None, [], False, True, False, None, id="collect-cancelled"),

@@ -15,6 +15,7 @@ from terok.lib.containers.instructions import (
     has_custom_instructions,
     resolve_instructions,
 )
+from testfs import NONEXISTENT_PROJECT_ROOT, WORKSPACE_ROOT
 
 DEFAULT_INSTRUCTIONS = bundled_default_instructions()
 
@@ -41,7 +42,7 @@ class TestBundledDefault:
         assert "terok" in DEFAULT_INSTRUCTIONS
 
     def test_bundled_default_contains_key_sections(self) -> None:
-        assert "/workspace/" in DEFAULT_INSTRUCTIONS
+        assert f"{WORKSPACE_ROOT}/" in DEFAULT_INSTRUCTIONS
         assert "sudo" in DEFAULT_INSTRUCTIONS
         assert "git" in DEFAULT_INSTRUCTIONS.lower()
         assert "Classifying internal files by project" in DEFAULT_INSTRUCTIONS
@@ -228,7 +229,7 @@ class TestHasCustomInstructions:
             assert has_custom_instructions({}, project_root=root)
 
     @pytest.mark.parametrize(
-        "project_root", [Path("/tmp/does-not-exist"), None], ids=["empty-root", "none"]
+        "project_root", [NONEXISTENT_PROJECT_ROOT, None], ids=["empty-root", "none"]
     )
     def test_false_without_yaml_or_file(self, project_root: Path | None) -> None:
         if project_root is not None:

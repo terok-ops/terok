@@ -19,6 +19,7 @@ import pytest
 from terok.lib.containers.docker import generate_dockerfiles
 from terok.lib.core.config import build_root
 from test_utils import make_mock_http_response, project_env
+from testfs import CONTAINER_INSTRUCTIONS_PATH
 
 BLABLADOR_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
 TEST_API_KEY = "test-api-key"
@@ -355,7 +356,7 @@ def test_options_refresh_when_fetch_fails(blablador_module) -> None:
     ("existing", "expected_permission", "expected_model"),
     [
         pytest.param(
-            {"instructions": ["/home/dev/.terok/instructions.md"]},
+            {"instructions": [str(CONTAINER_INSTRUCTIONS_PATH)]},
             {"*": "allow"},
             "blablador/alias-huge",
             id="preserves-instructions",
@@ -454,7 +455,7 @@ def test_main_preserves_instructions_on_update(blablador_module) -> None:
         config_path = seed_opencode_config(
             Path(td),
             {
-                "instructions": ["/home/dev/.terok/instructions.md"],
+                "instructions": [str(CONTAINER_INSTRUCTIONS_PATH)],
                 "provider": {
                     "blablador": {
                         "options": {"baseURL": "https://old/v1", "apiKey": "old"},
@@ -473,5 +474,5 @@ def test_main_preserves_instructions_on_update(blablador_module) -> None:
             blablador_module.main()
 
         updated = json.loads(config_path.read_text(encoding="utf-8"))
-    assert updated["instructions"] == ["/home/dev/.terok/instructions.md"]
+    assert updated["instructions"] == [str(CONTAINER_INSTRUCTIONS_PATH)]
     assert updated["provider"]["blablador"]["options"]["apiKey"] == "new-key"

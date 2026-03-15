@@ -13,6 +13,7 @@ import pytest
 
 from terok.cli.main import main
 from terok.lib.containers.task_runners import HeadlessRunRequest
+from testfs import NONEXISTENT_MARKDOWN_PATH
 
 
 def run_cli(*argv: str) -> None:
@@ -82,7 +83,7 @@ def test_run_dispatches_to_task_run_headless() -> None:
             id="bad-provider",
         ),
         pytest.param(
-            ("run", "myproject", "test", "--instructions", "/nonexistent/path.md"),
+            ("run", "myproject", "test", "--instructions", str(NONEXISTENT_MARKDOWN_PATH)),
             None,
             "not found",
             id="missing-instructions-file",

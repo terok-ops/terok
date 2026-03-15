@@ -10,6 +10,8 @@ from collections.abc import Callable
 
 import pytest
 
+from testfs import FAKE_GATE_DIR
+
 
 def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     """Apply project-init step mocks to a test method.
@@ -43,7 +45,7 @@ class TestProjectInit:
     def test_cmd_project_init_calls_four_steps(
         self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
-        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": "/tmp/gate"}
+        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": str(FAKE_GATE_DIR)}
 
         from terok.cli.commands.setup import cmd_project_init
 
@@ -66,7 +68,7 @@ class TestProjectInit:
         mock_build.side_effect = lambda *a, **kw: call_order.append("build")
         mock_gate_cls.return_value.sync.side_effect = lambda **kw: (
             call_order.append("gate"),
-            {"success": True, "path": "/tmp/gate"},
+            {"success": True, "path": str(FAKE_GATE_DIR)},
         )[-1]
 
         from terok.cli.commands.setup import cmd_project_init
@@ -117,7 +119,7 @@ class TestSshPause:
     def test_project_init_continues_after_pause(
         self, mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls, mock_load
     ) -> None:
-        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": "/tmp/gate"}
+        mock_gate_cls.return_value.sync.return_value = {"success": True, "path": str(FAKE_GATE_DIR)}
 
         from terok.cli.commands.setup import cmd_project_init
 

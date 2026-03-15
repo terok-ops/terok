@@ -21,21 +21,25 @@ from terok.lib.containers.headless_providers import (
     get_provider,
 )
 from terok.lib.core.projects import ProjectConfig
+from testfs import (
+    CONTAINER_TEROK_DIR,
+    FAKE_PROJECT_GATE_DIR,
+    FAKE_PROJECT_ROOT,
+    FAKE_PROJECT_TASKS_ROOT,
+)
 
 
 def _make_project(**kwargs: object) -> ProjectConfig:
     """Create a minimal ProjectConfig with sensible defaults."""
-
-    from pathlib import Path
 
     defaults: dict = {
         "id": "testproj",
         "security_class": "online",
         "upstream_url": None,
         "default_branch": "main",
-        "root": Path("/tmp/test"),
-        "tasks_root": Path("/tmp/test/tasks"),
-        "gate_path": Path("/tmp/test/gate"),
+        "root": FAKE_PROJECT_ROOT,
+        "tasks_root": FAKE_PROJECT_TASKS_ROOT,
+        "gate_path": FAKE_PROJECT_GATE_DIR,
         "staging_root": None,
         "ssh_key_name": None,
         "ssh_host_dir": None,
@@ -307,7 +311,7 @@ class TestGenerateAgentWrapper:
             p = HEADLESS_PROVIDERS[name]
             wrapper = _provider_wrapper(name)
             assert p.resume_flag in wrapper, f"{name} missing resume flag"
-            assert f"cat /home/dev/.terok/{p.session_file}" in wrapper, (
+            assert f"cat {CONTAINER_TEROK_DIR}/{p.session_file}" in wrapper, (
                 f"{name} should read session ID from file"
             )
             assert "_resume_args+=(--continue)" not in wrapper, f"{name}"
@@ -324,7 +328,7 @@ class TestGenerateAgentWrapper:
         for name in self._SESSION_FILE_PROVIDERS:
             p = HEADLESS_PROVIDERS[name]
             wrapper = _provider_wrapper(name)
-            assert f"TEROK_SESSION_FILE=/home/dev/.terok/{p.session_file}" in wrapper, (
+            assert f"TEROK_SESSION_FILE={CONTAINER_TEROK_DIR}/{p.session_file}" in wrapper, (
                 f"{name} missing TEROK_SESSION_FILE"
             )
 

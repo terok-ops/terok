@@ -18,6 +18,7 @@ from terok.tui.shell_launch import (
     spawn_terminal_with_command,
     tmux_new_window,
 )
+from testfs import FAKE_TMUX_SOCKET
 
 SHELL_COMMAND = ["podman", "exec", "-it", "c1", "bash"]
 
@@ -30,7 +31,7 @@ def terminal_env(
     if term_program is not None:
         env["TERM_PROGRAM"] = term_program
     if tmux:
-        env["TMUX"] = "/tmp/tmux-1000/default,12345,0"
+        env["TMUX"] = str(FAKE_TMUX_SOCKET)
     if gnome_service:
         env["GNOME_TERMINAL_SERVICE"] = "1"
     return env

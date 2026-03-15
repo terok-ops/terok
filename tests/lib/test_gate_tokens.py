@@ -21,6 +21,7 @@ from terok.lib.security.gate_tokens import (
     revoke_token_for_task,
     token_file_path,
 )
+from testfs import FAKE_TEROK_STATE_DIR, MISSING_TOKENS_PATH, NONEXISTENT_TOKENS_PATH
 
 
 @contextmanager
@@ -45,10 +46,10 @@ class TestTokenFilePath:
     def test_returns_path_under_state_root(self) -> None:
         with unittest.mock.patch(
             "terok.lib.security.gate_tokens.state_root",
-            return_value=Path("/tmp/terok-state"),
+            return_value=FAKE_TEROK_STATE_DIR,
         ):
             path = token_file_path()
-        assert path == Path("/tmp/terok-state/gate/tokens.json")
+        assert path == FAKE_TEROK_STATE_DIR / "gate" / "tokens.json"
 
 
 class TestCreateToken:
@@ -95,7 +96,7 @@ class TestRevokeToken:
         assert len(data) == 1
 
     def test_revoke_on_missing_file_is_noop(self) -> None:
-        with patched_token_file(Path("/tmp/nonexistent/tokens.json")):
+        with patched_token_file(MISSING_TOKENS_PATH):
             revoke_token_for_task("proj-a", "1")
 
 
@@ -111,7 +112,7 @@ class TestAtomicWrite:
     @pytest.mark.parametrize(
         ("path", "content"),
         [
-            (Path("/nonexistent/tokens.json"), None),
+            (NONEXISTENT_TOKENS_PATH, None),
             (Path("tokens.json"), "not json{{{"),
             (Path("tokens.json"), json.dumps(["not", "a", "dict"])),
             (

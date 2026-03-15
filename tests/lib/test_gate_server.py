@@ -33,11 +33,12 @@ from terok.lib.security.gate_server import (
     stop_daemon,
     uninstall_systemd_units,
 )
+from testfs import FAKE_GATE_DIR, FAKE_STATE_DIR, NONEXISTENT_DIR
 from testnet import GATE_PORT, LOCALHOST
 
-GATE_BASE_PATH = Path("/tmp/gate")
-STATE_ROOT_PATH = Path("/tmp/state")
-MISSING_PATH = Path("/nonexistent")
+GATE_BASE_PATH = FAKE_GATE_DIR
+STATE_ROOT_PATH = FAKE_STATE_DIR
+MISSING_PATH = NONEXISTENT_DIR
 SYSTEMD_SOCKET = "terok-gate.socket"
 SYSTEMD_SERVICE = "terok-gate@.service"
 VERSION_STAMP = f"# terok-gate-version: {_UNIT_VERSION}"
@@ -393,11 +394,20 @@ class TestIsManagedServer:
 
     def test_matches_managed_server(self) -> None:
         pid_file = Path("/run/user/1000/terok/gate-server.pid")
-        cmdline = b"terok-gate\x00--base-path=/tmp/gate\x00--pid-file=" + str(pid_file).encode()
+        cmdline = (
+            b"terok-gate\x00--base-path="
+            + str(GATE_BASE_PATH).encode()
+            + b"\x00--pid-file="
+            + str(pid_file).encode()
+        )
         assert self._check_cmdline(cmdline, pid_file)
 
     def test_rejects_different_pid_file(self) -> None:
-        cmdline = b"terok-gate\x00--base-path=/tmp/gate\x00--pid-file=/other/pid"
+        cmdline = (
+            b"terok-gate\x00--base-path="
+            + str(GATE_BASE_PATH).encode()
+            + b"\x00--pid-file=/other/pid"
+        )
         assert not self._check_cmdline(cmdline, Path("/run/user/1000/terok/gate-server.pid"))
 
     def test_rejects_unrelated_process(self) -> None:

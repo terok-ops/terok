@@ -19,6 +19,7 @@ from terok.lib.util.config_stack import (
     load_json_scope,
     load_yaml_scope,
 )
+from testfs import NONEXISTENT_CONFIG_JSON, NONEXISTENT_CONFIG_YAML
 
 
 @pytest.mark.parametrize(
@@ -166,8 +167,8 @@ def test_scope_loaders(
 @pytest.mark.parametrize(
     ("loader", "path"),
     [
-        (load_yaml_scope, Path("/nonexistent/config.yml")),
-        (load_json_scope, Path("/nonexistent/config.json")),
+        (load_yaml_scope, NONEXISTENT_CONFIG_YAML),
+        (load_json_scope, NONEXISTENT_CONFIG_JSON),
     ],
     ids=["yaml-missing", "json-missing"],
 )
