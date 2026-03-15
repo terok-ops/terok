@@ -18,7 +18,46 @@ LAUNCHER_AGENTS="claude.com
 vibe.mistral.ai
 openai.com
 copilot.github.com
-opencode.ai"
+opencode.ai
+blablador.helmholtz.de"
+
+# Inject custom agent TOML for Blablador into Toad's package data.
+# Toad only reads agents from its bundled data dir — no user override dir yet.
+TOAD_AGENTS_DIR="${HOME}/.local/share/uv/tools/batrachian-toad/lib/python3.14/site-packages/toad/data/agents"
+BLABLADOR_TOML="${TOAD_AGENTS_DIR}/blablador.helmholtz.de.toml"
+if [[ -d "${TOAD_AGENTS_DIR}" ]] && [[ ! -f "${BLABLADOR_TOML}" ]]; then
+  cat > "${BLABLADOR_TOML}" << 'TOML_EOF'
+identity = "blablador.helmholtz.de"
+name = "Blablador"
+short_name = "blablador"
+url = "https://helmholtz-blablador.fz-juelich.de/"
+protocol = "acp"
+author_name = "Helmholtz / FZJ"
+author_url = "https://www.fz-juelich.de/"
+publisher_name = "terok"
+publisher_url = "https://github.com/terok-ai/terok"
+type = "coding"
+description = "OpenCode with Helmholtz Blablador — open-source LLMs for German academia."
+tags = []
+run_command."*" = "blablador-acp"
+
+help = '''
+# Blablador
+
+OpenCode powered by Helmholtz Blablador — open-source large language models
+hosted at Forschungszentrum Jülich for the German research community.
+
+Uses the same tools and capabilities as OpenCode, but routes through the
+Blablador API with models like alias-huge and alias-code.
+
+Requires BLABLADOR_API_KEY to be set.
+'''
+
+[actions."*".install]
+command = "echo 'Blablador is pre-installed in terok containers.'"
+description = "Already installed"
+TOML_EOF
+fi
 
 if command -v jq >/dev/null 2>&1; then
   mkdir -p "$(dirname "${TOAD_CONFIG}")"
