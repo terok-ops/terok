@@ -1,16 +1,19 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Integration tests for baked-in git identity env vars.
+"""Integration tests for git identity in task containers.
 
-Verifies that the full config stack (git global → terok global → project.yml)
-correctly resolves into GIT_AUTHOR_*/GIT_COMMITTER_* env vars through the
-same code path used by production task runners, and that ``git commit``
-inside an isolated workspace picks up the resolved identity.
+Two layers are tested:
 
-Tests exercise the real load_project → _prepare_agent_config →
-apply_git_identity_env path with isolated filesystem state, mocking only
-the host git config and podman subprocess calls.
+1. **Runner layer** (``TestConfigStackIdentity``): the real
+   ``load_project`` → ``build_task_env_and_volumes`` path that bakes
+   ``HUMAN_GIT_NAME``, ``HUMAN_GIT_EMAIL``, and ``TEROK_GIT_AUTHORSHIP``
+   into the container environment.  This is what production runners do.
+
+2. **Runtime layer** (``TestAuthorshipModes``, ``TestGitCommitIdentity``):
+   ``resolve_git_identity`` applied on top of the runner env, simulating
+   what the shell wrapper functions do at agent invocation time inside the
+   container.  ``git commit`` tests verify the env vars are picked up.
 """
 
 from __future__ import annotations
@@ -71,45 +74,50 @@ _GIT_ENV_KEYS = (
 )
 
 
-def _resolve_env(
+def _build_runner_env(
     terok_env: TerokIntegrationEnv,
     project_id: str = "git-id-test",
-    agent_name: str = "Claude",
-    agent_email: str = "noreply@anthropic.com",
 ) -> dict[str, str]:
-    """Load a project, build the container env, and resolve git identity.
+    """Build the container env through the same path the production runners use.
 
-    Exercises the real config stack (load_project → build_task_env_and_volumes)
-    for human identity loading, then applies resolve_git_identity with the
-    given agent identity.  Agent identity is a runtime concern (set by wrapper
-    functions / ACP adapters), so it's passed explicitly here.
+    Calls ``load_project`` → ``build_task_env_and_volumes`` — the exact
+    sequence in ``task_run_cli``, ``task_run_toad``, and ``task_run_headless``.
+    Returns the env dict containing ``HUMAN_GIT_NAME``, ``HUMAN_GIT_EMAIL``,
+    ``TEROK_GIT_AUTHORSHIP``, and all other container env vars.
     """
-    from terok.lib.containers.environment import (
-        apply_git_identity_env,
-        build_task_env_and_volumes,
-    )
+    from terok.lib.containers.environment import build_task_env_and_volumes
     from terok.lib.core.projects import load_project
 
     project = load_project(project_id)
 
-    # Mock envs_base_dir so shared mount dirs are created under the isolated
-    # state root rather than the real host's state dir.
     envs_base = terok_env.state_root / "envs"
     envs_base.mkdir(parents=True, exist_ok=True)
     with unittest.mock.patch(
         "terok.lib.containers.environment.get_envs_base_dir", return_value=envs_base
     ):
         env, _volumes = build_task_env_and_volumes(project, "1")
-
-    # Simulate what a wrapper/ACP adapter does at runtime: resolve the full
-    # git identity using the agent's name + the project's human identity.
-    apply_git_identity_env(env, project, agent_name, agent_email)
     return env
 
 
-def _git_commit_env(env: dict[str, str]) -> dict[str, str]:
-    """Extract just the GIT_* identity vars from a container env dict."""
-    return {k: v for k, v in env.items() if k in _GIT_ENV_KEYS}
+def _apply_agent_identity(
+    env: dict[str, str],
+    agent_name: str = "Claude",
+    agent_email: str = "noreply@anthropic.com",
+) -> dict[str, str]:
+    """Apply resolve_git_identity on top of a runner env, as wrappers do at runtime.
+
+    Returns just the four ``GIT_*`` vars.
+    """
+    from terok.lib.containers.environment import resolve_git_identity
+
+    identity = resolve_git_identity(
+        agent_name=agent_name,
+        agent_email=agent_email,
+        human_name=env["HUMAN_GIT_NAME"],
+        human_email=env["HUMAN_GIT_EMAIL"],
+        authorship=env.get("TEROK_GIT_AUTHORSHIP", "agent-human"),
+    )
+    return identity
 
 
 def _git_subprocess_env(terok_env: TerokIntegrationEnv, git_env: dict[str, str]) -> dict[str, str]:
@@ -118,13 +126,12 @@ def _git_subprocess_env(terok_env: TerokIntegrationEnv, git_env: dict[str, str])
     Inherits HOME, XDG_CONFIG_HOME, and PATH from the isolated ``terok_env``
     so git doesn't pick up the host user's global config.
     """
-    base = {
+    return {
         "HOME": str(terok_env.home_dir),
         "XDG_CONFIG_HOME": str(terok_env.xdg_config_home),
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        **git_env,
     }
-    base.update(git_env)
-    return base
 
 
 def _write_global_config(terok_env: TerokIntegrationEnv, yaml_text: str) -> None:
@@ -158,18 +165,22 @@ def _mock_no_host_git() -> AbstractContextManager[unittest.mock._patch]:
     return unittest.mock.patch("terok.lib.core.projects._get_global_git_config", return_value=None)
 
 
-# ── Tests: authorship modes ──────────────────────────────────────────────────
+# ── Tests: authorship modes (runtime layer) ──────────────────────────────────
 
 
 class TestAuthorshipModes:
-    """Verify all four authorship modes produce correct GIT_* env vars."""
+    """Verify resolve_git_identity produces correct GIT_* vars for all four modes.
+
+    Uses the real runner env (with config-stack-resolved human identity)
+    as input to resolve_git_identity — simulating what shell wrappers do.
+    """
 
     @pytest.fixture(autouse=True)
     def _setup(self, terok_env: TerokIntegrationEnv) -> None:
         self.terok_env = terok_env
 
-    def _env_for_mode(self, mode: str) -> dict[str, str]:
-        """Write a project with given authorship mode and resolve env."""
+    def _identity_for_mode(self, mode: str) -> dict[str, str]:
+        """Write a project with given authorship mode and resolve git identity."""
         self.terok_env.write_project(
             "git-id-test",
             _project_with_identity(
@@ -179,90 +190,52 @@ class TestAuthorshipModes:
             ),
         )
         with _mock_no_host_git():
-            return _git_commit_env(_resolve_env(self.terok_env))
+            env = _build_runner_env(self.terok_env)
+        return _apply_agent_identity(env)
 
     def test_agent_human_mode(self) -> None:
         """agent-human: agent is author, human is committer (default)."""
-        env = self._env_for_mode("agent-human")
-        assert env["GIT_AUTHOR_NAME"] == "Claude"
-        assert env["GIT_AUTHOR_EMAIL"] == "noreply@anthropic.com"
-        assert env["GIT_COMMITTER_NAME"] == "Alice Human"
-        assert env["GIT_COMMITTER_EMAIL"] == "alice@example.com"
+        git = self._identity_for_mode("agent-human")
+        assert git["GIT_AUTHOR_NAME"] == "Claude"
+        assert git["GIT_AUTHOR_EMAIL"] == "noreply@anthropic.com"
+        assert git["GIT_COMMITTER_NAME"] == "Alice Human"
+        assert git["GIT_COMMITTER_EMAIL"] == "alice@example.com"
 
     def test_human_agent_mode(self) -> None:
         """human-agent: human is author, agent is committer."""
-        env = self._env_for_mode("human-agent")
-        assert env["GIT_AUTHOR_NAME"] == "Alice Human"
-        assert env["GIT_AUTHOR_EMAIL"] == "alice@example.com"
-        assert env["GIT_COMMITTER_NAME"] == "Claude"
-        assert env["GIT_COMMITTER_EMAIL"] == "noreply@anthropic.com"
+        git = self._identity_for_mode("human-agent")
+        assert git["GIT_AUTHOR_NAME"] == "Alice Human"
+        assert git["GIT_AUTHOR_EMAIL"] == "alice@example.com"
+        assert git["GIT_COMMITTER_NAME"] == "Claude"
+        assert git["GIT_COMMITTER_EMAIL"] == "noreply@anthropic.com"
 
     def test_agent_mode(self) -> None:
         """agent: agent is both author and committer."""
-        env = self._env_for_mode("agent")
-        assert env["GIT_AUTHOR_NAME"] == "Claude"
-        assert env["GIT_AUTHOR_EMAIL"] == "noreply@anthropic.com"
-        assert env["GIT_COMMITTER_NAME"] == "Claude"
-        assert env["GIT_COMMITTER_EMAIL"] == "noreply@anthropic.com"
+        git = self._identity_for_mode("agent")
+        assert git["GIT_AUTHOR_NAME"] == "Claude"
+        assert git["GIT_AUTHOR_EMAIL"] == "noreply@anthropic.com"
+        assert git["GIT_COMMITTER_NAME"] == "Claude"
+        assert git["GIT_COMMITTER_EMAIL"] == "noreply@anthropic.com"
 
     def test_human_mode(self) -> None:
         """human: human is both author and committer."""
-        env = self._env_for_mode("human")
-        assert env["GIT_AUTHOR_NAME"] == "Alice Human"
-        assert env["GIT_AUTHOR_EMAIL"] == "alice@example.com"
-        assert env["GIT_COMMITTER_NAME"] == "Alice Human"
-        assert env["GIT_COMMITTER_EMAIL"] == "alice@example.com"
+        git = self._identity_for_mode("human")
+        assert git["GIT_AUTHOR_NAME"] == "Alice Human"
+        assert git["GIT_AUTHOR_EMAIL"] == "alice@example.com"
+        assert git["GIT_COMMITTER_NAME"] == "Alice Human"
+        assert git["GIT_COMMITTER_EMAIL"] == "alice@example.com"
 
 
-# ── Tests: git commit picks up env vars ───────────────────────────────────────
+# ── Tests: git commit picks up env vars (runtime layer) ──────────────────────
 
 
 class TestGitCommitIdentity:
-    """Verify that ``git commit`` uses the baked-in GIT_* env vars.
+    """Verify that ``git commit`` uses the resolved GIT_* env vars.
 
     Runs a real ``git init`` + ``git commit`` in a temp dir with GIT_*
-    env vars set as they would be in the container, then inspects the
-    resulting commit metadata.
+    env vars set as they would be after a shell wrapper applies identity,
+    then inspects the resulting commit metadata.
     """
-
-    def test_git_commit_uses_baked_env_vars(self, terok_env: TerokIntegrationEnv) -> None:
-        """A real git commit inherits GIT_AUTHOR_*/GIT_COMMITTER_* from env."""
-        terok_env.write_project(
-            "git-id-test",
-            _project_with_identity(
-                human_name="Alice Human",
-                human_email="alice@example.com",
-                authorship="agent-human",
-            ),
-        )
-        with _mock_no_host_git():
-            env = _resolve_env(terok_env)
-
-        git_env = _git_commit_env(env)
-        workspace = terok_env.task_workspace("git-id-test", "1")
-        workspace.mkdir(parents=True, exist_ok=True)
-
-        run_opts = {
-            "cwd": workspace,
-            "env": _git_subprocess_env(terok_env, git_env),
-            "check": True,
-            "capture_output": True,
-            "text": True,
-            "timeout": 10,
-        }
-        subprocess.run(["git", "init"], **run_opts)
-        subprocess.run(["git", "commit", "--allow-empty", "-m", "test"], **run_opts)
-
-        # Inspect the commit
-        log = subprocess.run(
-            ["git", "log", "-1", "--format=%an|%ae|%cn|%ce"],
-            **run_opts,
-        )
-        author_name, author_email, committer_name, committer_email = log.stdout.strip().split("|")
-        assert author_name == "Claude"
-        assert author_email == "noreply@anthropic.com"
-        assert committer_name == "Alice Human"
-        assert committer_email == "alice@example.com"
 
     @pytest.mark.parametrize("mode", ["agent-human", "human-agent", "agent", "human"])
     def test_git_commit_respects_all_modes(self, terok_env: TerokIntegrationEnv, mode: str) -> None:
@@ -276,9 +249,9 @@ class TestGitCommitIdentity:
             ),
         )
         with _mock_no_host_git():
-            env = _resolve_env(terok_env)
+            env = _build_runner_env(terok_env)
+        git_env = _apply_agent_identity(env)
 
-        git_env = _git_commit_env(env)
         workspace = terok_env.task_workspace("git-id-test", "1")
         workspace.mkdir(parents=True, exist_ok=True)
 
@@ -305,11 +278,16 @@ class TestGitCommitIdentity:
         assert (an, ae, cn, ce) == expected[mode]
 
 
-# ── Tests: config stack identity loading ──────────────────────────────────────
+# ── Tests: config stack identity loading (runner layer) ───────────────────────
 
 
 class TestConfigStackIdentity:
-    """Verify the identity resolution stack: git global → terok global → project.yml."""
+    """Verify the identity resolution stack: git global → terok global → project.yml.
+
+    These tests exercise ``build_task_env_and_volumes`` — the same call the
+    production runners make — and assert on the ``HUMAN_GIT_*`` and
+    ``TEROK_GIT_AUTHORSHIP`` env vars that are baked into the container env.
+    """
 
     @pytest.fixture(autouse=True)
     def _setup(self, terok_env: TerokIntegrationEnv) -> None:
@@ -322,21 +300,19 @@ class TestConfigStackIdentity:
             _project_with_identity(human_name="Project User", human_email="proj@example.com"),
         )
         with _mock_no_host_git():
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Project User"
         assert env["HUMAN_GIT_EMAIL"] == "proj@example.com"
-        assert env["GIT_COMMITTER_NAME"] == "Project User"
 
     def test_host_git_config_autoloaded_as_fallback(self) -> None:
         """Host git config provides human identity when project.yml omits it."""
         self.terok_env.write_project("git-id-test", _BASE_PROJECT)
         with _mock_host_git_config("Host Git User", "hostgit@example.com"):
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Host Git User"
         assert env["HUMAN_GIT_EMAIL"] == "hostgit@example.com"
-        assert env["GIT_COMMITTER_NAME"] == "Host Git User"
 
     def test_project_yml_overrides_host_git_config(self) -> None:
         """Project.yml human_name/email takes precedence over host git config."""
@@ -347,7 +323,7 @@ class TestConfigStackIdentity:
             ),
         )
         with _mock_host_git_config("Host Git User", "hostgit@example.com"):
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Project Override"
         assert env["HUMAN_GIT_EMAIL"] == "override@example.com"
@@ -364,7 +340,7 @@ class TestConfigStackIdentity:
         """,
         )
         with _mock_host_git_config("Host Git User", "hostgit@example.com"):
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Global Terok User"
         assert env["HUMAN_GIT_EMAIL"] == "global@terok.dev"
@@ -384,7 +360,7 @@ class TestConfigStackIdentity:
         """,
         )
         with _mock_host_git_config("Host Git User", "hostgit@example.com"):
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Project Wins"
         assert env["HUMAN_GIT_EMAIL"] == "project@example.com"
@@ -393,11 +369,10 @@ class TestConfigStackIdentity:
         """With no identity configured anywhere, falls back to Nobody/nobody@localhost."""
         self.terok_env.write_project("git-id-test", _BASE_PROJECT)
         with _mock_no_host_git():
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Nobody"
         assert env["HUMAN_GIT_EMAIL"] == "nobody@localhost"
-        assert env["GIT_COMMITTER_NAME"] == "Nobody"
 
     def test_global_authorship_mode_applied(self) -> None:
         """Authorship mode from terok-config.yml is applied when project.yml omits it."""
@@ -413,18 +388,15 @@ class TestConfigStackIdentity:
         """,
         )
         with _mock_no_host_git():
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
-        # human-agent: human is author, agent is committer
-        assert env["GIT_AUTHOR_NAME"] == "Alice"
-        assert env["GIT_COMMITTER_NAME"] == "Claude"
+        assert env["TEROK_GIT_AUTHORSHIP"] == "human-agent"
 
     def test_partial_host_git_name_only(self) -> None:
         """Host git config with only user.name and no email still propagates name."""
         self.terok_env.write_project("git-id-test", _BASE_PROJECT)
         with _mock_host_git_config("Just A Name", None):
-            env = _resolve_env(self.terok_env)
+            env = _build_runner_env(self.terok_env)
 
         assert env["HUMAN_GIT_NAME"] == "Just A Name"
-        # Email falls back to nobody@localhost since not set anywhere
         assert env["HUMAN_GIT_EMAIL"] == "nobody@localhost"
