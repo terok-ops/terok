@@ -62,6 +62,11 @@ def _build_interactive_agent_command(provider: object, prompt: str | None) -> st
     return f"{provider.binary} {shlex.quote(prompt)}"
 
 
+def _login_title(project_id: str, task_id: str, task_name: str) -> str:
+    """Build a unified terminal/tmux title for task login sessions."""
+    return f"{project_id}:{task_id}:{task_name}"
+
+
 class TaskActionsMixin:
     """Task-related action handlers for the TerokTUI application.
 
@@ -216,6 +221,7 @@ class TaskActionsMixin:
                 container_name=cname,
                 project_id=pid,
                 task_id=task_id,
+                task_name=name,
                 default_login=default_login,
             ),
             self._on_launch_screen_result,
@@ -223,7 +229,7 @@ class TaskActionsMixin:
         await self.refresh_tasks()
 
     async def _on_launch_screen_result(
-        self, result: "tuple[str, str, str, str, str | None] | None"
+        self, result: "tuple[str, str, str, str, str, str | None] | None"
     ) -> None:
         """Handle the result from TaskLaunchScreen.
 
@@ -234,7 +240,7 @@ class TaskActionsMixin:
             await self.refresh_tasks()
             return
 
-        pid, tid, cname, agent, prompt = result
+        pid, tid, task_name, cname, agent, prompt = result
 
         # All agents (including bash) launch interactively inside tmux so the
         # user can re-attach later with 'login'.  The base command is always
@@ -257,7 +263,9 @@ class TaskActionsMixin:
             agent_cmd = _build_interactive_agent_command(provider, prompt)
             cmd = [*base_cmd, "bash", "-lc", agent_cmd]
 
-        await self._launch_terminal_session(cmd, title=f"{pid}:{tid}", cname=cname)
+        await self._launch_terminal_session(
+            cmd, title=_login_title(pid, tid, task_name), cname=cname
+        )
 
     async def _action_task_start_toad(self) -> None:
         """Create a new task and immediately run Toad serve."""
@@ -542,7 +550,9 @@ class TaskActionsMixin:
         mode = self.current_task.mode or "cli"
         cname = container_name(pid, mode, tid)
         task_name = self.current_task.name or tid
-        await self._launch_terminal_session(cmd, title=f"{pid}:{tid}:{task_name}", cname=cname)
+        await self._launch_terminal_session(
+            cmd, title=_login_title(pid, tid, task_name), cname=cname
+        )
 
     # ---------- Task management actions ----------
 

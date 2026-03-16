@@ -1124,12 +1124,13 @@ class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
 # ---------------------------------------------------------------------------
 
 
-class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None] | None"]):
+class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | None] | None"]):
     """Post-creation modal for CLI tasks: agent selection + optional prompt.
 
-    Dismisses with ``(project_id, task_id, container_name, agent, prompt)``
-    on Login, or ``None`` on Dismiss.  The full launch context is captured
-    at creation time so the callback is immune to selection changes.
+    Dismisses with ``(project_id, task_id, task_name, container_name,
+    agent, prompt)`` on Login, or ``None`` on Dismiss.  The full launch
+    context is captured at creation time so the callback is immune to
+    selection changes.
     """
 
     BINDINGS = [
@@ -1179,6 +1180,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         container_name: str,
         project_id: str,
         task_id: str,
+        task_name: str = "",
         default_login: str = "bash",
     ) -> None:
         """Create the launch screen with container context and default agent."""
@@ -1186,6 +1188,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         self._container_name = container_name
         self._project_id = project_id
         self._task_id = task_id
+        self._task_name = task_name or task_id
         self._default_login = default_login
         self._container_ready = False
         self._poll_timer = None
@@ -1211,7 +1214,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
             with Horizontal(id="launch-buttons"):
                 yield Button("Dismiss", id="btn-dismiss", variant="default")
                 yield Button("Login", id="btn-login", variant="primary", disabled=True)
-        dialog.border_title = f"CLI Task {self._task_id}"
+        dialog.border_title = f"CLI Task {self._task_id} ({self._task_name})"
         dialog.border_subtitle = "Esc to dismiss"
 
     def on_mount(self) -> None:
@@ -1299,7 +1302,16 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         prompt = prompt_input.value.strip() or None
         if agent == "bash":
             prompt = None
-        self.dismiss((self._project_id, self._task_id, self._container_name, agent, prompt))
+        self.dismiss(
+            (
+                self._project_id,
+                self._task_id,
+                self._task_name,
+                self._container_name,
+                agent,
+                prompt,
+            )
+        )
 
     def action_dismiss_screen(self) -> None:
         """Dismiss the launch screen without logging in."""

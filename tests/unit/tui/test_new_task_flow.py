@@ -121,11 +121,13 @@ class TestTaskLaunchScreen:
             container_name="terok-p-cli-1",
             project_id="p",
             task_id="1",
+            task_name="fix-bug",
             default_login="claude",
         )
         assert screen._container_name == "terok-p-cli-1"
         assert screen._project_id == "p"
         assert screen._task_id == "1"
+        assert screen._task_name == "fix-bug"
         assert screen._default_login == "claude"
         assert not screen._container_ready
 
@@ -133,6 +135,7 @@ class TestTaskLaunchScreen:
         screens, _ = import_screens()
         screen = screens.TaskLaunchScreen(container_name="c", project_id="p", task_id="1")
         assert screen._default_login == "bash"
+        assert screen._task_name == "1"  # falls back to task_id
 
     def test_dismiss_returns_none(self) -> None:
         screens, _ = import_screens()
@@ -153,7 +156,9 @@ class TestTaskLaunchScreen:
 
     def test_do_login_returns_agent_and_prompt(self) -> None:
         screens, _ = import_screens()
-        screen = screens.TaskLaunchScreen(container_name="c", project_id="p", task_id="1")
+        screen = screens.TaskLaunchScreen(
+            container_name="c", project_id="p", task_id="1", task_name="fix-bug"
+        )
         screen.dismiss = mock.Mock()
 
         mock_select = mock.Mock()
@@ -169,11 +174,13 @@ class TestTaskLaunchScreen:
         screen.query_one = query_one
 
         screen._do_login()
-        screen.dismiss.assert_called_once_with(("p", "1", "c", "claude", "fix the bug"))
+        screen.dismiss.assert_called_once_with(("p", "1", "fix-bug", "c", "claude", "fix the bug"))
 
     def test_do_login_bash_clears_prompt(self) -> None:
         screens, _ = import_screens()
-        screen = screens.TaskLaunchScreen(container_name="c", project_id="p", task_id="1")
+        screen = screens.TaskLaunchScreen(
+            container_name="c", project_id="p", task_id="1", task_name="my-task"
+        )
         screen.dismiss = mock.Mock()
 
         mock_select = mock.Mock()
@@ -189,7 +196,7 @@ class TestTaskLaunchScreen:
         screen.query_one = query_one
 
         screen._do_login()
-        screen.dismiss.assert_called_once_with(("p", "1", "c", "bash", None))
+        screen.dismiss.assert_called_once_with(("p", "1", "my-task", "c", "bash", None))
 
     def test_login_button_blocked_when_not_ready(self) -> None:
         screens, _ = import_screens()
