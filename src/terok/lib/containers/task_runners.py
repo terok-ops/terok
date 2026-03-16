@@ -192,9 +192,9 @@ def _prepare_agent_config(
 ) -> Path:
     """Resolve agent config, instructions, and prepare the agent-config dir.
 
-    Shared by CLI and web task runners to avoid duplicating the
-    resolve → instructions → prepare sequence.  *provider_name* overrides
-    the auto-detected provider (e.g. web backend selection).
+    Shared by task runners to avoid duplicating the resolve → instructions →
+    prepare sequence.  *provider_name* overrides the auto-detected provider
+    (e.g. explicit provider selection).
     """
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
@@ -908,5 +908,10 @@ def task_restart(project_id: str, task_id: str) -> None:
             task_run_cli(project_id, task_id, preset=saved_preset)
         elif mode == "toad":
             task_run_toad(project_id, task_id, preset=saved_preset)
+        elif mode == "run":
+            raise SystemExit(
+                f"Headless task {task_id} cannot be auto-restarted when its container "
+                "is missing. Re-run it via 'terokctl run' with the original prompt."
+            )
         else:
             raise SystemExit(f"Unknown mode '{mode}' for task {task_id}")

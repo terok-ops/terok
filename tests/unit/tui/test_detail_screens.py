@@ -536,7 +536,6 @@ class TestTaskScreenKeyBinding:
         elif should_stop is False:
             event.stop.assert_not_called()
 
-
     @pytest.mark.parametrize("key", ["H", "d", "D", "s", "f"])
     def test_task_only_keys_are_blocked_without_tasks(self, key: str) -> None:
         screen = make_task_screen(has_tasks=False)

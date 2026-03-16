@@ -404,8 +404,8 @@ panel edges misalign — and **cannot be fixed by padding alone**.
    Pass the dict entry directly — the function reads `.emoji` and `.label`
    itself.  No `width` or `label` parameter needed at the call site.
 5. Emoji definitions live in `terok.lib.containers.task_display`
-   (`STATUS_DISPLAY`, `MODE_DISPLAY`, `WEB_BACKEND_DISPLAY`,
-   `SECURITY_CLASS_DISPLAY`, `GPU_DISPLAY`) and
+   (`STATUS_DISPLAY`, `MODE_DISPLAY`, `SECURITY_CLASS_DISPLAY`,
+   `GPU_DISPLAY`) and
    `terok.lib.containers.work_status` (`WORK_STATUS_DISPLAY`).
 6. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
    natively 2 cells wide — adding a VS16 emoji will fail CI.  Tests also

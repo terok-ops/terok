@@ -222,7 +222,7 @@ def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
     """
     if project_id is None:
         return None
-    if task.mode not in {"cli", "web"}:
+    if task.mode != "cli":
         return None
 
     container_name = f"{project_id}-{task.mode}-{task.task_id}"
