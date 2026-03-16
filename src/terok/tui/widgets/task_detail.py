@@ -88,21 +88,35 @@ def render_task_details(
         success_color = variables.get("success", "green")
         error_color = variables.get("error", "red")
         warning_color = variables.get("warning", "yellow")
-        shield_colors = {
-            "UP": success_color,
-            "DOWN": warning_color,
-            "INACTIVE": error_color,
-            "DISABLED": error_color,
-        }
-        shield_color = shield_colors.get(task.shield_state, warning_color)
-        lines.append(
-            Text.assemble(
-                "Shield:    ",
-                Text(task.shield_state.lower(), style=Style(color=shield_color)),
+
+        # When the container is stopped, shield rules are naturally absent.
+        # Show "ready" in dim text instead of a scary red "inactive" warning.
+        container_live = task.container_state == "running"
+        if task.shield_state == "INACTIVE" and not container_live:
+            lines.append(
+                Text.assemble(
+                    "Shield:    ",
+                    Text("ready", style=Style(dim=True)),
+                )
             )
-        )
-        if task.shield_state in {"DISABLED", "INACTIVE"}:
-            lines.append(Text(f"           {SHIELD_SECURITY_HINT}", style=Style(color=error_color)))
+        else:
+            shield_colors = {
+                "UP": success_color,
+                "DOWN": warning_color,
+                "INACTIVE": error_color,
+                "DISABLED": error_color,
+            }
+            shield_color = shield_colors.get(task.shield_state, warning_color)
+            lines.append(
+                Text.assemble(
+                    "Shield:    ",
+                    Text(task.shield_state.lower(), style=Style(color=shield_color)),
+                )
+            )
+            if task.shield_state in {"DISABLED", "INACTIVE"}:
+                lines.append(
+                    Text(f"           {SHIELD_SECURITY_HINT}", style=Style(color=error_color))
+                )
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))

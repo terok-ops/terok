@@ -311,7 +311,7 @@ class TestRenderHelpers:
                 "INACTIVE",
                 ["inactive", "shield-security"],
                 [],
-                id="inactive",
+                id="inactive-running",
             ),
             pytest.param(
                 "UP",
@@ -329,6 +329,15 @@ class TestRenderHelpers:
             present,
             absent,
         )
+
+    def test_render_shield_inactive_stopped_shows_ready(self) -> None:
+        """Stopped containers with INACTIVE shield show 'ready', no warning."""
+        text = render_task_details_text(
+            task_id="99", shield_state="INACTIVE", container_state="exited"
+        )
+        assert "ready" in text
+        assert "inactive" not in text
+        assert "shield-security" not in text
 
     @pytest.mark.parametrize(
         ("overrides", "present", "absent"),
