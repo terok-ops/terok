@@ -1192,6 +1192,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         self._default_login = default_login
         self._container_ready = False
         self._poll_timer = None
+        self._poll_count = 0
 
     def compose(self) -> ComposeResult:
         """Build status, agent selector, prompt input, and action buttons."""
@@ -1223,6 +1224,10 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         prompt.focus()
         self._poll_timer = self.set_interval(1.5, self._poll_status)
 
+    # After this many polls (~90s at 1.5s interval) without the container
+    # appearing, assume the launch failed and show a hint.
+    _POLL_STALL_THRESHOLD = 60
+
     def _poll_status(self) -> None:
         """Check container state and task mode; enable Login only when fully ready.
 
@@ -1230,10 +1235,14 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
         1. The container is in "running" state (podman says so).
         2. The task metadata has a ``mode`` set (the runner finished init).
         This prevents premature Login attempts before init scripts complete.
+
+        If the container never appears after many polls, updates the status
+        to indicate a likely launch failure so the user can dismiss.
         """
         from ..lib.containers.runtime import get_container_state
         from ..lib.containers.tasks import get_task_meta
 
+        self._poll_count += 1
         state = get_container_state(self._container_name)
         status_widget = self.query_one("#launch-status", Static)
         if state == "running":
@@ -1256,6 +1265,8 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None]
                 status_widget.update("Status: Initializing\u2026")
         elif state:
             status_widget.update(f"Status: {state}")
+        elif self._poll_count >= self._POLL_STALL_THRESHOLD:
+            status_widget.update("Status: Launch may have failed \u2014 check notifications")
 
     def _update_prompt_state(self) -> None:
         """Enable/disable prompt input based on selected agent."""
