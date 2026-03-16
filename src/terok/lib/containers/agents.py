@@ -164,8 +164,8 @@ def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
         "        esac",
         "    done",
         "    local _args=()",
-        "    [ -r /usr/local/share/terok/terok-git-identity.sh ] && \\",
-        "        . /usr/local/share/terok/terok-git-identity.sh",
+        "    [ -r /usr/local/share/terok/terok-env-git-identity.sh ] && \\",
+        "        . /usr/local/share/terok/terok-env-git-identity.sh",
     ]
 
     # Permission mode is handled by /etc/claude-code/managed-settings.json

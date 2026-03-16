@@ -642,8 +642,8 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
         "            *) break ;;",
         "        esac",
         "    done",
-        "    [ -r /usr/local/share/terok/terok-git-identity.sh ] && \\",
-        "        . /usr/local/share/terok/terok-git-identity.sh",
+        "    [ -r /usr/local/share/terok/terok-env-git-identity.sh ] && \\",
+        "        . /usr/local/share/terok/terok-env-git-identity.sh",
     ]
 
     # Permission mode: most agents use container-level env vars or /etc/

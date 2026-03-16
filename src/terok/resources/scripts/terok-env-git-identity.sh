@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-# Shared Git identity helper for terok task containers.
+# Git identity helper for terok task containers (sourced by terok-env.sh).
 #
 # Expected environment:
 #   TEROK_GIT_AUTHORSHIP - agent-human (default), human-agent, agent, human

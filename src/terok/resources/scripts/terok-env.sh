@@ -20,12 +20,12 @@ export PATH="$HOME/.npm-packages/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
 # Source the helper that defines _terok_apply_git_identity().
 # Wrapper functions (claude, codex, etc.) call this in subshells to set
 # GIT_AUTHOR_*/GIT_COMMITTER_* per invocation.
-[ -r /usr/local/share/terok/terok-git-identity.sh ] && \
-    . /usr/local/share/terok/terok-git-identity.sh
+[ -r /usr/local/share/terok/terok-env-git-identity.sh ] && \
+    . /usr/local/share/terok/terok-env-git-identity.sh
 
 # Git identity wrappers for non-agent CLIs.
 # Agent wrappers (claude, codex, vibe, …) are generated per-task in
-# terok-agent.sh and sourced via zz-terok-project.sh below.
+# terok-agent.sh and sourced via terok-env-wrappers.sh below.
 gh() {
   (
     _terok_apply_git_identity "GitHub CLI" "gh@github.com"
@@ -41,6 +41,7 @@ glab() {
 
 # ── Per-project agent wrappers ────────────────────────────────────────────────
 
-# Source terok-agent.sh (mounted per-task at /home/dev/.terok/).
+# Source per-task agent wrappers (mounted at /home/dev/.terok/terok-agent.sh).
 # Defines wrapper functions for all agent CLIs: claude(), codex(), vibe(), etc.
-[ -r /etc/profile.d/zz-terok-project.sh ] && . /etc/profile.d/zz-terok-project.sh
+[ -r /usr/local/share/terok/terok-env-wrappers.sh ] && \
+    . /usr/local/share/terok/terok-env-wrappers.sh

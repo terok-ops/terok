@@ -46,27 +46,29 @@ RUN mkdir -p /etc/claude-code && chown dev:dev /etc/claude-code
 
 # Shell environment: terok-env.sh is the single source of truth for PATH,
 # git identity helpers, gh/glab wrappers, and per-project agent wrappers.
-# It's sourced by all three shell modes:
+# It lives in /etc/profile.d/ and is sourced by all three shell modes:
 #   - Non-interactive (bash -c): via BASH_ENV (set below)
 #   - Interactive:               via /etc/bash.bashrc
-#   - Login:                     via /etc/profile.d/
+#   - Login:                     via /etc/profile.d/ (directly)
 # The script guards against double-sourcing internally.
-# The COPY + RUN here set up the wiring; the script itself is also refreshed
-# below the cache bust point so `terokctl build --agents` picks up changes.
-COPY scripts/terok-env.sh /usr/local/share/terok/terok-env.sh
-RUN chmod +x /usr/local/share/terok/terok-env.sh; \
-    ln -sf /usr/local/share/terok/terok-env.sh /etc/profile.d/terok-env.sh; \
+# It sources two helpers from /usr/local/share/terok/:
+#   - terok-env-git-identity.sh  — _terok_apply_git_identity() function
+#   - terok-env-wrappers.sh      — per-task agent CLI wrappers (symlink to mount)
+# The COPY here sets up the wiring; the script is also refreshed below the
+# cache bust point so `terokctl build --agents` picks up content changes.
+COPY scripts/terok-env.sh /etc/profile.d/terok-env.sh
+RUN chmod +x /etc/profile.d/terok-env.sh; \
     if [ -f /etc/bash.bashrc ]; then \
-      printf '\n# terok environment (PATH, git identity, agent wrappers)\n. /usr/local/share/terok/terok-env.sh\n' >> /etc/bash.bashrc; \
+      printf '\n# terok environment (PATH, git identity, agent wrappers)\n. /etc/profile.d/terok-env.sh\n' >> /etc/bash.bashrc; \
     else \
-      printf '# terok environment (PATH, git identity, agent wrappers)\n. /usr/local/share/terok/terok-env.sh\n' > /etc/bash.bashrc; \
+      printf '# terok environment (PATH, git identity, agent wrappers)\n. /etc/profile.d/terok-env.sh\n' > /etc/bash.bashrc; \
     fi; \
     # Interactive-only: help banner and model sync (login shells only)
     printf '\n# Help banner (interactive login only)\nif [ -t 1 ] && [ -z "$_TEROK_BANNER_SHOWN" ]; then\n  export _TEROK_BANNER_SHOWN=1\n  _TEROK_LOGIN=1 hilfe --kurz 2>/dev/null || true\nfi\n' >> /etc/bash.bashrc; \
     printf '\n# Mistral model sync (interactive login only)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
-# Symlink for terok project config (resolved at runtime via mount).
-RUN ln -s /home/dev/.terok/terok-agent.sh /etc/profile.d/zz-terok-project.sh
+# Symlink for per-task agent wrappers (resolved at runtime via mount).
+RUN ln -s /home/dev/.terok/terok-agent.sh /usr/local/share/terok/terok-env-wrappers.sh
 
 # === Cache bust point ===
 # Changing AGENT_CACHE_BUST invalidates all layers below: terok scripts,
@@ -81,8 +83,8 @@ ARG AGENT_CACHE_BUST=0
 RUN mkdir -p /usr/local/share/terok && echo "cache-bust: ${AGENT_CACHE_BUST}" > /dev/null
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
-COPY scripts/terok-git-identity.sh /usr/local/share/terok/terok-git-identity.sh
-COPY scripts/terok-env.sh /usr/local/share/terok/terok-env.sh
+COPY scripts/terok-env-git-identity.sh /usr/local/share/terok/terok-env-git-identity.sh
+COPY scripts/terok-env.sh /etc/profile.d/terok-env.sh
 COPY scripts/hilfe /usr/local/bin/hilfe
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/blablador-acp /usr/local/bin/blablador-acp
@@ -94,7 +96,7 @@ COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
 COPY scripts/update-all-the-things /usr/local/bin/update-all-the-things
 RUN chmod +x \
     /usr/local/bin/setup-codex-auth.sh \
-    /usr/local/share/terok/terok-git-identity.sh \
+    /usr/local/share/terok/terok-env-git-identity.sh \
     /usr/local/bin/hilfe \
     /usr/local/bin/blablador \
     /usr/local/bin/blablador-acp \
@@ -138,7 +140,7 @@ RUN set -eux; \
 ENV HOME=/home/dev
 ENV NPM_CONFIG_PREFIX=/home/dev/.npm-packages \
     PATH=/home/dev/.npm-packages/bin:/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH \
-    BASH_ENV=/usr/local/share/terok/terok-env.sh
+    BASH_ENV=/etc/profile.d/terok-env.sh
 USER dev
 WORKDIR /home/dev
 

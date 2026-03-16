@@ -4,7 +4,7 @@
 """Tests for baked-in git identity env vars (environment.resolve_git_identity).
 
 Verifies that the Python-side identity resolution matches the shell helper
-(terok-git-identity.sh) for all authorship modes, and that
+(terok-env-git-identity.sh) for all authorship modes, and that
 apply_git_identity_env correctly wires project config into the env dict.
 """
 
@@ -129,7 +129,7 @@ def test_resolve_git_identity_returns_all_four_keys() -> None:
 
 
 # ── Shell parity ──────────────────────────────────────────────────────────────
-# The shell helper (terok-git-identity.sh) is tested in test_git_authorship.py.
+# The shell helper (terok-env-git-identity.sh) is tested in test_git_authorship.py.
 # These cross-check that the Python function produces identical output for the
 # same inputs used by those shell tests.
 

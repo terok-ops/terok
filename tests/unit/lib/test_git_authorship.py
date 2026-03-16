@@ -18,7 +18,7 @@ SCRIPT_TIMEOUT_SECONDS = 15
 
 def apply_mode(mode: str) -> dict[str, str | None]:
     """Run the shared helper in a shell and capture the resulting Git env."""
-    helper = resources.files("terok") / "resources" / "scripts" / "terok-git-identity.sh"
+    helper = resources.files("terok") / "resources" / "scripts" / "terok-env-git-identity.sh"
     with resources.as_file(helper) as helper_path:
         shell = f"""
 set -euo pipefail

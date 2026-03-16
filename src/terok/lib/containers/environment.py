@@ -158,7 +158,7 @@ def resolve_git_identity(
 ) -> dict[str, str]:
     """Resolve ``GIT_AUTHOR_*`` and ``GIT_COMMITTER_*`` env vars.
 
-    Mirrors the logic in ``terok-git-identity.sh`` so that the identity
+    Mirrors the logic in ``terok-env-git-identity.sh`` so that the identity
     is baked into the container environment at launch time.  This makes
     git commits work for any code path — interactive CLI wrappers, ACP
     adapters launched by toad, and headless runs — without relying on
