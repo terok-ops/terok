@@ -110,11 +110,11 @@ def stop_task_containers(project: Any, task_id: str) -> None:
 
 def gpu_run_args(project: "ProjectConfig") -> list[str]:
     """Return additional ``podman run`` args to enable NVIDIA GPU if configured."""
-    import yaml
+    from terok.lib.util.yaml import load as _yaml_load
 
     enabled = False
     try:
-        proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+        proj_cfg = _yaml_load((project.root / "project.yml").read_text()) or {}
         run_cfg = proj_cfg.get("run", {}) or {}
         gpus = run_cfg.get("gpus")
         if isinstance(gpus, str):

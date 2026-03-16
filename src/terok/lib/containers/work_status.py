@@ -22,12 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import yaml
+from ..util.yaml import YAMLError, dump as _yaml_dump, load as _yaml_load
 
 
 def _write_yaml_atomic(path: Path, data: dict[str, str]) -> None:
     """Write *data* as YAML to *path* atomically via temp-file + replace."""
-    payload = yaml.safe_dump(data, sort_keys=False)
+    payload = _yaml_dump(data)
     with NamedTemporaryFile(
         "w", encoding="utf-8", dir=path.parent, suffix=".tmp", delete=False
     ) as tmp:
@@ -97,8 +97,8 @@ def read_work_status(agent_config_dir: Path) -> WorkStatus:
     if not status_path.is_file():
         return WorkStatus()
     try:
-        raw = yaml.safe_load(status_path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError, UnicodeDecodeError):
+        raw = _yaml_load(status_path.read_text(encoding="utf-8"))
+    except (YAMLError, OSError, UnicodeDecodeError):
         return WorkStatus()
     if raw is None:
         return WorkStatus()
@@ -156,8 +156,8 @@ def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
     if not phase_path.is_file():
         return None
     try:
-        raw = yaml.safe_load(phase_path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError, UnicodeDecodeError):
+        raw = _yaml_load(phase_path.read_text(encoding="utf-8"))
+    except (YAMLError, OSError, UnicodeDecodeError):
         return None
     if not isinstance(raw, dict):
         return None

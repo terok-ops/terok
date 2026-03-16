@@ -11,7 +11,8 @@ from textwrap import dedent
 from types import ModuleType
 
 import pytest
-import yaml
+
+from terok.lib.util.yaml import load as yaml_load
 
 
 def _load_ci_map_module() -> ModuleType:
@@ -36,7 +37,7 @@ def ci_map_module() -> ModuleType:
         pytest.param({"on": "push"}, "`push`", id="string-on"),
         pytest.param({"on": ["push", "pull_request"]}, "`push`, `pull_request`", id="list-on"),
         pytest.param(
-            yaml.safe_load("on:\n  push:\n    branches: [master]\n"),
+            yaml_load("on:\n  push:\n    branches: [master]\n"),
             "`push(master)`",
             id="yaml-bool-key-push",
         ),

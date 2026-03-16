@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-import yaml
 
+from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.testfs import (
     CONTAINER_CLAUDE_MEMORY_OVERRIDE,
     CONTAINER_CLAUDE_SESSION_PATH,
@@ -135,7 +135,7 @@ def read_task_agents(state_dir: Path, project_id: str, task_id: str = "1") -> di
 
 def read_task_meta(state_dir: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
     """Load task metadata YAML for a task."""
-    return yaml.safe_load(task_paths(state_dir, project_id, task_id)[1].read_text())
+    return yaml_load(task_paths(state_dir, project_id, task_id)[1].read_text())
 
 
 def prepare_agent_config(
@@ -919,9 +919,9 @@ class TestTaskFollowupHeadless:
                 with mock_git_config():
                     task_id = task_new("proj_mode")
                     _agent_cfg, meta_path = task_paths(state_dir, "proj_mode", task_id)
-                    meta = yaml.safe_load(meta_path.read_text())
+                    meta = yaml_load(meta_path.read_text())
                     meta["mode"] = "cli"
-                    meta_path.write_text(yaml.safe_dump(meta))
+                    meta_path.write_text(yaml_dump(meta))
 
                     with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_mode", task_id, "test")
@@ -942,9 +942,9 @@ class TestTaskFollowupHeadless:
                 with mock_git_config():
                     task_id = task_new("proj_run")
                     _agent_cfg, meta_path = task_paths(state_dir, "proj_run", task_id)
-                    meta = yaml.safe_load(meta_path.read_text())
+                    meta = yaml_load(meta_path.read_text())
                     meta["mode"] = "run"
-                    meta_path.write_text(yaml.safe_dump(meta))
+                    meta_path.write_text(yaml_dump(meta))
 
                     with (
                         unittest.mock.patch(

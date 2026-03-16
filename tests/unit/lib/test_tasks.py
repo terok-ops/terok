@@ -10,7 +10,6 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-import yaml
 
 from terok.lib.containers.environment import build_task_env_and_volumes
 from terok.lib.containers.task_logs import LogViewOptions, task_logs
@@ -22,6 +21,7 @@ from terok.lib.containers.tasks import (
     task_new,
 )
 from terok.lib.core.projects import load_project
+from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from terok.tui.clipboard import (
     copy_to_clipboard_detailed,
     get_clipboard_helper_status,
@@ -154,9 +154,9 @@ class TestTask:
         """Load a task's YAML metadata, apply updates, and write it back."""
         meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
         meta_path = meta_dir / f"{tid}.yml"
-        meta = yaml.safe_load(meta_path.read_text())
+        meta = yaml_load(meta_path.read_text())
         meta.update(updates)
-        meta_path.write_text(yaml.safe_dump(meta))
+        meta_path.write_text(yaml_dump(meta))
 
     @staticmethod
     def _task_list_output(project_id: str, states: dict[str, str | None], **filters: str) -> str:
@@ -242,7 +242,7 @@ class TestTask:
                     "workspace": str(ws_dir),
                     "web_port": None,
                 }
-                (meta_dir / f"{tid}.yml").write_text(yaml.safe_dump(meta))
+                (meta_dir / f"{tid}.yml").write_text(yaml_dump(meta))
 
             output = self._task_list_output(
                 project_id,
@@ -592,9 +592,9 @@ class TestTask:
             meta_path = meta_dir / "1.yml"
 
             # Simulate task was previously run
-            meta = yaml.safe_load(meta_path.read_text())
+            meta = yaml_load(meta_path.read_text())
             meta["mode"] = "cli"
-            meta_path.write_text(yaml.safe_dump(meta))
+            meta_path.write_text(yaml_dump(meta))
 
             with (
                 mock_git_config(),
@@ -615,7 +615,7 @@ class TestTask:
                 assert call_args[:2] == ["podman", "start"]
 
                 # Verify metadata mode is preserved
-                meta = yaml.safe_load(meta_path.read_text())
+                meta = yaml_load(meta_path.read_text())
                 assert meta["mode"] == "cli"
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
@@ -974,9 +974,9 @@ class TestTaskLogs:
 
         meta_dir = state_root() / "projects" / project_id / "tasks"
         meta_path = meta_dir / f"{task_id}.yml"
-        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta = yaml_load(meta_path.read_text()) or {}
         meta["mode"] = mode
-        meta_path.write_text(yaml.safe_dump(meta))
+        meta_path.write_text(yaml_dump(meta))
         return task_id
 
     def test_unknown_task_raises(self) -> None:
@@ -1284,11 +1284,11 @@ class TestTaskArchive:
                 meta_path = meta_dir / f"{task_id}.yml"
 
                 # Set mode in metadata (simulating a task that ran)
-                meta = yaml.safe_load(meta_path.read_text()) or {}
+                meta = yaml_load(meta_path.read_text()) or {}
                 meta["mode"] = "run"
                 meta["name"] = "test-task"
                 meta["exit_code"] = 0
-                meta_path.write_text(yaml.safe_dump(meta))
+                meta_path.write_text(yaml_dump(meta))
 
                 # Create logs dir to simulate persisted logs
                 task_dir = ctx.state_dir / "tasks" / project_id / task_id
@@ -1329,7 +1329,7 @@ class TestTaskArchive:
                 # Archive should contain task.yml
                 archived_meta = archive_entry / "task.yml"
                 assert archived_meta.is_file()
-                archived_data = yaml.safe_load(archived_meta.read_text())
+                archived_data = yaml_load(archived_meta.read_text())
                 assert archived_data["task_id"] == task_id
                 assert archived_data["name"] == "test-task"
 
@@ -1387,7 +1387,7 @@ class TestTaskArchive:
                 entry_dir = archive_root / f"{ts}_{i + 1}_task-{i + 1}"
                 entry_dir.mkdir()
                 (entry_dir / "task.yml").write_text(
-                    yaml.safe_dump(
+                    yaml_dump(
                         {
                             "task_id": str(i + 1),
                             "name": f"task-{i + 1}",

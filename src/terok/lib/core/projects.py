@@ -9,10 +9,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import yaml  # pip install pyyaml
 from pydantic import ValidationError
 
 from ..util.config_stack import ConfigScope, ConfigStack
+from ..util.yaml import YAMLError, dump as _yaml_dump, load as _yaml_load
 from .config import (
     build_root,
     bundled_presets_dir,
@@ -90,8 +90,8 @@ def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
 def _parse_project_yaml(cfg_path: Path) -> RawProjectYaml:
     """Parse and validate a project.yml file, returning a typed model."""
     try:
-        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, YAMLError) as exc:
         raise SystemExit(f"Failed to read {cfg_path}: {exc}")
     try:
         return RawProjectYaml.model_validate(raw)
@@ -222,8 +222,8 @@ def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path
         hint = f"  Available: {names}" if available else "  No presets found."
         raise SystemExit(f"Preset '{preset_name}' not found.\n{hint}")
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
+        data = _yaml_load(path.read_text(encoding="utf-8")) or {}
+    except YAMLError as exc:
         raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
     # Resolve subagent file: paths relative to the preset file's directory
     _resolve_subagent_files(data.get("subagents", []), path.parent)
@@ -251,8 +251,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     if target_root.exists():
         raise SystemExit(f"Project '{new_id}' already exists at {target_root}")
 
-    # Read and re-serialise via safe_load/safe_dump (comments are not preserved)
-    source_cfg = yaml.safe_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
+    source_cfg = _yaml_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
 
     # Update project ID
     if "project" not in source_cfg:
@@ -264,7 +263,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
 
     target_root.mkdir(parents=True, exist_ok=True)
     (target_root / "project.yml").write_text(
-        yaml.safe_dump(source_cfg, default_flow_style=False, sort_keys=False),
+        _yaml_dump(source_cfg),
         encoding="utf-8",
     )
 

@@ -314,14 +314,14 @@ class ProjectActionsMixin:
         pid = self.current_project_id
 
         try:
-            import yaml as _yaml
+            from ..lib.util.yaml import dump as _yaml_dump, load as _yaml_load
 
             project = load_project(pid)
             project_yml = project.root / "project.yml"
             if not project_yml.is_file():
                 self.notify("No project.yml found.")
                 return
-            raw = _yaml.safe_load(project_yml.read_text(encoding="utf-8")) or {}
+            raw = _yaml_load(project_yml.read_text(encoding="utf-8")) or {}
             agent = raw.setdefault("agent", {})
             current = agent.get("instructions")
 
@@ -349,7 +349,7 @@ class ProjectActionsMixin:
                 )
                 return
 
-            project_yml.write_text(_yaml.safe_dump(raw, default_flow_style=False), encoding="utf-8")
+            project_yml.write_text(_yaml_dump(raw), encoding="utf-8")
             self.notify(f"Instructions: {mode_label}")
         except Exception as e:
             self.notify(f"Toggle failed: {e}")

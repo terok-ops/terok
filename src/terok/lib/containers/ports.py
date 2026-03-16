@@ -9,9 +9,8 @@ free port starting from the configured UI base port.
 
 import socket
 
-import yaml
-
 from ..core.config import get_ui_base_port, state_root
+from ..util.yaml import load as _yaml_load
 
 _LOCALHOST = "127.0.0.1"
 
@@ -39,7 +38,7 @@ def _collect_all_web_ports() -> set[int]:
             continue
         for f in tdir.glob("*.yml"):
             try:
-                meta = yaml.safe_load(f.read_text()) or {}
+                meta = _yaml_load(f.read_text()) or {}
             except Exception:
                 continue
             port = meta.get("web_port")

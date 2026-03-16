@@ -11,9 +11,9 @@ from importlib import resources as _pkg_resources
 from pathlib import Path
 from typing import Any
 
-import yaml  # pip install pyyaml
 from pydantic import ValidationError
 
+from ..util.yaml import YAMLError, load as _yaml_load
 from .paths import config_root as _config_root_base, state_root as _state_root_base
 from .yaml_schema import RawGlobalConfig
 
@@ -108,8 +108,8 @@ def _load_validated() -> RawGlobalConfig:
     if not cfg_path.is_file():
         return RawGlobalConfig()
     try:
-        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, YAMLError):
         logger.warning("Failed to read global config %s, using defaults", cfg_path, exc_info=True)
         return RawGlobalConfig()
     try:
@@ -124,7 +124,7 @@ def load_global_config() -> dict[str, Any]:
     cfg_path = global_config_path()
     if not cfg_path.is_file():
         return {}
-    return yaml.safe_load(cfg_path.read_text()) or {}
+    return _yaml_load(cfg_path.read_text()) or {}
 
 
 def get_global_section(key: str) -> dict[str, Any]:
@@ -162,7 +162,7 @@ def _resolve_path(
             val = section.get(config_key[1])
             if val:
                 return Path(val).expanduser().resolve()
-        except (OSError, KeyError, TypeError, yaml.YAMLError):
+        except (OSError, KeyError, TypeError, YAMLError):
             pass
 
     return default().resolve()

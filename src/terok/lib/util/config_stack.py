@@ -19,7 +19,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
+from .yaml import load as _yaml_load
 
 # ---------------------------------------------------------------------------
 # Merge helpers
@@ -156,7 +156,7 @@ class ConfigStack:
 def load_yaml_scope(level: str, path: Path) -> ConfigScope:
     """Load a YAML file into a ConfigScope.  Returns empty data if missing."""
     if path.is_file():
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        data = _yaml_load(path.read_text(encoding="utf-8")) or {}
     else:
         data = {}
     return ConfigScope(level=level, source=path, data=data)

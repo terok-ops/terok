@@ -36,7 +36,7 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
 pydantic = ">=2.6"
-PyYAML = ">=6.0"
+"ruamel.yaml" = ">=0.18"
 textual = "8.0.2"
 argcomplete = ">=3.1"
 requests = ">=2.31"

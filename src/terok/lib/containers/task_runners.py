@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
-
 from ..core.config import (
     get_gate_server_port,
     get_shield_bypass_firewall_no_protection,
@@ -34,6 +32,7 @@ from ..util.ansi import (
     yellow as _yellow,
 )
 from ..util.podman import _podman_userns_args
+from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .agent_config import resolve_agent_config, resolve_provider_value
 from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import build_task_env_and_volumes
@@ -387,7 +386,7 @@ def task_run_cli(
         _podman_start(cname)
         _assert_running(cname)
         meta["mode"] = "cli"
-        meta_path.write_text(yaml.safe_dump(meta))
+        meta_path.write_text(_yaml_dump(meta))
         print("Container started.")
         _print_login_instructions(project.id, task_id, cname, color_enabled)
         return
@@ -439,7 +438,7 @@ def task_run_cli(
     meta["unrestricted"] = unrestricted
     if preset:
         meta["preset"] = preset
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
 
     color_enabled = _supports_color()
     print(
@@ -505,7 +504,7 @@ def task_run_toad(
     meta["unrestricted"] = unrestricted
     if preset:
         meta["preset"] = preset
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
 
     task_dir = project.tasks_root / str(task_id)
     toad_cmd = (
@@ -599,7 +598,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         config_src = Path(request.config_path)
         if not config_src.is_file():
             raise SystemExit(f"Agent config file not found: {request.config_path}")
-        cli_config = yaml.safe_load(config_src.read_text(encoding="utf-8")) or {}
+        cli_config = _yaml_load(config_src.read_text(encoding="utf-8")) or {}
         cli_overrides = cli_config
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
@@ -704,7 +703,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     meta["unrestricted"] = unrestricted
     if request.preset:
         meta["preset"] = request.preset
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
 
     color_enabled = _supports_color()
 
@@ -821,7 +820,7 @@ def task_followup_headless(
 
     # Clear previous exit_code so effective_status shows "running" until new exit
     meta["exit_code"] = None
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
 
     color_enabled = _supports_color()
 

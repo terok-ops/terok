@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
+from terok.lib.util.yaml import load as yaml_load
 from tests.testnet import EXAMPLE_UPSTREAM_URL, LOCALHOST, localhost_url
 
 from ..helpers import TerokIntegrationEnv, write_fake_podman
@@ -94,9 +94,7 @@ class TestLaunchWorkflows:
             extra_env=extra_env,
         )
 
-        meta = yaml.safe_load(
-            terok_env.task_meta_path(PROJECT_ID, TASK_ID).read_text(encoding="utf-8")
-        )
+        meta = yaml_load(terok_env.task_meta_path(PROJECT_ID, TASK_ID).read_text(encoding="utf-8"))
         state = _load_fake_podman_state(state_path)
         args = _container_args(state, CLI_CONTAINER)
 
@@ -127,9 +125,7 @@ class TestLaunchWorkflows:
             extra_env=extra_env,
         )
 
-        meta = yaml.safe_load(
-            terok_env.task_meta_path(PROJECT_ID, TASK_ID).read_text(encoding="utf-8")
-        )
+        meta = yaml_load(terok_env.task_meta_path(PROJECT_ID, TASK_ID).read_text(encoding="utf-8"))
         state = _load_fake_podman_state(state_path)
         args = _container_args(state, TOAD_CONTAINER)
 

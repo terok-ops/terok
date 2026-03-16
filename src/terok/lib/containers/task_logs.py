@@ -15,9 +15,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from ..core.projects import load_project
+from ..util.yaml import load as _yaml_load
 from .log_format import auto_detect_formatter
 from .runtime import container_name, get_container_state
 from .tasks import tasks_meta_dir
@@ -64,7 +63,7 @@ def task_logs(
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+    meta = _yaml_load(meta_path.read_text(encoding="utf-8")) or {}
 
     mode = meta.get("mode")
     if not mode:

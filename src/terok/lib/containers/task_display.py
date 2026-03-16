@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import yaml
+from ..util.yaml import YAMLError, load as _yaml_load
 
 if TYPE_CHECKING:
     from .tasks import TaskMeta
@@ -88,8 +88,8 @@ def has_gpu(project: Any) -> bool:
     if root is None:
         return False
     try:
-        cfg = yaml.safe_load((root / "project.yml").read_text()) or {}
-    except (OSError, TypeError, AttributeError, yaml.YAMLError):
+        cfg = _yaml_load((root / "project.yml").read_text()) or {}
+    except (OSError, TypeError, AttributeError, YAMLError):
         return False
     gpus = (cfg.get("run") or {}).get("gpus")
     if isinstance(gpus, str):

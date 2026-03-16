@@ -19,8 +19,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml  # pip install pyyaml
-
 from ..core.config import state_root
 from ..core.projects import ProjectConfig, load_project
 from ..util.ansi import (
@@ -32,6 +30,7 @@ from ..util.ansi import (
 from ..util.emoji import render_emoji
 from ..util.fs import archive_timestamp, create_archive_dir, ensure_dir
 from ..util.logging_utils import _log_debug
+from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .runtime import (
     container_name,
     get_container_state,
@@ -168,7 +167,7 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    raw = yaml.safe_load(meta_path.read_text()) or {}
+    raw = _yaml_load(meta_path.read_text()) or {}
     mode = raw.get("mode")
     tid = str(raw.get("task_id", ""))
     # Hydrate live container state only for tasks that have actually been started
@@ -279,9 +278,9 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         return
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
     meta["exit_code"] = exit_code
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
 
 
 def _write_task_readme(task_dir: Path) -> None:
@@ -350,7 +349,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
         "workspace": str(ws),
         "web_port": None,
     }
-    (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
+    (meta_dir / f"{next_id}.yml").write_text(_yaml_dump(meta))
     print(f"Created task {next_id} ({task_name}) in {ws}")
     return next_id
 
@@ -396,7 +395,7 @@ def _task_rename(project: ProjectConfig, task_id: str, new_name: str) -> None:
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
     sanitized = sanitize_task_name(new_name)
     if sanitized is None:
         raise SystemExit(f"Invalid task name: {new_name!r}")
@@ -404,7 +403,7 @@ def _task_rename(project: ProjectConfig, task_id: str, new_name: str) -> None:
     if err:
         raise SystemExit(f"Invalid task name: {err}")
     meta["name"] = sanitized
-    meta_path.write_text(yaml.safe_dump(meta))
+    meta_path.write_text(_yaml_dump(meta))
     print(f"Renamed task {task_id} to {sanitized}")
 
 
@@ -430,7 +429,7 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
         tasks_root = None
     for f in meta_dir.glob("*.yml"):
         try:
-            meta = yaml.safe_load(f.read_text()) or {}
+            meta = _yaml_load(f.read_text()) or {}
             tid = str(meta.get("task_id", ""))
             ws_status = None
             ws_message = None
@@ -567,7 +566,7 @@ def load_task_meta(
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
     if expected_mode is not None:
         _check_mode(meta, expected_mode)
     return meta, meta_path
@@ -580,9 +579,9 @@ def mark_task_deleting(project_id: str, task_id: str) -> None:
         meta_path = meta_dir / f"{task_id}.yml"
         if not meta_path.is_file():
             return
-        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta = _yaml_load(meta_path.read_text()) or {}
         meta["deleting"] = True
-        meta_path.write_text(yaml.safe_dump(meta))
+        meta_path.write_text(_yaml_dump(meta))
     except Exception as e:
         _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
@@ -650,7 +649,7 @@ def _archive_task(project: ProjectConfig, task_id: str, meta: dict) -> Path | No
         archive_dir = create_archive_dir(archive_root, dir_name)
 
         # Save metadata snapshot
-        (archive_dir / "task.yml").write_text(yaml.safe_dump(meta))
+        (archive_dir / "task.yml").write_text(_yaml_dump(meta))
 
         # Copy logs if they exist
         task_dir = project.tasks_root / str(task_id)
@@ -677,7 +676,7 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
 
     meta = {}
     if meta_path.is_file():
-        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     if mode:
@@ -739,7 +738,7 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     if not mode:
@@ -797,7 +796,7 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     if not mode:
@@ -855,7 +854,7 @@ def task_status(project_id: str, task_id: str) -> None:
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     web_port = meta.get("web_port")
@@ -947,7 +946,7 @@ def list_archived_tasks(project_id: str) -> list[ArchivedTask]:
         if not meta_path.is_file():
             continue
         try:
-            meta = yaml.safe_load(meta_path.read_text()) or {}
+            meta = _yaml_load(meta_path.read_text()) or {}
         except Exception:
             continue
         # Parse archive timestamp from directory name: <timestamp>_<task_id>[_<name>]

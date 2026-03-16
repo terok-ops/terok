@@ -12,7 +12,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-import yaml
 
 from terok.lib.util.config_stack import (
     ConfigScope,
@@ -21,6 +20,7 @@ from terok.lib.util.config_stack import (
     load_json_scope,
     load_yaml_scope,
 )
+from terok.lib.util.yaml import dump as yaml_dump
 from tests.testfs import NONEXISTENT_CONFIG_JSON, NONEXISTENT_CONFIG_YAML
 
 
@@ -147,7 +147,7 @@ class TestConfigStack:
 @pytest.mark.parametrize(
     ("loader", "suffix", "content", "expected"),
     [
-        (load_yaml_scope, ".yml", yaml.dump({"key": "value"}), {"key": "value"}),
+        (load_yaml_scope, ".yml", yaml_dump({"key": "value"}), {"key": "value"}),
         (load_json_scope, ".json", json.dumps({"key": "value"}), {"key": "value"}),
         (load_yaml_scope, ".yml", "", {}),
         (load_json_scope, ".json", "{}", {}),

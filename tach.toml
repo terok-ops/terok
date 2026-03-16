@@ -66,6 +66,7 @@ depends_on = [
     "terok.lib.facade",
     "terok.lib.security.shield",
     "terok.lib.util.emoji",
+    "terok.lib.util.yaml",
 ]
 
 # Service facade (aggregates shared cross-cutting operations)
@@ -132,7 +133,7 @@ depends_on = [
 [[modules]]
 path = "terok.lib.containers.agents"
 layer = "services"
-depends_on = ["terok.lib.containers.headless_providers", "terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs"]
+depends_on = ["terok.lib.containers.headless_providers", "terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs", "terok.lib.util.yaml"]
 
 # Headless provider registry (multi-agent autopilot support)
 [[modules]]
@@ -168,13 +169,13 @@ depends_on = ["terok.lib.util.ansi"]
 [[modules]]
 path = "terok.lib.containers.task_display"
 layer = "services"
-depends_on = []
+depends_on = ["terok.lib.util.yaml"]
 
 # Agent work status reading
 [[modules]]
 path = "terok.lib.containers.work_status"
 layer = "services"
-depends_on = []
+depends_on = ["terok.lib.util.yaml"]
 
 # Task log viewing and streaming
 [[modules]]
@@ -185,6 +186,7 @@ depends_on = [
     "terok.lib.containers.runtime",
     "terok.lib.containers.tasks",
     "terok.lib.core.projects",
+    "terok.lib.util.yaml",
 ]
 
 # Task metadata, lifecycle, and queries
@@ -202,6 +204,7 @@ depends_on = [
     "terok.lib.util.emoji",
     "terok.lib.util.fs",
     "terok.lib.util.logging_utils",
+    "terok.lib.util.yaml",
 ]
 
 # Task container runners (CLI, headless, toad, restart)
@@ -223,13 +226,14 @@ depends_on = [
     "terok.lib.security.shield",
     "terok.lib.util.ansi",
     "terok.lib.util.podman",
+    "terok.lib.util.yaml",
 ]
 
 # Container state, GPU args, log streaming
 [[modules]]
 path = "terok.lib.containers.runtime"
 layer = "services"
-depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils"]
+depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils", "terok.lib.util.yaml"]
 
 # Task environment & volume mounts
 [[modules]]
@@ -241,7 +245,7 @@ depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.sec
 [[modules]]
 path = "terok.lib.containers.ports"
 layer = "services"
-depends_on = ["terok.lib.core.config"]
+depends_on = ["terok.lib.core.config", "terok.lib.util.yaml"]
 
 # Dockerfile generation & image building
 [[modules]]
@@ -366,7 +370,7 @@ depends_on = []
 [[modules]]
 path = "terok.lib.core.config"
 layer = "core"
-depends_on = ["terok.lib.core.paths", "terok.lib.core.yaml_schema"]
+depends_on = ["terok.lib.core.paths", "terok.lib.core.yaml_schema", "terok.lib.util.yaml"]
 
 # Project and preset data models (pure types, no I/O)
 [[modules]]
@@ -396,6 +400,7 @@ depends_on = [
     "terok.lib.core.project_model",
     "terok.lib.core.yaml_schema",
     "terok.lib.util.config_stack",
+    "terok.lib.util.yaml",
 ]
 
 # Image naming conventions
@@ -468,11 +473,18 @@ layer = "core"
 depends_on = []
 utility = true
 
+# Centralised YAML I/O (round-trip via ruamel.yaml)
+[[modules]]
+path = "terok.lib.util.yaml"
+layer = "core"
+depends_on = []
+utility = true
+
 # Generic layered config resolution
 [[modules]]
 path = "terok.lib.util.config_stack"
 layer = "core"
-depends_on = []
+depends_on = ["terok.lib.util.yaml"]
 utility = true
 
 # ── Interfaces ──────────────────────────────────────────────────────
@@ -819,6 +831,11 @@ from = ["terok.lib.project"]
 [[interfaces]]
 expose = ["Task"]
 from = ["terok.lib.task"]
+
+# YAML I/O utility interface
+[[interfaces]]
+expose = ["load", "dump", "YAMLError"]
+from = ["terok.lib.util.yaml"]
 
 # Config stack utility interface
 [[interfaces]]

@@ -11,7 +11,6 @@ from io import StringIO
 from unittest.mock import patch
 
 import pytest
-import yaml
 
 from terok.lib.containers.tasks import (
     TASK_NAME_MAX_LEN,
@@ -24,6 +23,7 @@ from terok.lib.containers.tasks import (
     task_rename,
     validate_task_name,
 )
+from terok.lib.util.yaml import load as yaml_load
 from tests.test_utils import project_env
 
 SLUG_PATTERN = r"^[a-z]+-[a-z0-9]+$"
@@ -41,7 +41,7 @@ def project_yaml(project_id: str, *, name_categories: list[str] | None = None) -
 def task_meta_name(ctx, project_id: str, task_id: str = "1") -> str:
     """Return the persisted task name from task metadata."""
     meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml"
-    return yaml.safe_load(meta_path.read_text())["name"]
+    return yaml_load(meta_path.read_text())["name"]
 
 
 def create_task_and_get_name(project_id: str, *, explicit_name: str | None = None) -> str:

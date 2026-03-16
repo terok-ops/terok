@@ -15,11 +15,10 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from ..core.config import get_envs_base_dir
 from ..core.projects import ProjectConfig
 from ..util.fs import ensure_dir, ensure_dir_writable
+from ..util.yaml import load as _yaml_load
 from .headless_providers import WrapperConfig
 
 # TODO: future — support global agent definitions in terok-config.yml (agent.subagents).
@@ -48,7 +47,7 @@ def parse_md_agent(file_path: str) -> dict:
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) >= 3:
-            frontmatter = yaml.safe_load(parts[1]) or {}
+            frontmatter = _yaml_load(parts[1]) or {}
             if not isinstance(frontmatter, dict):
                 frontmatter = {}
             body = parts[2].strip()

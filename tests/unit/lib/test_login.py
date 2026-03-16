@@ -9,9 +9,9 @@ import types
 import unittest.mock
 
 import pytest
-import yaml
 
 from terok.lib.containers.tasks import get_login_command, task_login, task_new
+from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
 
@@ -30,9 +30,9 @@ def setup_task_with_mode(
     task_new(project_id)
     if mode:
         meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
-        meta = yaml.safe_load(meta_path.read_text())
+        meta = yaml_load(meta_path.read_text())
         meta["mode"] = mode
-        meta_path.write_text(yaml.safe_dump(meta))
+        meta_path.write_text(yaml_dump(meta))
 
 
 LOGIN_COMMAND = [

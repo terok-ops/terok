@@ -14,11 +14,11 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
-import yaml
 
 from terok.lib.containers.runtime import get_container_state, get_task_container_state
 from terok.lib.containers.task_runners import task_restart
 from terok.lib.containers.tasks import task_new, task_status, task_stop
+from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
 
@@ -40,9 +40,9 @@ def update_task_meta(
 ) -> None:
     """Patch selected metadata keys for a generated task."""
     meta_path = task_meta_path(ctx, project_id, task_id)
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta = yaml_load(meta_path.read_text()) or {}
     meta.update(changes)
-    meta_path.write_text(yaml.safe_dump(meta), encoding="utf-8")
+    meta_path.write_text(yaml_dump(meta), encoding="utf-8")
 
 
 def create_task_with_mode(ctx: SimpleNamespace, project_id: str, *, mode: str = "cli") -> str:

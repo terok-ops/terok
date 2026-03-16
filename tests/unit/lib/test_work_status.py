@@ -8,7 +8,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml
 
 from terok.lib.containers.work_status import (
     PENDING_PHASE_FILE,
@@ -23,6 +22,7 @@ from terok.lib.containers.work_status import (
     write_pending_phase,
     write_work_status,
 )
+from terok.lib.util.yaml import dump as yaml_dump
 
 EXPECTED_WORK_STATUSES = {
     "planning",
@@ -39,7 +39,7 @@ EXPECTED_WORK_STATUSES = {
 
 def write_payload(base_dir: Path, filename: str, payload: object | str) -> None:
     """Write raw text or a YAML-serializable payload into *filename* under *base_dir*."""
-    text = payload if isinstance(payload, str) else yaml.safe_dump(payload)
+    text = payload if isinstance(payload, str) else yaml_dump(payload)
     (base_dir / filename).write_text(text, encoding="utf-8")
 
 

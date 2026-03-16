@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 import pytest
-import yaml
 
+from terok.lib.util.yaml import load as yaml_load
 from tests.testnet import TEST_UPSTREAM_URL
 
 from ..helpers import TerokIntegrationEnv
@@ -64,7 +64,7 @@ class TestProjects:
         assert "Derived project 'beta' from 'alpha'" in result.stdout
         assert target.is_file()
 
-        derived = yaml.safe_load(target.read_text(encoding="utf-8"))
+        derived = yaml_load(target.read_text(encoding="utf-8"))
         assert derived["project"]["id"] == "beta"
         assert "agent" not in derived
         assert derived["git"]["upstream_url"] == TEST_UPSTREAM_URL
