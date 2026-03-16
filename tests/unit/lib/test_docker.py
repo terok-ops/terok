@@ -10,20 +10,12 @@ from unittest.mock import Mock, patch
 import pytest
 
 from terok.lib.containers.docker import build_images, generate_dockerfiles
-from terok.lib.core.config import build_root, set_experimental
+from terok.lib.core.config import build_root
 from terok.lib.core.images import base_dev_image
 from tests.test_utils import mock_git_config, project_env
 
 UPSTREAM_URL = "https://example.com/repo.git"
 DEFAULT_BRANCH = "main"
-
-
-@pytest.fixture(autouse=True)
-def experimental_enabled() -> Iterator[None]:
-    """Run Docker tests with experimental mode enabled unless overridden per test."""
-    set_experimental(True)
-    yield
-    set_experimental(False)
 
 
 @contextmanager
@@ -79,7 +71,7 @@ def test_generate_dockerfiles_outputs_expected_files_and_content() -> None:
 
         assert all(
             (out_dir / name).is_file()
-            for name in ("L0.Dockerfile", "L1.cli.Dockerfile", "L1.ui.Dockerfile", "L2.Dockerfile")
+            for name in ("L0.Dockerfile", "L1.cli.Dockerfile", "L2.Dockerfile")
         )
         l0_content = (out_dir / "L0.Dockerfile").read_text(encoding="utf-8")
         assert all(
@@ -129,19 +121,17 @@ def test_l1_cli_pipx_inject_has_env_vars() -> None:
         pytest.param(
             "proj_build_test",
             {"image_exists": True},
-            2,
-            ["L2.Dockerfile", "L2.Dockerfile"],
+            1,
+            ["L2.Dockerfile"],
             id="l2-only-when-base-exists",
         ),
         pytest.param(
             "proj_build_auto",
             {"image_exists": False},
-            5,
+            3,
             [
                 "L0.Dockerfile",
                 "L1.cli.Dockerfile",
-                "L1.ui.Dockerfile",
-                "L2.Dockerfile",
                 "L2.Dockerfile",
             ],
             id="auto-detect-missing-base",
@@ -173,7 +163,7 @@ def test_build_images_rebuild_agents_builds_all_layers() -> None:
         generate_dockerfiles("proj_build_agents")
         commands = build_commands("proj_build_agents", image_exists=True, rebuild_agents=True)
 
-    assert len(commands) == 5
+    assert len(commands) == 3
     assert "AGENT_CACHE_BUST" in " ".join(commands[1])
 
 
@@ -209,46 +199,4 @@ def test_build_images_auto_detects_missing_l1() -> None:
         generate_dockerfiles(project_id)
         commands = build_commands(project_id, image_exists_side_effect=l0_exists_only)
 
-    assert len(commands) == 5
-
-
-@pytest.mark.parametrize(
-    ("project_id", "expected_files", "expected_build_count"),
-    [
-        pytest.param(
-            "proj_no_ui",
-            {
-                "L0.Dockerfile": True,
-                "L1.cli.Dockerfile": True,
-                "L1.ui.Dockerfile": False,
-                "L2.Dockerfile": True,
-            },
-            None,
-            id="generate-without-ui",
-        ),
-        pytest.param(
-            "proj_build_noweb",
-            None,
-            1,
-            id="build-without-web",
-        ),
-    ],
-)
-def test_non_experimental_mode_skips_web_artifacts(
-    project_id: str,
-    expected_files: dict[str, bool] | None,
-    expected_build_count: int | None,
-) -> None:
-    """Disabling experimental mode omits UI/web layers during generation and build."""
-    set_experimental(False)
-    with docker_project(project_id):
-        generate_dockerfiles(project_id)
-        out_dir = build_root() / project_id
-        if expected_files is not None:
-            assert all(
-                (out_dir / name).exists() is exists for name, exists in expected_files.items()
-            )
-        if expected_build_count is not None:
-            commands = build_commands(project_id, image_exists=True)
-            assert len(commands) == expected_build_count
-            assert "L2.Dockerfile" in " ".join(commands[0])
+    assert len(commands) == 3

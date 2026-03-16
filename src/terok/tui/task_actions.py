@@ -3,7 +3,7 @@
 
 """TaskActionsMixin — task lifecycle operations for TerokTUI.
 
-Handles task creation, deletion, renaming, running (CLI/web/autopilot),
+Handles task creation, deletion, renaming, running (CLI/toad/autopilot),
 login, restart, follow-up, log viewing, and diff copying.
 """
 
@@ -23,7 +23,7 @@ from ..lib.containers.tasks import (
     get_workspace_git_diff,
     mark_task_deleting,
 )
-from ..lib.core.config import get_shield_bypass_firewall_no_protection, is_experimental
+from ..lib.core.config import get_shield_bypass_firewall_no_protection
 from ..lib.core.projects import load_project
 from ..lib.facade import (
     HeadlessRunRequest,
@@ -37,7 +37,6 @@ from ..lib.facade import (
     task_run_cli,
     task_run_headless,
     task_run_toad,
-    task_run_web,
 )
 from .clipboard import copy_to_clipboard_detailed
 from .screens import (
@@ -164,29 +163,6 @@ class TaskActionsMixin:
             return pid, task_id, cname, str(e)
 
     # ---------- Task lifecycle actions ----------
-
-    async def action_run_web(self) -> None:
-        """Public action for running web UI (delegates to _action_run_web)."""
-        await self._action_run_web()
-
-    async def _action_run_web(self) -> None:
-        """Run web UI for current task."""
-        if not is_experimental():
-            self.notify("Web tasks require --experimental flag.")
-            return
-        if not self.current_project_id or not self.current_task:
-            self.notify("No task selected.")
-            return
-        pid = self.current_project_id
-        tid = self.current_task.task_id
-
-        def work() -> None:
-            """Prompt for backend and launch the web container."""
-            backend = self._prompt_ui_backend()
-            print(f"Starting Web UI for {pid}/{tid} (backend: {backend})...\n")
-            task_run_web(pid, tid, backend=backend)
-
-        await self._run_suspended(work, refresh="tasks")
 
     async def _action_task_start_cli(self) -> None:
         """Create a new task and immediately run CLI agent."""
@@ -322,37 +298,6 @@ class TaskActionsMixin:
         )
         self.notify("Starting Toad task\u2026")
         await self.refresh_tasks()
-
-    async def _action_task_start_web(self) -> None:
-        """Create a new task and immediately run Web UI."""
-        if not is_experimental():
-            self.notify("Web tasks require --experimental flag.")
-            return
-        if not self.current_project_id:
-            self.notify("No project selected.")
-            return
-
-        default_name = generate_task_name(self.current_project_id)
-        await self.push_screen(
-            TaskNameScreen(default_name=default_name),
-            self._on_task_start_web_name,
-        )
-
-    async def _on_task_start_web_name(self, name: str | None) -> None:
-        """Handle name result from TaskNameScreen for web task start."""
-        if name is None or not self.current_project_id:
-            return
-        pid = self.current_project_id
-
-        def work() -> None:
-            """Create a new task and immediately launch web mode."""
-            task_id = task_new(pid, name=name)
-            self._focus_task_after_creation(pid, task_id)
-            backend = self._prompt_ui_backend()
-            print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
-            task_run_web(pid, task_id, backend=backend)
-
-        await self._run_suspended(work, refresh="tasks")
 
     async def _action_task_start_autopilot(self) -> None:
         """Create a new task and run Claude headlessly (autopilot)."""
@@ -801,5 +746,3 @@ class TaskActionsMixin:
             await self._start_toad_task_background(name)
         elif mode == "autopilot":
             await self._on_autopilot_name_result(name)
-        elif mode == "web":
-            await self._on_task_start_web_name(name)

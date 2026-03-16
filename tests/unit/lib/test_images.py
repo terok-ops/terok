@@ -14,7 +14,6 @@ from terok.lib.core import images
 BASE_IMAGE_FUNCS: list[tuple[Callable[[str], str], str]] = [
     (images.base_dev_image, "terok-l0"),
     (images.agent_cli_image, "terok-l1-cli"),
-    (images.agent_ui_image, "terok-l1-ui"),
 ]
 BASE_IMAGE_IDS = [prefix for _, prefix in BASE_IMAGE_FUNCS]
 BASE_IMAGE_CALLABLES = [func for func, _ in BASE_IMAGE_FUNCS]
@@ -89,10 +88,8 @@ def test_base_tag_long_name_hash_changes_for_different_inputs() -> None:
         (images.base_dev_image, "ubuntu@22.04", "terok-l0:ubuntu-22.04"),
         (images.agent_cli_image, "ubuntu-22.04", "terok-l1-cli:ubuntu-22.04"),
         (images.agent_cli_image, "ubuntu@22.04", "terok-l1-cli:ubuntu-22.04"),
-        (images.agent_ui_image, "ubuntu-22.04", "terok-l1-ui:ubuntu-22.04"),
-        (images.agent_ui_image, "ubuntu@22.04", "terok-l1-ui:ubuntu-22.04"),
     ],
-    ids=["l0", "l0-sanitized", "l1-cli", "l1-cli-sanitized", "l1-ui", "l1-ui-sanitized"],
+    ids=["l0", "l0-sanitized", "l1-cli", "l1-cli-sanitized"],
 )
 def test_base_image_functions(
     func: Callable[[str], str],
@@ -106,10 +103,9 @@ def test_base_image_functions(
     ("func", "expected"),
     [
         (images.project_cli_image, "my-project:l2-cli"),
-        (images.project_web_image, "my-project:l2-web"),
         (images.project_dev_image, "my-project:l2-dev"),
     ],
-    ids=["project-cli", "project-web", "project-dev"],
+    ids=["project-cli", "project-dev"],
 )
 def test_project_image_functions(func: Callable[[str], str], expected: str) -> None:
     assert func("my-project") == expected

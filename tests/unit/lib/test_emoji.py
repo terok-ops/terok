@@ -15,8 +15,6 @@ from terok.lib.containers.task_display import (
     MODE_DISPLAY,
     SECURITY_CLASS_DISPLAY,
     STATUS_DISPLAY,
-    WEB_BACKEND_DEFAULT,
-    WEB_BACKEND_DISPLAY,
 )
 from terok.lib.containers.work_status import WORK_STATUS_DISPLAY
 from terok.lib.util.emoji import EmojiInfo, is_emoji_enabled, render_emoji, set_emoji_enabled
@@ -33,7 +31,6 @@ class _FakeInfo:
 EMOJI_COLLECTIONS = [
     pytest.param("status", STATUS_DISPLAY.values(), id="status"),
     pytest.param("mode", MODE_DISPLAY.values(), id="mode"),
-    pytest.param("web-backend", WEB_BACKEND_DISPLAY.values(), id="web-backend"),
     pytest.param("security-class", SECURITY_CLASS_DISPLAY.values(), id="security-class"),
     pytest.param("gpu", GPU_DISPLAY.values(), id="gpu"),
     pytest.param("work-status", WORK_STATUS_DISPLAY.values(), id="work-status"),
@@ -41,7 +38,6 @@ EMOJI_COLLECTIONS = [
 
 LABEL_COLLECTIONS = [
     pytest.param("status", STATUS_DISPLAY.values(), id="status"),
-    pytest.param("web-backend", WEB_BACKEND_DISPLAY.values(), id="web-backend"),
     pytest.param("security-class", SECURITY_CLASS_DISPLAY.values(), id="security-class"),
     pytest.param("gpu", GPU_DISPLAY.values(), id="gpu"),
     pytest.param("work-status", WORK_STATUS_DISPLAY.values(), id="work-status"),
@@ -92,8 +88,6 @@ def test_project_display_emojis_are_natively_two_cells(
     """Every registered project emoji is natively two cells wide."""
     assert all(is_width_two(info.emoji) for info in infos), name
     assert all("\ufe0f" not in info.emoji for info in infos), name
-    assert is_width_two(WEB_BACKEND_DEFAULT.emoji)
-    assert "\ufe0f" not in WEB_BACKEND_DEFAULT.emoji
 
 
 @pytest.mark.parametrize(("name", "infos"), LABEL_COLLECTIONS)

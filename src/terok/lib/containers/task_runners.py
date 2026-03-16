@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Task container runners: CLI, web, headless, and restart."""
+"""Task container runners: CLI, headless, toad, and restart."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from ..core.config import (
     get_gate_server_port,
     get_shield_bypass_firewall_no_protection,
 )
-from ..core.images import project_cli_image, project_web_image
+from ..core.images import project_cli_image
 from ..core.projects import load_project
 from ..security.shield import (
     SHIELD_SECURITY_HINT,
@@ -36,10 +36,7 @@ from ..util.ansi import (
 from ..util.podman import _podman_userns_args
 from .agent_config import resolve_agent_config, resolve_provider_value
 from .agents import AgentConfigSpec, prepare_agent_config_dir
-from .environment import (
-    apply_web_env_overrides,
-    build_task_env_and_volumes,
-)
+from .environment import build_task_env_and_volumes
 from .instructions import resolve_instructions
 from .ports import assign_web_port
 from .runtime import (
@@ -452,161 +449,6 @@ def task_run_cli(
     print(f"- To stop:  {_red(f'podman stop {cname}', color_enabled)}\n")
 
 
-def task_run_web(
-    project_id: str,
-    task_id: str,
-    backend: str | None = None,
-    agents: list[str] | None = None,
-    preset: str | None = None,
-    unrestricted: bool | None = None,
-) -> None:
-    """Launch a web-mode task container with a browser-accessible IDE backend.
-
-    Sets up port forwarding, starts a detached Podman container running
-    the chosen *backend* (OpenHands or Open WebUI), and prints the URL
-    the user can open in a browser.
-    """
-    project = load_project(project_id)
-    meta, meta_path = load_task_meta(project.id, task_id, "web")
-
-    mode_updated = meta.get("mode") != "web"
-    if mode_updated:
-        meta["mode"] = "web"
-
-    if preset and meta.get("preset") != preset:
-        meta["preset"] = preset
-
-    port = meta.get("web_port")
-    if not isinstance(port, int):
-        port = assign_web_port()
-        meta["web_port"] = port
-
-    env, volumes = build_task_env_and_volumes(project, task_id)
-
-    # Resolve layered agent config (global → project → preset → CLI overrides)
-    # Note: backend is a web UI name (codex/claude/copilot), not a headless provider
-    agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
-    volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
-
-    env = apply_web_env_overrides(env, backend, project.default_agent)
-
-    # Save the effective backend to task metadata for UI display
-    effective_backend = env.get("TEROK_UI_BACKEND", "codex")
-    backend_updated = meta.get("backend") != effective_backend
-    if backend_updated:
-        meta["backend"] = effective_backend
-
-    # Resolve unrestricted mode: CLI flag → config → default (True)
-    if unrestricted is None:
-        _effective = resolve_agent_config(project_id, preset=preset)
-        _cfg_val = resolve_provider_value("unrestricted", _effective, effective_backend)
-        unrestricted = _cfg_val is None or _str_to_bool(_cfg_val)
-    if unrestricted:
-        _apply_unrestricted_env(env)
-
-    cname = container_name(project.id, "web", task_id)
-    container_state = get_container_state(cname)
-
-    # If container already exists, handle it — don't overwrite metadata with
-    # a potentially different unrestricted value while the container keeps its
-    # original environment.
-    if container_state is not None:
-        color_enabled = _supports_color()
-        url = f"http://{_LOCALHOST}:{port}/"
-        if container_state == "running":
-            print(f"Container {_green(cname, color_enabled)} is already running.")
-            print(f"Web UI: {_blue(url, color_enabled)}")
-            return
-        # Container exists but is stopped/exited - start it
-        print(f"Starting existing container {_green(cname, color_enabled)}...")
-        _podman_start(cname)
-        _assert_running(cname)
-        print("Container started.")
-        print(f"Web UI: {_blue(url, color_enabled)}")
-        return
-
-    # Persist metadata only when a new container is actually being created
-    meta["unrestricted"] = unrestricted
-    meta_path.write_text(yaml.safe_dump(meta))
-
-    # Start UI in background and return terminal when it's reachable
-    # Note: We intentionally do NOT use --rm so containers persist after stopping.
-    # This allows `task restart` to quickly resume stopped containers.
-    task_dir = project.tasks_root / str(task_id)
-    _run_container(
-        cname=cname,
-        image=project_web_image(project.id),
-        env=env,
-        volumes=volumes,
-        project=project,
-        task_dir=task_dir,
-        extra_args=["-p", f"{_LOCALHOST}:{port}:7860"],
-    )
-    _maybe_drop_shield(project, cname, task_dir)
-
-    # Stream initial logs and detach once the Terok Web UI server reports that it
-    # is actually running. We intentionally rely on a *log marker* here
-    # instead of just probing the TCP port, because podman exposes the host port
-    # regardless of the state of the routed guest port.
-    # Terok Web UI currently prints a stable line when the server is ready, e.g.:
-    #   "Terok Web UI started"
-    #
-    # We treat the appearance of this as the readiness signal.
-    def _web_ready(line: str) -> bool:
-        """Return True if *line* contains the Terok Web UI readiness marker."""
-        line = line.strip()
-        if not line:
-            return False
-
-        # Primary marker: the main startup banner emitted by Terok Web UI when
-        # the HTTP server is ready to accept connections.
-        return "Terok Web UI started" in line
-
-    # Follow logs until either the Terok Web UI readiness marker is seen or the
-    # container exits. We deliberately do *not* time out here: as long as the
-    # init script keeps making progress, the user sees the live logs and can
-    # decide to Ctrl+C if it hangs.
-    ready = stream_initial_logs(
-        container_name=cname,
-        timeout_sec=None,
-        ready_check=_web_ready,
-    )
-
-    # After log streaming stops, check whether the container is actually
-    # still running. This prevents false "Web UI is up" messages in cases where
-    # the web process failed to start (e.g. Node error) and the container
-    # exited before emitting the readiness marker.
-    running = is_container_running(cname)
-
-    if ready and running:
-        color_enabled = _supports_color()
-        print("\n\n>> terok: ")
-        print("Web UI container is up")
-    elif not running:
-        print(
-            "Web UI container exited before the web UI became reachable. "
-            "Check the container logs for errors."
-        )
-        print(
-            f"- Last known name: {cname}\n"
-            f"- Check logs (if still available): podman logs {cname}\n"
-            f"- You may need to re-run: terokctl task run-web {project.id} {task_id}"
-        )
-        # Exit with non-zero status to signal that the web UI did not start.
-        raise SystemExit(1)
-
-    url = f"http://{_LOCALHOST}:{port}/"
-    log_command = f"podman logs -f {cname}"
-    stop_command = f"podman stop {cname}"
-
-    print(
-        f"- Name: {_green(cname, color_enabled)}"
-        f"\n- Routed URL: {_blue(url, color_enabled)}"
-        f"\n- Check logs: {_yellow(log_command, color_enabled)}"
-        f"\n- Stop:       {_red(stop_command, color_enabled)}"
-    )
-
-
 def task_run_toad(
     project_id: str,
     task_id: str,
@@ -1004,12 +846,13 @@ def task_followup_headless(
         )
 
 
-def task_restart(project_id: str, task_id: str, backend: str | None = None) -> None:
+def task_restart(project_id: str, task_id: str) -> None:
     """Restart a task container.
 
     If the container is running, stops it first and then starts it again.
     If the container exists in stopped/exited state, uses ``podman start``.
-    If the container doesn't exist, delegates to task_run_cli or task_run_web.
+    If the container doesn't exist, delegates to ``task_run_cli`` or
+    ``task_run_toad``.
 
     Note:
         Headless (mode ``"run"``) tasks cannot be auto-restarted because they
@@ -1053,10 +896,6 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
         print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")
         if mode == "cli":
             _print_login_instructions(project_id, task_id, cname, color_enabled)
-        elif mode == "web":
-            port = meta.get("web_port")
-            if port:
-                print(f"Web UI: http://{_LOCALHOST}:{port}/")
         elif mode == "toad":
             port = meta.get("web_port")
             if port:
@@ -1067,10 +906,6 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
         saved_preset = meta.get("preset")
         if mode == "cli":
             task_run_cli(project_id, task_id, preset=saved_preset)
-        elif mode == "web":
-            task_run_web(
-                project_id, task_id, backend=backend or meta.get("backend"), preset=saved_preset
-            )
         elif mode == "toad":
             task_run_toad(project_id, task_id, preset=saved_preset)
         else:

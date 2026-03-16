@@ -145,47 +145,13 @@ class TestTaskStart:
                 ("proj1", "42", {"agents": None, "preset": None, "unrestricted": None}),
             ),
             (
-                ["terok", "--experimental", "task", "start", "proj2", "--web"],
-                "7",
-                "terok.cli.commands.task.task_run_web",
-                (
-                    "proj2",
-                    "7",
-                    {"backend": None, "agents": None, "preset": None, "unrestricted": None},
-                ),
-            ),
-            (
-                [
-                    "terok",
-                    "--experimental",
-                    "task",
-                    "start",
-                    "proj3",
-                    "--web",
-                    "--backend",
-                    "codex",
-                ],
-                "3",
-                "terok.cli.commands.task.task_run_web",
-                (
-                    "proj3",
-                    "3",
-                    {
-                        "backend": "codex",
-                        "agents": None,
-                        "preset": None,
-                        "unrestricted": None,
-                    },
-                ),
-            ),
-            (
                 ["terok", "task", "start", "proj1", "--toad"],
                 "10",
                 "terok.cli.commands.task.task_run_toad",
                 ("proj1", "10", {"agents": None, "preset": None, "unrestricted": None}),
             ),
         ],
-        ids=["cli-mode", "web-mode", "web-mode-with-backend", "toad-mode"],
+        ids=["cli-mode", "toad-mode"],
     )
     def test_task_start_dispatch(
         self,
@@ -204,20 +170,6 @@ class TestTaskStart:
         project_id, expected_task_id, kwargs = expected_call
         mock_new.assert_called_once_with(project_id, name=None)
         mock_runner.assert_called_once_with(project_id, expected_task_id, **kwargs)
-
-    @pytest.mark.parametrize(
-        ("argv", "runner_path"),
-        [
-            (["terok", "task", "start", "proj1", "--web"], "terok.cli.commands.task.task_new"),
-            (["terok", "task", "run-web", "proj1", "1"], "terok.cli.commands.task.task_run_web"),
-        ],
-        ids=["task-start-web", "task-run-web"],
-    )
-    def test_experimental_flag_required(self, argv: list[str], runner_path: str) -> None:
-        with unittest.mock.patch(runner_path) as mock_runner:
-            with pytest.raises(SystemExit, match="--experimental"):
-                run_main(argv)
-        mock_runner.assert_not_called()
 
     @pytest.mark.parametrize(
         ("argv", "patch_target", "expected_call"),

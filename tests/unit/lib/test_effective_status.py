@@ -13,7 +13,6 @@ import pytest
 from terok.lib.containers.runtime import get_project_container_states
 from terok.lib.containers.task_display import (
     STATUS_DISPLAY,
-    WEB_BACKEND_DISPLAY,
     effective_status,
     mode_info,
 )
@@ -38,7 +37,6 @@ EFFECTIVE_STATUS_CASES = [
     ({"container_state": "exited", "mode": "cli", "exit_code": None}, "stopped"),
     ({"container_state": "exited", "mode": "run", "exit_code": 0}, "completed"),
     ({"container_state": "exited", "mode": "run", "exit_code": 1}, "failed"),
-    ({"container_state": "stopped", "mode": "web"}, "stopped"),
     ({"container_state": None, "mode": None}, "created"),
     ({"container_state": None, "mode": "cli", "exit_code": None}, "not found"),
     ({"container_state": None, "mode": "run", "exit_code": 0}, "completed"),
@@ -52,12 +50,6 @@ MODE_INFO_CASES = [
     ({"mode": "cli"}, "💻", "CLI"),
     ({"mode": "run"}, "🚀", "Autopilot"),
     ({"mode": None}, "🦗", ""),
-    ({"mode": "web", "backend": "claude"}, "💠", "Claude"),
-    ({"mode": "web", "backend": "codex"}, "🌸", "Codex"),
-    ({"mode": "web", "backend": "mistral"}, "🏰", "Mistral"),
-    ({"mode": "web", "backend": "copilot"}, "🤖", "Copilot"),
-    ({"mode": "web", "backend": "something"}, "🌍", "Web"),
-    ({"mode": "web"}, "🌍", "Web"),
 ]
 
 
@@ -70,7 +62,6 @@ MODE_INFO_CASES = [
         "exited-no-exit-code",
         "exited-success",
         "exited-failure",
-        "stopped-podman-state",
         "no-container-no-mode",
         "no-container-mode-set",
         "no-container-success",
@@ -97,12 +88,6 @@ def test_all_effective_status_values_have_display_info() -> None:
         "cli",
         "run",
         "unset",
-        "web-claude",
-        "web-codex",
-        "web-mistral",
-        "web-copilot",
-        "web-unknown",
-        "web-default",
     ],
 )
 def test_mode_info_cases(task_kwargs: dict[str, object], emoji: str, label: str) -> None:
@@ -110,12 +95,6 @@ def test_mode_info_cases(task_kwargs: dict[str, object], emoji: str, label: str)
     info = mode_info(_task(**task_kwargs))
     assert info.emoji == emoji
     assert info.label == label
-
-
-def test_all_known_backends_use_their_registered_mode_info() -> None:
-    """Every registered web backend resolves to its declared display metadata."""
-    for backend, info in WEB_BACKEND_DISPLAY.items():
-        assert mode_info(_task(mode="web", backend=backend)) == info
 
 
 @pytest.mark.parametrize(

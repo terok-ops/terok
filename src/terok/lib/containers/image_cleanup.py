@@ -79,12 +79,12 @@ def _known_project_ids() -> set[str] | None:
 
 def _terok_image_prefixes() -> tuple[str, ...]:
     """Return repository prefixes that identify terok-managed images."""
-    return ("terok-l0", "terok-l1-cli", "terok-l1-ui")
+    return ("terok-l0", "terok-l1-cli")
 
 
 def _is_terok_l2_image(repo: str, tag: str) -> bool:
     """Return True if the image looks like a terok L2 project image."""
-    return tag in ("l2-cli", "l2-web", "l2-dev")
+    return tag in ("l2-cli", "l2-dev")
 
 
 def _is_terok_image(repo: str, tag: str) -> bool:

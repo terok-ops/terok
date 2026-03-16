@@ -30,7 +30,6 @@ used by CLI commands that operate on ``project_id`` strings directly.
 from __future__ import annotations
 
 from .containers.docker import build_images, generate_dockerfiles
-from .containers.environment import WEB_BACKENDS
 from .containers.image_cleanup import (  # noqa: F401 — re-exported public API
     cleanup_images,
     find_orphaned_images,
@@ -45,7 +44,6 @@ from .containers.task_runners import (  # noqa: F401 — re-exported public API
     task_run_cli,
     task_run_headless,
     task_run_toad,
-    task_run_web,
 )
 from .containers.tasks import (  # noqa: F401 — re-exported public API
     get_tasks,
@@ -162,8 +160,6 @@ __all__ = [
     "list_images",
     "find_orphaned_images",
     "cleanup_images",
-    # Environment
-    "WEB_BACKENDS",
     # Project lifecycle
     "delete_project",
     "DeleteProjectResult",
@@ -181,7 +177,6 @@ __all__ = [
     # Task runners
     "task_run_cli",
     "task_run_toad",
-    "task_run_web",
     "task_run_headless",
     "HeadlessRunRequest",
     "task_restart",

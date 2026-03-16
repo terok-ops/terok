@@ -38,7 +38,6 @@ from .containers.task_runners import (
     task_followup_headless,
     task_restart,
     task_run_cli,
-    task_run_web,
 )
 from .containers.tasks import (
     TaskMeta,
@@ -90,7 +89,7 @@ class Task:
 
     @property
     def mode(self) -> str | None:
-        """Return the task's mode ('cli', 'web', 'run') or ``None``."""
+        """Return the task's mode ('cli', 'run', 'toad') or ``None``."""
         return self._meta.mode
 
     @property
@@ -119,23 +118,13 @@ class Task:
         """Launch a CLI-mode task container."""
         task_run_cli(self._config.id, self.id, agents=agents, preset=preset)
 
-    def run_web(
-        self,
-        *,
-        backend: str | None = None,
-        agents: list[str] | None = None,
-        preset: str | None = None,
-    ) -> None:
-        """Launch a web-mode task container."""
-        task_run_web(self._config.id, self.id, backend=backend, agents=agents, preset=preset)
-
     def stop(self, *, timeout: int | None = None) -> None:
         """Gracefully stop the task container."""
         task_stop(self._config.id, self.id, timeout=timeout)
 
-    def restart(self, *, backend: str | None = None) -> None:
+    def restart(self) -> None:
         """Restart the task container."""
-        task_restart(self._config.id, self.id, backend=backend)
+        task_restart(self._config.id, self.id)
 
     def delete(self) -> None:
         """Delete the task (workspace, metadata, containers)."""

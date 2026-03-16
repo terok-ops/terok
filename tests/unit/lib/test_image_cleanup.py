@@ -69,13 +69,12 @@ class TestListImages:
                 {"terok-l0:ubuntu-24.04", "proj-a:l2-cli"},
             ),
             (
-                "myproj\tl2-dev\tsha256:aaa\t1GB\t1 day ago\n"
-                "myproj\tl2-web\tsha256:bbb\t1GB\t1 day ago\n",
+                "myproj\tl2-dev\tsha256:aaa\t1GB\t1 day ago\n",
                 None,
-                {"myproj:l2-dev", "myproj:l2-web"},
+                {"myproj:l2-dev"},
             ),
         ],
-        ids=["all-terok-images", "filtered-by-project", "dev-and-web-tags"],
+        ids=["all-terok-images", "filtered-by-project", "dev-tag"],
     )
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
     def test_list_images(

@@ -1,19 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Task management commands: new, list, run-cli, run-web, start, etc."""
+"""Task management commands: new, list, run-cli, start, etc."""
 
 from __future__ import annotations
 
 import argparse
 
 from ...lib.containers.headless_providers import PROVIDER_NAMES as _PROVIDER_NAMES
-from ...lib.core.config import (
-    get_logs_partial_streaming as _get_logs_partial_streaming,
-    is_experimental as _is_experimental,
-)
+from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
 from ...lib.facade import (
-    WEB_BACKENDS,
     HeadlessRunRequest,
     LogViewOptions,
     get_tasks as _get_tasks,
@@ -30,7 +26,6 @@ from ...lib.facade import (
     task_run_cli,
     task_run_headless,
     task_run_toad,
-    task_run_web,
     task_status,
     task_stop,
 )
@@ -88,9 +83,6 @@ def _resolve_unrestricted(args: argparse.Namespace) -> bool | None:
     if getattr(args, "restricted", None):
         return False
     return None
-
-
-_BACKENDS_HELP = ", ".join(WEB_BACKENDS)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -174,24 +166,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
     _add_restriction_flags(t_run_cli)
 
-    t_run_ui = tsub.add_parser("run-web", help=argparse.SUPPRESS)
-    _add_project_task_args(t_run_ui)
-    t_run_ui.add_argument(
-        "--backend",
-        dest="ui_backend",
-        choices=list(WEB_BACKENDS),
-        help=f"Web backend ({_BACKENDS_HELP})",
-    )
-    t_run_ui.add_argument(
-        "--agent",
-        dest="selected_agents",
-        action="append",
-        default=None,
-        help="Include a non-default agent by name (repeatable)",
-    )
-    t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
-    _add_restriction_flags(t_run_ui)
-
     t_run_toad = tsub.add_parser("run-toad", help="Run Toad multi-agent TUI (browser access)")
     _add_project_task_args(t_run_toad)
     t_run_toad.add_argument(
@@ -218,11 +192,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
     _add_project_task_args(t_restart)
-    t_restart.add_argument(
-        "--backend",
-        choices=list(WEB_BACKENDS),
-        help=argparse.SUPPRESS,
-    )
 
     t_followup = tsub.add_parser(
         "followup", help="Follow up on a completed/failed headless task with a new prompt"
@@ -240,21 +209,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Create a new task and immediately run it (default: CLI mode)",
     )
     _add_project_arg(t_start)
-    _start_mode = t_start.add_mutually_exclusive_group()
-    _start_mode.add_argument(
-        "--web",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    _start_mode.add_argument(
+    t_start.add_argument(
         "--toad",
         action="store_true",
         help="Start Toad multi-agent TUI (browser access)",
-    )
-    t_start.add_argument(
-        "--backend",
-        choices=list(WEB_BACKENDS),
-        help=argparse.SUPPRESS,
     )
     t_start.add_argument(
         "--agent",
@@ -377,17 +335,6 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             preset=getattr(args, "preset", None),
             unrestricted=_resolve_unrestricted(args),
         )
-    elif args.task_cmd == "run-web":
-        if not _is_experimental():
-            raise SystemExit("run-web requires --experimental (feature is incomplete)")
-        task_run_web(
-            args.project_id,
-            args.task_id,
-            backend=getattr(args, "ui_backend", None),
-            agents=getattr(args, "selected_agents", None),
-            preset=getattr(args, "preset", None),
-            unrestricted=_resolve_unrestricted(args),
-        )
     elif args.task_cmd == "run-toad":
         task_run_toad(
             args.project_id,
@@ -402,8 +349,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
     elif args.task_cmd == "stop":
         task_stop(args.project_id, args.task_id, timeout=getattr(args, "timeout", None))
     elif args.task_cmd == "restart":
-        backend = getattr(args, "backend", None)
-        task_restart(args.project_id, args.task_id, backend=backend)
+        task_restart(args.project_id, args.task_id)
     elif args.task_cmd == "followup":
         task_followup_headless(
             args.project_id,
@@ -412,10 +358,6 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             follow=not getattr(args, "no_follow", False),
         )
     elif args.task_cmd == "start":
-        if args.web and not _is_experimental():
-            raise SystemExit("--web requires --experimental (feature is incomplete)")
-        if getattr(args, "backend", None) and not args.web:
-            raise SystemExit("--backend requires --web")
         task_id = task_new(args.project_id, name=getattr(args, "name", None))
         selected = getattr(args, "selected_agents", None)
         preset = getattr(args, "preset", None)
@@ -423,15 +365,6 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         if getattr(args, "toad", False):
             task_run_toad(
                 args.project_id, task_id, agents=selected, preset=preset, unrestricted=restriction
-            )
-        elif args.web:
-            task_run_web(
-                args.project_id,
-                task_id,
-                backend=getattr(args, "backend", None),
-                agents=selected,
-                preset=preset,
-                unrestricted=restriction,
             )
         else:
             task_run_cli(

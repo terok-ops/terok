@@ -536,30 +536,6 @@ class TestTaskScreenKeyBinding:
         elif should_stop is False:
             event.stop.assert_not_called()
 
-    def test_shift_w_dismisses_task_start_web(self) -> None:
-        from terok.lib.core.config import set_experimental
-
-        set_experimental(True)
-        try:
-            screen = make_task_screen(has_tasks=False)
-            event = make_key_event("W")
-            screen.on_key(event)
-            screen.dismiss.assert_called_once_with("task_start_web")
-        finally:
-            set_experimental(False)
-
-    def test_shift_w_blocked_without_experimental(self) -> None:
-        from terok.lib.core.config import is_experimental, set_experimental
-
-        previous = is_experimental()
-        set_experimental(False)
-        try:
-            screen = make_task_screen(has_tasks=False)
-            event = make_key_event("W")
-            screen.on_key(event)
-            screen.dismiss.assert_not_called()
-        finally:
-            set_experimental(previous)
 
     @pytest.mark.parametrize("key", ["H", "d", "D", "s", "f"])
     def test_task_only_keys_are_blocked_without_tasks(self, key: str) -> None:
@@ -719,39 +695,6 @@ class TestActionSelection:
         instance._save_selection_state.assert_called_once()
         instance.run_worker.assert_called_once()
         instance.refresh_tasks.assert_awaited()
-
-    def test_task_start_web_selects_created_task(self) -> None:
-        from terok.lib.core.config import set_experimental
-
-        set_experimental(True)
-        try:
-            _, app_class = import_app()
-            instance = make_creation_app(app_class)
-            instance._prompt_ui_backend = mock.Mock(return_value="codex")
-            fake_task_new = mock.Mock(return_value="99")
-            fake_task_run_web = mock.Mock()
-            action_globals = app_class._action_task_start_web.__globals__
-
-            with (
-                mock.patch.dict(
-                    action_globals,
-                    {
-                        "task_new": fake_task_new,
-                        "task_run_web": fake_task_run_web,
-                        "generate_task_name": lambda *a, **kw: "test-name",
-                    },
-                ),
-                mock.patch("builtins.input", return_value=""),
-            ):
-                run(app_class._action_task_start_web(instance))
-
-            assert instance._last_selected_tasks.get("proj1") == "99"
-            fake_task_new.assert_called_once_with("proj1", name="test-name")
-            fake_task_run_web.assert_called_once_with("proj1", "99", backend="codex")
-            instance._save_selection_state.assert_called_once()
-            instance.refresh_tasks.assert_awaited_once()
-        finally:
-            set_experimental(False)
 
     def test_autopilot_launch_selects_created_task(self) -> None:
         app_mod, app_class = import_app()

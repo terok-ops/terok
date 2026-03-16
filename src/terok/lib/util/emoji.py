@@ -36,7 +36,7 @@ central dict whose values carry both an ``emoji`` and a ``label`` attribute
    and has a non-empty label.
 
 Emoji definitions are centralised in ``terok.lib.containers.task_display``
-(``STATUS_DISPLAY``, ``MODE_DISPLAY``, ``WEB_BACKEND_DISPLAY``,
+(``STATUS_DISPLAY``, ``MODE_DISPLAY``,
 ``SECURITY_CLASS_DISPLAY``, ``GPU_DISPLAY``) and
 ``terok.lib.containers.work_status`` (``WORK_STATUS_DISPLAY``).
 

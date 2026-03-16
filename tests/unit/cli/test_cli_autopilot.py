@@ -163,26 +163,6 @@ def test_run_with_instructions_flag(tmp_path: Path) -> None:
             {"agents": ["debugger"], "preset": None, "unrestricted": None},
             id="run-toad-with-agent",
         ),
-        pytest.param(
-            [
-                "--experimental",
-                "task",
-                "run-web",
-                "myproject",
-                "1",
-                "--agent",
-                "reviewer",
-            ],
-            "terok.cli.commands.task.task_run_web",
-            ("myproject", "1"),
-            {
-                "backend": None,
-                "agents": ["reviewer"],
-                "preset": None,
-                "unrestricted": None,
-            },
-            id="run-web",
-        ),
     ],
 )
 def test_task_run_commands_forward_selected_agents(

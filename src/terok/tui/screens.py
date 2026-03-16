@@ -51,7 +51,6 @@ from rich.style import Style
 from rich.text import Text
 
 from ..lib.containers.tasks import sanitize_task_name, validate_task_name
-from ..lib.core.config import is_experimental
 from ..lib.core.projects import ProjectConfig
 from ..lib.facade import (
     EnvironmentCheck,
@@ -1006,7 +1005,7 @@ class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
     """Modal for creating a new task: name input + mode selection.
 
     Dismisses with ``(sanitized_name, mode)`` or ``None`` if cancelled.
-    Mode is one of ``"cli"``, ``"toad"``, ``"autopilot"``, ``"web"``.
+    Mode is one of ``"cli"``, ``"toad"``, ``"autopilot"``.
     """
 
     BINDINGS = [
@@ -1061,8 +1060,6 @@ class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
                 Option("Toad (browser TUI)", id="toad"),
                 Option("Autopilot (headless)", id="autopilot"),
             ]
-            if is_experimental():
-                options.append(Option("Web UI (experimental)", id="web"))
             yield OptionList(*options, id="create-mode-list")
             with Horizontal(id="create-buttons"):
                 yield Button("Cancel", id="btn-cancel", variant="default")
@@ -1442,8 +1439,6 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             Option("Start \\[c]li task  (new task + run CLI)", id="task_start_cli"),
             Option("Start Toad task  \\[w]  (new task + browser TUI)", id="task_start_toad"),
         ]
-        if is_experimental():
-            options.append(Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"))
         options.append(
             Option("Start \\[A]utopilot task  (new task + run headless)", id="task_start_autopilot")
         )
@@ -1510,8 +1505,6 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             "X": "delete",
             "D": "shield_down",
         }
-        if is_experimental():
-            shift_map["W"] = "task_start_web"
         if key in shift_map:
             if key in ("H", "P", "X", "D") and not self._has_tasks:
                 return

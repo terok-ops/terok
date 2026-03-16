@@ -11,7 +11,7 @@ terok manages two types of resources:
 │                         IMAGES (immutable)                      │
 │  ┌─────────┐    ┌─────────────┐    ┌─────────────────────────┐  │
 │  │   L0    │───▶│     L1      │───▶│          L2             │  │
-│  │  (dev)  │    │ (cli / ui)  │    │  (project-cli / -web)   │  │
+│  │  (dev)  │    │   (cli)     │    │     (project-cli)       │  │
 │  └─────────┘    └─────────────┘    └─────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -19,7 +19,7 @@ terok manages two types of resources:
 ┌─────────────────────────────────────────────────────────────────┐
 │                      CONTAINERS (mutable)                       │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │  project-cli-1  │  │  project-cli-2  │  │  project-web-3  │  │
+│  │  project-cli-1  │  │  project-cli-2  │  │  project-cli-3  │  │
 │  │    (task 1)     │  │    (task 2)     │  │    (task 3)     │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
@@ -37,7 +37,7 @@ A task consists of three persistent components:
 Task #1
 ├── Workspace    ~/.local/share/terok/tasks/<project>/1/workspace-dangerous/
 ├── Metadata     ~/.local/share/terok/projects/<project>/tasks/1.yml
-└── Container    <project>-cli-1  (or <project>-web-1)
+└── Container    <project>-cli-1
 ```
 
 All three persist independently and survive:
@@ -52,7 +52,7 @@ All three persist independently and survive:
                     │   (not exists)   │
                     └────────┬─────────┘
                              │
-                    task run-cli/web
+                    task run-cli
                     (first time)
                              │
                              ▼
@@ -63,7 +63,7 @@ All three persist independently and survive:
     │  │          │                │                  │  │
     │  │          │◀────────────── │                  │  │
     │  └──────────┘  task restart  └──────────────────┘  │
-    │       │        task run-*           │              │
+    │       │        task run-cli          │              │
     │       │                             │              │
     │       └──────────┬──────────────────┘              │
     │                  │                                 │
@@ -82,10 +82,9 @@ All three persist independently and survive:
 | Command | Container Exists & Running | Container Exists & Stopped | Container Doesn't Exist |
 |---------|---------------------------|---------------------------|------------------------|
 | `task run-cli` | Shows "already running" | `podman start` | `podman run` (create) |
-| `task run-web` | Shows "already running" | `podman start` | `podman run` (create) |
 | `task stop` | `podman stop` | Error: not running | Error: not running |
-| `task restart` | Shows "already running" | `podman start` | `podman run` (create) |
-| `task status` | Shows state | Shows state | Shows "not found" |
+| `task restart` | Shows "already running" | `podman start` | `podman run` (create)  |
+| `task status`  | Shows state            | Shows state     | Shows "not found"      |
 | `task delete` | `podman rm -f` + cleanup | `podman rm -f` + cleanup | Cleanup only |
 
 ### Container Naming
@@ -94,8 +93,7 @@ All three persist independently and survive:
 <project-id>-<mode>-<task-id>
 
 Examples:
-  myproject-cli-1     # CLI container for task 1
-  myproject-web-2     # Web container for task 2
+  myproject-cli-1       # CLI container for task 1
   myproject-auth-codex  # Auth container (ephemeral, uses --rm)
 ```
 
@@ -103,7 +101,7 @@ Examples:
 
 | Type | Containers | Lifetime | `--rm` flag |
 |------|------------|----------|-------------|
-| Task | `*-cli-*`, `*-web-*` | Persistent | No |
+| Task | `*-cli-*` | Persistent | No |
 | Auth | `*-auth-*` | Ephemeral | Yes |
 
 Task containers persist to allow:
@@ -130,29 +128,29 @@ Auth containers are ephemeral because:
 │ │ + dev user + /workspace                                       │ │
 │ └───────────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────┘
-                │                               │
-                ▼                               ▼
-┌───────────────────────────────┐ ┌───────────────────────────────┐
-│ L1: terok-l1-cli:<base-tag> │ │ L1: terok-l1-ui:<base-tag>  │
-│ ┌───────────────────────────┐ │ │ ┌───────────────────────────┐ │
-│ │ + Codex CLI               │ │ │ │ + Terok Web UI dist       │ │
-│ │ + Claude Code             │ │ │ │ + Node.js runtime         │ │
-│ │ + GitHub Copilot          │ │ │ │ + terok-ui-entry.sh       │ │
-│ │ + Mistral Vibe            │ │ │ │                           │ │
-│ │ + OpenCode (blablador)    │ │ │ │                           │ │
-│ └───────────────────────────┘ │ │ └───────────────────────────┘ │
-└───────────────────────────────┘ └───────────────────────────────┘
-                │                               │
-                ▼                               ▼
-┌───────────────────────────────┐ ┌───────────────────────────────┐
-│ L2: <project>:l2-cli          │ │ L2: <project>:l2-web          │
-│ ┌───────────────────────────┐ │ │ ┌───────────────────────────┐ │
-│ │ + Project-specific env    │ │ │ │ + Project-specific env    │ │
-│ │ + CODE_REPO, GIT_BRANCH   │ │ │ │ + CODE_REPO, GIT_BRANCH   │ │
-│ │ + SSH_KEY_NAME            │ │ │ │ + SSH_KEY_NAME            │ │
-│ │ + User snippet            │ │ │ │ + User snippet            │ │
-│ └───────────────────────────┘ │ └───────────────────────────────┘
-└───────────────────────────────┘ └───────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│ L1: terok-l1-cli:<base-tag>   │
+│ ┌───────────────────────────┐ │
+│ │ + Codex CLI               │ │
+│ │ + Claude Code             │ │
+│ │ + GitHub Copilot          │ │
+│ │ + Mistral Vibe            │ │
+│ │ + OpenCode (blablador)    │ │
+│ └───────────────────────────┘ │
+└───────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│ L2: <project>:l2-cli          │
+│ ┌───────────────────────────┐ │
+│ │ + Project-specific env    │ │
+│ │ + CODE_REPO, GIT_BRANCH   │ │
+│ │ + SSH_KEY_NAME            │ │
+│ │ + User snippet            │ │
+│ └───────────────────────────┘ │
+└───────────────────────────────┘
 ```
 
 ### Build Commands
@@ -176,8 +174,8 @@ Container image hash ≠ Current project build hash
         │
         ▼
   User should: terokctl build <project>
-               then: task delete + task run-*
-               or:   task stop + podman rm <container> + task run-*
+               then: task delete + task run-cli
+               or:   task stop + podman rm <container> + task run-cli
 ```
 
 ---

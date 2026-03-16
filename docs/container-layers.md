@@ -15,32 +15,23 @@ terok builds project containers in three logical layers. L0 (dev) and L1 (agent)
 - Stages `init-ssh-and-repo.sh` at `/usr/local/bin` and makes it the default `CMD`.
 - Environment defaults: `REPO_ROOT=/workspace`, `GIT_RESET_MODE=none`.
 
-### L1 — Agent Images (`terok-l1-cli:<base-tag>`, `terok-l1-ui:<base-tag>`)
+### L1 — Agent Image (`terok-l1-cli:<base-tag>`)
 
 Built `FROM` L0.
 
-- **CLI image** installs Codex, Claude Code, GitHub Copilot, Mistral Vibe, OpenCode, and supporting tools.
-- **UI image** installs UI dependencies, prefetches the Terok Web UI distribution, and sets `CMD` to `terok-ui-entry.sh`.
-  - `terok-ui-entry.sh` runs `init-ssh-and-repo.sh` first, then starts the UI server using the pre-built distribution (downloaded at runtime only if missing).
+- Installs Codex, Claude Code, GitHub Copilot, Mistral Vibe, OpenCode, and supporting tools.
 
-### L2 — Project Images (`<project>:l2-cli`, `<project>:l2-ui`)
+### L2 — Project Image (`<project>:l2-cli`)
 
-Built `FROM` the corresponding L1 image.
+Built `FROM` the L1 image.
 
 - Adds project-specific defaults (`CODE_REPO`, `SSH_KEY_NAME`, `GIT_BRANCH`) and the user snippet.
 - Optional dev image (`<project>:l2-dev`) built `FROM` L0 when `--dev` is used.
 
-The UI backend is configurable (Codex, Claude, or Mistral). Precedence:
-
-1. CLI flag: `terokctl task run-web --backend <backend>`
-2. Per-project config: `default_agent` in `project.yml`
-3. Global config: `default_agent` in `config.yml`
-4. Default: `codex`
-
 ## Build Flow
 
-`terokctl generate <project>` renders four Dockerfiles into the per-project build directory:
-`L0.Dockerfile`, `L1.cli.Dockerfile`, `L1.ui.Dockerfile`, `L2.Dockerfile`.
+`terokctl generate <project>` renders Dockerfiles into the per-project build directory:
+`L0.Dockerfile`, `L1.cli.Dockerfile`, `L2.Dockerfile`.
 
 | Command | Layers Built | When to Use |
 |---------|-------------|-------------|
@@ -57,8 +48,8 @@ The `--full-rebuild` flag rebuilds from L0 with `--no-cache` and `--pull=always`
 
 ## Runtime Behavior
 
-- `terokctl task run-cli` starts `<project>:l2-cli`; `terokctl task run-web` starts `<project>:l2-ui`.
-- Both modes mount a per-task workspace to `/workspace`, shared credential directories, and optionally SSH config.
+- `terokctl task run-cli` starts `<project>:l2-cli`.
+- Mounts a per-task workspace to `/workspace`, shared credential directories, and optionally SSH config.
 - The init script clones or syncs the project repository into `/workspace`.
 
 See [Shared Directories](shared-dirs.md) for mount details.

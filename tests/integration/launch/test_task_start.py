@@ -22,7 +22,6 @@ pytestmark = pytest.mark.needs_host_features
 PROJECT_ID = "demo"
 TASK_ID = "1"
 CLI_CONTAINER = f"{PROJECT_ID}-cli-{TASK_ID}"
-WEB_CONTAINER = f"{PROJECT_ID}-web-{TASK_ID}"
 TOAD_CONTAINER = f"{PROJECT_ID}-toad-{TASK_ID}"
 WEB_PORT = 7860
 TOAD_PORT = 8080
@@ -111,40 +110,6 @@ class TestLaunchWorkflows:
         assert "-p" not in args
         assert meta["mode"] == "cli"
         assert meta["name"] == "fix-login-bug"
-        assert meta["unrestricted"] is True
-
-    def test_task_start_web_launches_browser_runtime(
-        self, terok_env: TerokIntegrationEnv, tmp_path: Path
-    ) -> None:
-        """`task start --web` should launch the web runtime and persist web metadata."""
-        terok_env.write_project(PROJECT_ID, PROJECT_CONFIG)
-        state_path, extra_env = _configure_fake_runtime(terok_env, tmp_path)
-
-        result = terok_env.run_cli(
-            "--experimental",
-            "task",
-            "start",
-            PROJECT_ID,
-            "--web",
-            extra_env=extra_env,
-        )
-
-        meta = yaml.safe_load(
-            terok_env.task_meta_path(PROJECT_ID, TASK_ID).read_text(encoding="utf-8")
-        )
-        state = _load_fake_podman_state(state_path)
-        args = _container_args(state, WEB_CONTAINER)
-        env_entries = _env_entries(args)
-
-        assert "Web UI container is up" in result.stdout
-        assert localhost_url(WEB_PORT) in result.stdout
-        assert state["containers"][WEB_CONTAINER]["marker"] == "Terok Web UI started"
-        assert args[args.index("-p") + 1] == f"{LOCALHOST}:{WEB_PORT}:{WEB_PORT}"
-        assert f"{PROJECT_ID}:l2-web" in args
-        assert "TEROK_UI_BACKEND=codex" in env_entries
-        assert meta["mode"] == "web"
-        assert meta["backend"] == "codex"
-        assert meta["web_port"] == WEB_PORT
         assert meta["unrestricted"] is True
 
     def test_task_start_toad_launches_browser_tui(

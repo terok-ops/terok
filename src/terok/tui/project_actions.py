@@ -17,7 +17,6 @@ from collections.abc import Callable
 from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
 from ..lib.facade import (
-    WEB_BACKENDS,
     GitGate,
     SSHManager,
     authenticate,
@@ -39,36 +38,11 @@ class ProjectActionsMixin:
 
     Provides ``action_*`` methods for project-level operations (Dockerfile
     generation, image building, SSH init, gate sync, auth, wizard) as well
-    as reusable helpers (``_run_suspended``, ``_launch_terminal_session``,
-    ``_prompt_ui_backend``) used by both project and task actions.
+    as reusable helpers (``_run_suspended``, ``_launch_terminal_session``)
+    used by both project and task actions.
     """
 
     # ---------- Shared helpers ----------
-
-    def _prompt_ui_backend(self) -> str:
-        """Prompt the user to select a web UI backend and return the choice."""
-        backends = list(WEB_BACKENDS)
-        default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
-        if default not in backends:
-            default = backends[0] if backends else "codex"
-
-        print("Select UI backend:")
-        for idx, backend in enumerate(backends, start=1):
-            label = backend
-            if backend == default:
-                label += " (default)"
-            print(f"  {idx}) {label}")
-
-        choice = input(f"Backend [{default}]: ").strip()
-        if not choice:
-            return default
-        if choice.isdigit():
-            idx = int(choice)
-            if 1 <= idx <= len(backends):
-                return backends[idx - 1]
-            return default
-        normalized = choice.lower()
-        return normalized if normalized in backends else default
 
     def _print_sync_gate_ssh_help(self, project_id: str) -> None:
         """Print SSH-specific troubleshooting details for gate sync failures."""

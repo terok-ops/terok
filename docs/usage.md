@@ -160,7 +160,6 @@ install.  The steps below show the equivalent CLI workflow.
 - Podman installed and working
 - OpenSSH client tools (ssh, ssh-keygen) for private Git over SSH
 - tmux (optional, for `terokctl --tmux` and persistent container sessions)
-- ttyd (optional, for web-mode terminal access)
 
 ### Step 1: Create Project Directory
 
@@ -258,9 +257,6 @@ terokctl task list myproj
 
 # Run in CLI mode (headless agent)
 terokctl task run-cli myproj 1
-
-# Or run in web mode (experimental)
-terokctl --experimental task run-web myproj 1 --backend codex
 ```
 
 #### Additional Task Operations
@@ -551,7 +547,6 @@ The `--agent` flag also works with interactive modes:
 
 ```bash
 terokctl task run-cli myproj 1 --agent debugger
-terokctl --experimental task run-web myproj 1 --agent debugger
 terokctl task start myproj --agent debugger
 ```
 
@@ -598,16 +593,6 @@ Per-sub-agent MCPs can be defined inline using the `mcpServers` field in the
 agent definition (same format as Claude's native agent JSON).
 
 Run `terokctl config` to see the actual paths on your system.
-
----
-
-### UI Mode Configuration
-
-| Backend | API Key Environment Variable | Optional Model Variable |
-|---------|------------------------------|------------------------|
-| codex | (uses OpenAI from codex config) | - |
-| claude | `TEROK_UI_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | `TEROK_UI_CLAUDE_MODEL` |
-| mistral | `TEROK_UI_MISTRAL_API_KEY` or `MISTRAL_API_KEY` | `TEROK_UI_MISTRAL_MODEL` |
 
 ---
 
@@ -765,7 +750,6 @@ Presets work with all task modes:
 ```bash
 terokctl task start myproj --preset review
 terokctl task run-cli myproj 1 --preset team
-terokctl --experimental task run-web myproj 1 --preset solo
 ```
 
 ### See What's Available

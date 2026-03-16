@@ -61,8 +61,7 @@ terokctl ssh-init myproj
 # 5. Create and run a task
 terokctl task new myproj
 terokctl task run-cli myproj 1    # CLI mode
-# or
-terokctl --experimental task run-web myproj 1    # Web UI mode
+terokctl task start myproj --toad  # Toad multi-agent TUI (browser access)
 ```
 
 ### Headless Agent Runs (Autopilot)

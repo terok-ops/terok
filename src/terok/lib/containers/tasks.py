@@ -6,7 +6,7 @@
 
 Provides module-level functions for CRUD over YAML-backed task metadata.
 
-Container runner functions (``task_run_cli``, ``task_run_web``,
+Container runner functions (``task_run_cli``,
 ``task_run_headless``, ``task_restart``) live in the companion
 ``task_runners`` module.  Display types and status computation live in
 ``task_display``.  Log viewing lives in ``task_logs``.
@@ -745,8 +745,7 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'terokctl task run-cli {project.id} {task_id}' "
-            f"or 'terokctl task run-web {project.id} {task_id}'."
+            f"Start it first via 'terokctl task run-cli {project.id} {task_id}'."
         )
 
     cname = container_name(project.id, mode, task_id)

@@ -52,20 +52,10 @@ STATUS_DISPLAY: dict[str, StatusInfo] = {
 
 MODE_DISPLAY: dict[str | None, ModeInfo] = {
     "cli": ModeInfo(emoji="\U0001f4bb", label="CLI"),
-    "web": ModeInfo(emoji="\U0001f30d", label="Web"),
     "run": ModeInfo(emoji="\U0001f680", label="Autopilot"),
     "toad": ModeInfo(emoji="\U0001f438", label="Toad"),
     None: ModeInfo(emoji="\U0001f997", label=""),
 }
-
-WEB_BACKEND_DISPLAY: dict[str, ModeInfo] = {
-    "claude": ModeInfo(emoji="\U0001f4a0", label="Claude"),
-    "codex": ModeInfo(emoji="\U0001f338", label="Codex"),
-    "mistral": ModeInfo(emoji="\U0001f3f0", label="Mistral"),
-    "copilot": ModeInfo(emoji="\U0001f916", label="Copilot"),
-}
-
-WEB_BACKEND_DEFAULT = MODE_DISPLAY["web"]
 
 
 @dataclass(frozen=True)
@@ -150,16 +140,7 @@ def effective_status(task: TaskMeta) -> str:
 
 
 def mode_info(task: TaskMeta) -> ModeInfo:
-    """Return the display info for a task's mode, resolving web backends.
-
-    For ``mode="web"``, the info is looked up from ``WEB_BACKEND_DISPLAY``
-    using the task's ``backend`` field.  Other modes use ``MODE_DISPLAY``.
-    """
+    """Return the display info for a task's mode."""
     mode = task.mode
-    if mode == "web":
-        backend = task.backend
-        if isinstance(backend, str):
-            return WEB_BACKEND_DISPLAY.get(backend, WEB_BACKEND_DEFAULT)
-        return WEB_BACKEND_DEFAULT
     info = MODE_DISPLAY.get(mode if isinstance(mode, str) else None)
     return info if info else MODE_DISPLAY[None]

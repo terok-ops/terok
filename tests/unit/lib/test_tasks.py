@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from terok.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
+from terok.lib.containers.environment import build_task_env_and_volumes
 from terok.lib.containers.task_logs import LogViewOptions, task_logs
-from terok.lib.containers.task_runners import task_run_cli, task_run_toad, task_run_web
+from terok.lib.containers.task_runners import task_run_cli, task_run_toad
 from terok.lib.containers.tasks import (
     get_workspace_git_diff,
     task_delete,
@@ -28,7 +28,7 @@ from terok.tui.clipboard import (
 )
 from tests.test_utils import mock_git_config, parse_meta_value, project_env, write_project
 from tests.testfs import CONTAINER_SSH_DIR
-from tests.testnet import CONTAINER_HOSTNAME, GATE_PORT, localhost_url
+from tests.testnet import CONTAINER_HOSTNAME, GATE_PORT
 
 
 def _gate_repo_fragment(project_id: str, *, port: int = GATE_PORT) -> str:
@@ -442,79 +442,6 @@ class TestTask:
             env, _volumes = build_task_env_and_volumes(load_project(project_id), task_id="1")
             assert env["TEROK_GIT_AUTHORSHIP"] == "human-agent"
 
-    def test_apply_ui_env_overrides_passthrough(self) -> None:
-        base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
-        # Host env uses TEROK_UI_* prefix for passthrough to containers
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "TEROK_UI_TOKEN": "token-123",
-                "TEROK_UI_MISTRAL_API_KEY": "mistral-xyz",
-                "ANTHROPIC_API_KEY": "anthropic-456",
-                "CLAUDE_API_KEY": "from-env",
-                "MISTRAL_API_KEY": "mistral-456",
-            },
-            clear=True,
-        ):
-            merged = apply_web_env_overrides(base_env, "CLAUDE")
-
-        # Container receives TEROK_UI_* passthrough
-        assert merged["TEROK_UI_BACKEND"] == "claude"
-        assert merged["TEROK_UI_TOKEN"] == "token-123"
-        assert merged["TEROK_UI_MISTRAL_API_KEY"] == "mistral-xyz"
-        assert merged["ANTHROPIC_API_KEY"] == "anthropic-456"
-        assert merged["CLAUDE_API_KEY"] == "override"
-        assert merged["MISTRAL_API_KEY"] == "mistral-456"
-
-    def test_task_run_web_passes_passthrough_env(self) -> None:
-        project_id = "proj_ui_env"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-            with_config_file=True,
-            clear_env=True,
-            extra_env={
-                "TEROK_UI_TOKEN": "token-xyz",
-                "TEROK_UI_MISTRAL_API_KEY": "mistral-xyz",
-                "ANTHROPIC_API_KEY": "anthropic-abc",
-                "MISTRAL_API_KEY": "mistral-abc",
-            },
-        ):
-            # Host env uses TEROK_UI_* prefix for passthrough to containers
-            task_new(project_id)
-            with (
-                mock_git_config(),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
-                    return_value=None,  # No existing container
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.is_container_running",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.assign_web_port",
-                    return_value=7788,
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-            ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
-                task_run_web(project_id, "1", backend="CLAUDE")
-
-            cmd = run_mock.call_args[0][0]
-            env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
-
-            # Container receives TEROK_UI_* passthrough
-            assert "TEROK_UI_BACKEND=claude" in env_entries
-            assert "TEROK_UI_TOKEN=token-xyz" in env_entries
-            assert "TEROK_UI_MISTRAL_API_KEY=mistral-xyz" in env_entries
-            assert "ANTHROPIC_API_KEY=anthropic-abc" in env_entries
-            assert "MISTRAL_API_KEY=mistral-abc" in env_entries
-
     def test_task_run_cli_colors_login_lines_when_tty(self) -> None:
         project_id = "proj_cli_color"
         with project_env(
@@ -579,92 +506,6 @@ class TestTask:
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_cli(project_id, "1")
-
-            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
-            assert (ctx.envs_dir / "_claude-config" / "settings.json").is_file()
-
-    def test_task_run_web_colors_url_and_stop_when_tty(self) -> None:
-        project_id = "proj_web_color"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-            with_config_file=True,
-            clear_env=True,
-        ):
-            task_new(project_id)
-            with (
-                mock_git_config(),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
-                    return_value=None,  # No existing container
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.is_container_running",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.assign_web_port",
-                    return_value=7788,
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners._supports_color",
-                    return_value=True,
-                ),
-            ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
-                buffer = StringIO()
-                with redirect_stdout(buffer):
-                    task_run_web(project_id, "1")
-
-            output = buffer.getvalue()
-            expected_name = f"\x1b[32m{project_id}-web-1\x1b[0m"
-            expected_url = f"\x1b[34m{localhost_url(7788)}\x1b[0m"
-            expected_logs = f"\x1b[33mpodman logs -f {project_id}-web-1\x1b[0m"
-            expected_stop = f"\x1b[31mpodman stop {project_id}-web-1\x1b[0m"
-            assert expected_name in output
-            assert expected_url in output
-            assert expected_logs in output
-            assert expected_stop in output
-
-    def test_task_run_web_does_not_add_files_before_clone(self) -> None:
-        """Interactive web startup must not add files to workspace before init clone."""
-        project_id = "proj_web_clean_workspace"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-            with_config_file=True,
-            clear_env=True,
-        ) as ctx:
-            task_new(project_id)
-            workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
-            with (
-                mock_git_config(),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
-                    return_value=None,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.is_container_running",
-                    return_value=True,
-                ),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.assign_web_port",
-                    return_value=7788,
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-            ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
-                task_run_web(project_id, "1")
 
             assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
             assert (ctx.envs_dir / "_claude-config" / "settings.json").is_file()
@@ -776,81 +617,6 @@ class TestTask:
                 # Verify metadata mode is preserved
                 meta = yaml.safe_load(meta_path.read_text())
                 assert meta["mode"] == "cli"
-
-    def test_task_run_web_already_running(self) -> None:
-        """task_run_web prints message and exits when container is already running."""
-        project_id = "proj_web_running"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-            with_config_file=True,
-            clear_env=True,
-        ) as ctx:
-            task_new(project_id)
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta_path = meta_dir / "1.yml"
-
-            # Simulate task was previously run
-            meta = yaml.safe_load(meta_path.read_text())
-            meta["mode"] = "web"
-            meta["web_port"] = 7860
-            meta_path.write_text(yaml.safe_dump(meta))
-
-            with (
-                mock_git_config(),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
-                    return_value="running",
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-            ):
-                buffer = StringIO()
-                with redirect_stdout(buffer):
-                    task_run_web(project_id, "1")
-
-                # Verify no podman run was called
-                run_mock.assert_not_called()
-
-                # Verify message indicates already running
-                output = buffer.getvalue()
-                assert "already running" in output
-
-    def test_task_run_web_starts_stopped_container(self) -> None:
-        """task_run_web uses 'podman start' for stopped container."""
-        project_id = "proj_web_stopped"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-            with_config_file=True,
-            clear_env=True,
-        ) as ctx:
-            task_new(project_id)
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta_path = meta_dir / "1.yml"
-
-            # Simulate task was previously run
-            meta = yaml.safe_load(meta_path.read_text())
-            meta["mode"] = "web"
-            meta["web_port"] = 7860
-            meta_path.write_text(yaml.safe_dump(meta))
-
-            with (
-                mock_git_config(),
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
-                    side_effect=["exited", "running"],  # Stopped, then alive after start
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-            ):
-                run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
-                buffer = StringIO()
-                with redirect_stdout(buffer):
-                    task_run_web(project_id, "1")
-
-                # Verify podman start was called
-                run_mock.assert_called_once()
-                call_args = run_mock.call_args[0][0]
-                assert call_args[:2] == ["podman", "start"]
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""

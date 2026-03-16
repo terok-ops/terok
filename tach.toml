@@ -204,7 +204,7 @@ depends_on = [
     "terok.lib.util.logging_utils",
 ]
 
-# Task container runners (CLI, web, headless, restart)
+# Task container runners (CLI, headless, toad, restart)
 [[modules]]
 path = "terok.lib.containers.task_runners"
 layer = "services"
@@ -510,8 +510,6 @@ expose = [
     "MODE_DISPLAY",
     "SECURITY_CLASS_DISPLAY",
     "GPU_DISPLAY",
-    "WEB_BACKEND_DISPLAY",
-    "WEB_BACKEND_DEFAULT",
     "effective_status",
     "mode_info",
     "has_gpu",
@@ -572,7 +570,7 @@ expose = [
 from = ["terok.lib.containers.tasks"]
 
 [[interfaces]]
-expose = ["task_run_cli", "task_run_toad", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
+expose = ["task_run_cli", "task_run_toad", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
 from = ["terok.lib.containers.task_runners"]
 
 [[interfaces]]
@@ -705,9 +703,7 @@ from = ["terok.lib.core.config"]
 expose = [
     "base_dev_image",
     "agent_cli_image",
-    "agent_ui_image",
     "project_cli_image",
-    "project_web_image",
     "project_dev_image",
 ]
 from = ["terok.lib.core.images"]
@@ -716,11 +712,9 @@ from = ["terok.lib.core.images"]
 
 [[interfaces]]
 expose = [
-    "WEB_BACKENDS",
     "SHARED_MOUNTS",
     "SharedMount",
     "build_task_env_and_volumes",
-    "apply_web_env_overrides",
 ]
 from = ["terok.lib.containers.environment"]
 
@@ -764,7 +758,6 @@ expose = [
     "list_images",
     "find_orphaned_images",
     "cleanup_images",
-    "WEB_BACKENDS",
     "task_new",
     "task_delete",
     "task_rename",
@@ -777,7 +770,6 @@ expose = [
     "get_tasks",
     "task_run_cli",
     "task_run_toad",
-    "task_run_web",
     "task_run_headless",
     "HeadlessRunRequest",
     "task_restart",

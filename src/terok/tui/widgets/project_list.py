@@ -104,7 +104,7 @@ class ProjectActions(Static):
         with Horizontal():
             yield Button("[yellow]t[/yellow] new", id="btn-new-task", compact=True)
             yield Button("[yellow]r[/yellow] cli", id="btn-task-run-cli", compact=True)
-            yield Button("[yellow]w[/yellow] web", id="btn-task-run-web", compact=True)
+            yield Button("[yellow]w[/yellow] toad", id="btn-task-run-toad", compact=True)
             yield Button("[yellow]d[/yellow]el", id="btn-task-delete", compact=True)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
@@ -123,7 +123,7 @@ class ProjectActions(Static):
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
-            "btn-task-run-web": "action_run_web",
+            "btn-task-run-toad": "action_run_toad",
             "btn-task-delete": "action_delete_task",
         }
         method_name = mapping.get(btn_id)

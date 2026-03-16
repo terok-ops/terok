@@ -10,14 +10,12 @@ from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
-from ..core.config import build_root, is_experimental
+from ..core.config import build_root
 from ..core.images import (
     agent_cli_image,
-    agent_ui_image,
     base_dev_image,
     project_cli_image,
     project_dev_image,
-    project_web_image,
 )
 from ..core.project_model import ProjectConfig
 from ..core.projects import effective_ssh_key_name, load_project
@@ -157,8 +155,6 @@ def _render_dockerfiles(project) -> dict[str, str]:
         "L1.cli.Dockerfile": (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text(),
         "L2.Dockerfile": (tmpl_pkg / "l2.project.Dockerfile.template").read_text(),
     }
-    if is_experimental():
-        templates["L1.ui.Dockerfile"] = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
 
     ssh_key_name = effective_ssh_key_name(project, key_type="ed25519")
 
@@ -268,12 +264,9 @@ def build_images(
 
     l0 = stage_dir / "L0.Dockerfile"
     l1_cli = stage_dir / "L1.cli.Dockerfile"
-    l1_ui = stage_dir / "L1.ui.Dockerfile"
     l2 = stage_dir / "L2.Dockerfile"
 
     required = [l0, l1_cli, l2]
-    if is_experimental():
-        required.append(l1_ui)
     if not all(f.is_file() for f in required):
         raise SystemExit("Dockerfiles are missing. Run 'terokctl generate <project>' first.")
 
@@ -281,9 +274,7 @@ def build_images(
 
     l0_image = base_dev_image(base_image)
     l1_cli_image = agent_cli_image(base_image)
-    l1_ui_image = agent_ui_image(base_image)
     l2_cli_image = project_cli_image(project.id)
-    l2_ui_image = project_web_image(project.id)
     l2_dev_image = project_dev_image(project.id)
 
     # Cache bust timestamp for agent installs
@@ -321,10 +312,8 @@ def build_images(
         if not _image_exists(l0_image):
             print(f"L0 image {l0_image} not found locally, will build all layers (L0+L1+L2).")
             need_base_layers = True
-        elif not _image_exists(l1_cli_image) or (
-            is_experimental() and not _image_exists(l1_ui_image)
-        ):
-            print("L1 image(s) not found locally, will build all layers (L0+L1+L2).")
+        elif not _image_exists(l1_cli_image):
+            print("L1 image not found locally, will build all layers (L0+L1+L2).")
             need_base_layers = True
 
     # Build L0 and L1 layers when needed
@@ -338,14 +327,10 @@ def build_images(
                 build_args={"AGENT_CACHE_BUST": cache_bust},
             )
         )
-        if is_experimental():
-            cmds.append(_build_cmd(l1_ui, l0_image, l1_ui_image))
 
-    # Always build L2 project images
+    # Always build L2 project image
     hash_label = {"terok.build_context_hash": context_hash}
     cmds.append(_build_cmd(l2, l1_cli_image, l2_cli_image, labels=hash_label))
-    if is_experimental():
-        cmds.append(_build_cmd(l2, l1_ui_image, l2_ui_image, labels=hash_label))
 
     if include_dev:
         cmds.append(_build_cmd(l2, l0_image, l2_dev_image, labels=hash_label))

@@ -14,8 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..core.config import build_root, get_envs_base_dir, is_experimental
-from ..core.images import project_cli_image, project_web_image
+from ..core.config import build_root, get_envs_base_dir
+from ..core.images import project_cli_image
 from ..core.projects import load_project
 
 
@@ -28,11 +28,9 @@ def get_project_state(
     The resulting dict contains boolean flags that can be used by UIs
     (including the TUI) to give a quick overview of the project:
 
-    - ``dockerfiles`` - True if required Dockerfiles exist under the build root:
-      always L0/L1.cli/L2, and additionally L1.ui when experimental mode is enabled.
-    - ``images`` - True if required project images exist:
-      always ``<id>:l2-cli``, and additionally ``<id>:l2-web`` when experimental
-      mode is enabled.
+    - ``dockerfiles`` - True if required Dockerfiles exist under the build root
+      (L0/L1.cli/L2).
+    - ``images`` - True if the required ``<id>:l2-cli`` project image exists.
     - ``ssh`` - True if the project SSH directory exists and contains
       a ``config`` file.
     - ``gate`` - True if the project's git gate directory exists.
@@ -40,7 +38,6 @@ def get_project_state(
     """
 
     project = load_project(project_id)
-    experimental = is_experimental()
 
     # Dockerfiles: look in the same location generate_dockerfiles writes to.
     stage_dir = build_root() / project.id
@@ -49,16 +46,12 @@ def get_project_state(
         stage_dir / "L1.cli.Dockerfile",
         stage_dir / "L2.Dockerfile",
     ]
-    if experimental:
-        dockerfiles.append(stage_dir / "L1.ui.Dockerfile")
     has_dockerfiles = all(p.is_file() for p in dockerfiles)
 
     # Images: rely on podman image tags created by build_images().
     has_images = False
     try:
         required_tags = [project_cli_image(project.id)]
-        if experimental:
-            required_tags.append(project_web_image(project.id))
         ok = True
         for tag in required_tags:
             # ``podman image exists`` exits with 0 when the image is present.

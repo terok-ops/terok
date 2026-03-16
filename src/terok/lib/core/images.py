@@ -32,19 +32,9 @@ def agent_cli_image(base_image: str) -> str:
     return f"terok-l1-cli:{_base_tag(base_image)}"
 
 
-def agent_ui_image(base_image: str) -> str:
-    """Return the L1 UI agent image tag for *base_image*."""
-    return f"terok-l1-ui:{_base_tag(base_image)}"
-
-
 def project_cli_image(project_id: str) -> str:
     """Return the L2 CLI project image tag for *project_id*."""
     return f"{project_id}:l2-cli"
-
-
-def project_web_image(project_id: str) -> str:
-    """Return the L2 web project image tag for *project_id*."""
-    return f"{project_id}:l2-web"
 
 
 def project_dev_image(project_id: str) -> str:
