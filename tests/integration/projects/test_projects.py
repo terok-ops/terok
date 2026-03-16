@@ -98,9 +98,7 @@ class TestProjects:
         assert "- alpha [online]" in listed.stdout
         assert "- beta [online]" in listed.stdout
 
-    def test_project_derive_preserves_yaml_comments(
-        self, terok_env: TerokIntegrationEnv
-    ) -> None:
+    def test_project_derive_preserves_yaml_comments(self, terok_env: TerokIntegrationEnv) -> None:
         """``project-derive`` preserves user comments via ruamel.yaml round-trip.
 
         Creates a source project.yml with inline and block comments on every
@@ -132,8 +130,9 @@ class TestProjects:
         assert "# pinned to main" in raw
         assert "# custom key" in raw
 
-        # The agent block comment should be gone (whole section removed)
+        # The agent section and its associated comments should be gone
         assert re.search(r"(?m)^\s*agent\s*:", raw) is None
+        assert re.search(r"(?m)^\s*#.*\bagent\b", raw) is None
 
         # Key order matches the source file (not alphabetically sorted)
         keys = [m.group(1) for m in re.finditer(r"(?m)^(\w+)\s*:", raw)]
