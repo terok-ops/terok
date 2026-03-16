@@ -79,7 +79,7 @@ class TestDump:
         """Flow-style emitter must preserve quotes like the default emitter."""
         data = load("key: 'quoted value'\n")
         result = dump(data, default_flow_style=True)
-        assert "quoted" in result
+        assert "'quoted value'" in result or '"quoted value"' in result
 
     def test_dumps_none(self) -> None:
         result = dump(None)

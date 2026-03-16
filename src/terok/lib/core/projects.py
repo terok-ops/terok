@@ -35,6 +35,8 @@ from .yaml_schema import RawGlobalGitSection, RawProjectYaml
 
 logger = logging.getLogger(__name__)
 
+_PROJECT_YML = "project.yml"
+
 
 def _get_global_git_config(key: str) -> str | None:
     """Get a value from the user's global git config.
@@ -80,7 +82,7 @@ def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Pa
 
 def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
     """Format a Pydantic ValidationError into a user-friendly message."""
-    lines = [f"Invalid project.yml ({cfg_path}):"]
+    lines = [f"Invalid {_PROJECT_YML} ({cfg_path}):"]
     for err in exc.errors():
         loc = " → ".join(str(p) for p in err["loc"])
         lines.append(f"  {loc}: {err['msg']}")
@@ -251,7 +253,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     if target_root.exists():
         raise SystemExit(f"Project '{new_id}' already exists at {target_root}")
 
-    source_cfg = _yaml_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
+    source_cfg = _yaml_load((source.root / _PROJECT_YML).read_text(encoding="utf-8")) or {}
 
     # Update project ID
     if "project" not in source_cfg:
@@ -262,7 +264,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     source_cfg.pop("agent", None)
 
     target_root.mkdir(parents=True, exist_ok=True)
-    (target_root / "project.yml").write_text(
+    (target_root / _PROJECT_YML).write_text(
         _yaml_dump(source_cfg),
         encoding="utf-8",
     )
@@ -274,9 +276,9 @@ def _find_project_root(project_id: str) -> Path:
     """Return the root directory for *project_id*, preferring user over system."""
     user_root = user_projects_root() / project_id
     sys_root = config_root() / project_id
-    if (user_root / "project.yml").is_file():
+    if (user_root / _PROJECT_YML).is_file():
         return user_root
-    if (sys_root / "project.yml").is_file():
+    if (sys_root / _PROJECT_YML).is_file():
         return sys_root
     raise SystemExit(f"Project '{project_id}' not found in {user_root} or {sys_root}")
 
@@ -298,7 +300,7 @@ def list_projects() -> list[ProjectConfig]:
         for d in root.iterdir():
             if not d.is_dir():
                 continue
-            if (d / "project.yml").is_file():
+            if (d / _PROJECT_YML).is_file():
                 ids.add(d.name)
 
     projects: list[ProjectConfig] = []
@@ -334,9 +336,9 @@ def _validated_global_git_section() -> dict[str, Any]:
 def load_project(project_id: str) -> ProjectConfig:
     """Load and return a fully resolved :class:`ProjectConfig` from *project_id*."""
     root = _find_project_root(project_id)
-    cfg_path = root / "project.yml"
+    cfg_path = root / _PROJECT_YML
     if not cfg_path.is_file():
-        raise SystemExit(f"Missing project.yml in {root}")
+        raise SystemExit(f"Missing {_PROJECT_YML} in {root}")
 
     raw = _parse_project_yaml(cfg_path)
 
