@@ -130,6 +130,7 @@ def _git_subprocess_env(terok_env: TerokIntegrationEnv, git_env: dict[str, str])
         "HOME": str(terok_env.home_dir),
         "XDG_CONFIG_HOME": str(terok_env.xdg_config_home),
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "GIT_CONFIG_NOSYSTEM": "1",
         **git_env,
     }
 

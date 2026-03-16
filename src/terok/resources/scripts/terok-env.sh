@@ -8,7 +8,7 @@
 #   - Login:                     via /etc/profile.d/
 #
 # Guard against double-sourcing (login shells source both profile.d and bashrc).
-[ -n "$_TEROK_ENV_LOADED" ] && return 0
+[ -n "${_TEROK_ENV_LOADED:-}" ] && return 0
 _TEROK_ENV_LOADED=1
 
 # ── PATH ──────────────────────────────────────────────────────────────────────
