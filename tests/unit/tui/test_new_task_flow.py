@@ -443,18 +443,43 @@ class TestTaskListNewBinding:
 class TestTaskLaunchScreenCompose:
     """Test that compose() sets the expected border title with the task name."""
 
+    @staticmethod
+    def _run_compose(screens_mod, screen):
+        """Exhaust compose() and return the Vertical dialog with border_title.
+
+        Patches the stub Vertical's ``__enter__`` to capture the dialog
+        instance that ``compose()`` uses via ``with Vertical(...) as dialog:``.
+        """
+        Vertical = screens_mod.Vertical
+        captured: list = []
+        orig_enter = Vertical.__enter__
+
+        def tracking_enter(self):
+            captured.append(self)
+            return orig_enter(self)
+
+        Vertical.__enter__ = tracking_enter
+        try:
+            list(screen.compose())
+        finally:
+            Vertical.__enter__ = orig_enter
+        return captured[0] if captured else None
+
     def test_compose_border_title_includes_name(self) -> None:
         screens, _ = import_screens()
         screen = screens.TaskLaunchScreen(
             container_name="c", project_id="p", task_id="3", task_name="fix-auth"
         )
-        # Exhaust the compose generator to trigger side-effects
-        list(screen.compose())
-        # The dialog Vertical's border_title should be set
-        # (compose yields widgets and sets dialog.border_title as a side-effect)
-        # We verify via the stored _task_name since the stub doesn't fully wire compose
-        assert screen._task_name == "fix-auth"
-        assert screen._task_id == "3"
+        dialog = self._run_compose(screens, screen)
+        assert dialog is not None
+        assert dialog.border_title == "CLI Task 3 (fix-auth)"
+
+    def test_compose_border_title_fallback_to_id(self) -> None:
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(container_name="c", project_id="p", task_id="7")
+        dialog = self._run_compose(screens, screen)
+        assert dialog is not None
+        assert dialog.border_title == "CLI Task 7 (7)"
 
 
 # ---------------------------------------------------------------------------
@@ -715,12 +740,16 @@ class TestOnLaunchScreenResultTitle:
 
         action_globals = app_class._on_launch_screen_result.__globals__
 
-        with mock.patch.dict(
-            action_globals,
-            {
-                "get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"]),
-                "HEADLESS_PROVIDERS": {"claude": fake_provider},
-            },
+        with (
+            mock.patch.dict(
+                action_globals,
+                {"get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"])},
+            ),
+            mock.patch.dict(
+                "terok.lib.containers.headless_providers.HEADLESS_PROVIDERS",
+                {"claude": fake_provider},
+                clear=True,
+            ),
         ):
             result = ("proj1", "5", "my-task", "proj1-cli-5", "claude", "fix it")
             run(app_class._on_launch_screen_result(instance, result))
@@ -749,12 +778,16 @@ class TestOnLaunchScreenResultTitle:
 
         action_globals = app_class._on_launch_screen_result.__globals__
 
-        with mock.patch.dict(
-            action_globals,
-            {
-                "get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"]),
-                "HEADLESS_PROVIDERS": {},
-            },
+        with (
+            mock.patch.dict(
+                action_globals,
+                {"get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"])},
+            ),
+            mock.patch.dict(
+                "terok.lib.containers.headless_providers.HEADLESS_PROVIDERS",
+                {},
+                clear=True,
+            ),
         ):
             result = ("proj1", "5", "my-task", "proj1-cli-5", "nonexistent", "hi")
             run(app_class._on_launch_screen_result(instance, result))
