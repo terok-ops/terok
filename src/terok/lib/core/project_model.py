@@ -54,6 +54,7 @@ class ProjectConfig(BaseModel):
     auto_sync_enabled: bool = False
     auto_sync_branches: list[str] = Field(default_factory=list)
     default_agent: str | None = None
+    default_login: str | None = None
     agent_config: dict[str, Any] = Field(default_factory=dict)
     shutdown_timeout: int = 10
     task_name_categories: list[str] | None = None

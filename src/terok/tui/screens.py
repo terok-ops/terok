@@ -42,6 +42,11 @@ try:  # pragma: no cover - optional import for test stubs
 except Exception:  # pragma: no cover - textual may be a stub module
     Input = None  # type: ignore[assignment,misc]
 
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets import Select
+except Exception:  # pragma: no cover - textual may be a stub module
+    Select = None  # type: ignore[assignment,misc]
+
 from rich.style import Style
 from rich.text import Text
 
@@ -993,6 +998,324 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
 
 
 # ---------------------------------------------------------------------------
+# Task Create Screen (name + mode selection)
+# ---------------------------------------------------------------------------
+
+
+class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
+    """Modal for creating a new task: name input + mode selection.
+
+    Dismisses with ``(sanitized_name, mode)`` or ``None`` if cancelled.
+    Mode is one of ``"cli"``, ``"toad"``, ``"autopilot"``, ``"web"``.
+    """
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    TaskCreateScreen {
+        align: center middle;
+    }
+
+    #create-dialog {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #create-name-input {
+        margin-bottom: 1;
+    }
+
+    #create-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #create-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def __init__(self, default_name: str = "") -> None:
+        """Create the task creation screen with a pre-filled default name."""
+        super().__init__()
+        self._default_name = default_name
+
+    def compose(self) -> ComposeResult:
+        """Build the name input, mode option list, and Cancel button."""
+        with Vertical(id="create-dialog") as dialog:
+            yield Input(
+                value=self._default_name,
+                placeholder="task-name",
+                id="create-name-input",
+            )
+            options = [
+                Option("CLI", id="cli"),
+                Option("Toad (browser TUI)", id="toad"),
+                Option("Autopilot (headless)", id="autopilot"),
+            ]
+            if is_experimental():
+                options.append(Option("Web UI (experimental)", id="web"))
+            yield OptionList(*options, id="create-mode-list")
+            with Horizontal(id="create-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+        dialog.border_title = "New Task"
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        """Focus the name input for immediate editing."""
+        inp = self.query_one("#create-name-input", Input)
+        inp.focus()
+
+    def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
+        """On Enter in the name input, submit with the highlighted mode."""
+        self._submit_with_highlighted_mode()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Submit when a mode is selected from the option list."""
+        mode = event.option_id
+        if mode:
+            self._submit(mode)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Cancel button click."""
+        if event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def _submit_with_highlighted_mode(self) -> None:
+        """Submit using the currently highlighted mode option (default: cli)."""
+        mode_list = self.query_one("#create-mode-list", OptionList)
+        idx = mode_list.highlighted
+        if idx is not None and 0 <= idx < mode_list.option_count:
+            option = mode_list.get_option_at_index(idx)
+            self._submit(option.id)
+        else:
+            self._submit("cli")
+
+    def _submit(self, mode: str) -> None:
+        """Validate the name and dismiss with ``(name, mode)``."""
+        inp = self.query_one("#create-name-input", Input)
+        raw = inp.value.strip()
+        candidate = raw or self._default_name
+        if not candidate:
+            self.notify("Name cannot be empty.")
+            return
+        sanitized = sanitize_task_name(candidate)
+        if sanitized is None:
+            self.notify("Invalid name: must contain at least one alphanumeric character.")
+            return
+        err = validate_task_name(sanitized)
+        if err:
+            self.notify(f"Invalid name: {err}.")
+            return
+        self.dismiss((sanitized, mode))
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss without a result."""
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
+# Task Launch Screen (CLI launch modal with agent selector + prompt)
+# ---------------------------------------------------------------------------
+
+
+class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None] | None"]):
+    """Post-creation modal for CLI tasks: agent selection + optional prompt.
+
+    Dismisses with ``(project_id, task_id, container_name, agent, prompt)``
+    on Login, or ``None`` on Dismiss.  The full launch context is captured
+    at creation time so the callback is immune to selection changes.
+    """
+
+    BINDINGS = [
+        _modal_binding("escape", "dismiss_screen", "Dismiss"),
+    ]
+
+    CSS = """
+    TaskLaunchScreen {
+        align: center middle;
+    }
+
+    #launch-dialog {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #launch-status {
+        margin-bottom: 1;
+    }
+
+    #login-agent {
+        margin-bottom: 1;
+    }
+
+    #launch-prompt {
+        margin-bottom: 1;
+    }
+
+    #launch-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #launch-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def __init__(
+        self,
+        container_name: str,
+        project_id: str,
+        task_id: str,
+        default_login: str = "bash",
+    ) -> None:
+        """Create the launch screen with container context and default agent."""
+        super().__init__()
+        self._container_name = container_name
+        self._project_id = project_id
+        self._task_id = task_id
+        self._default_login = default_login
+        self._container_ready = False
+        self._poll_timer = None
+        self._poll_count = 0
+
+    def compose(self) -> ComposeResult:
+        """Build status, agent selector, prompt input, and action buttons."""
+        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
+        with Vertical(id="launch-dialog") as dialog:
+            yield Static("Status: Starting container\u2026", id="launch-status")
+
+            # Build agent choices: bash + all registered headless providers
+            choices: list[tuple[str, str]] = [("bash", "bash")]
+            for p in HEADLESS_PROVIDERS.values():
+                choices.append((p.label, p.name))
+
+            # Validate default_login against available choices; fall back to "bash"
+            valid_values = {v for _, v in choices}
+            login_value = self._default_login if self._default_login in valid_values else "bash"
+            yield Select(choices, value=login_value, id="login-agent")
+            yield Input(placeholder="Initial prompt (optional)", id="launch-prompt")
+            with Horizontal(id="launch-buttons"):
+                yield Button("Dismiss", id="btn-dismiss", variant="default")
+                yield Button("Login", id="btn-login", variant="primary", disabled=True)
+        dialog.border_title = f"CLI Task {self._task_id}"
+        dialog.border_subtitle = "Esc to dismiss"
+
+    def on_mount(self) -> None:
+        """Start polling for container readiness and focus the prompt input."""
+        self._update_prompt_state()
+        prompt = self.query_one("#launch-prompt", Input)
+        prompt.focus()
+        self._poll_timer = self.set_interval(1.5, self._poll_status)
+
+    # After this many polls (~90s at 1.5s interval) without the container
+    # appearing, assume the launch failed and show a hint.
+    _POLL_STALL_THRESHOLD = 60
+
+    def _poll_status(self) -> None:
+        """Check container state and task mode; enable Login only when fully ready.
+
+        A task is fully ready when both conditions are met:
+        1. The container is in "running" state (podman says so).
+        2. The task metadata has a ``mode`` set (the runner finished init).
+        This prevents premature Login attempts before init scripts complete.
+
+        If the container never appears after many polls, updates the status
+        to indicate a likely launch failure so the user can dismiss.
+        """
+        from ..lib.containers.runtime import get_container_state
+        from ..lib.containers.tasks import get_task_meta
+
+        self._poll_count += 1
+        state = get_container_state(self._container_name)
+        status_widget = self.query_one("#launch-status", Static)
+        if state == "running":
+            # Also check that mode is set in task metadata — this is written
+            # only after the runner's readiness marker fires.
+            try:
+                meta = get_task_meta(self._project_id, self._task_id)
+                has_mode = meta.mode is not None
+            except (SystemExit, Exception):
+                has_mode = False
+
+            if has_mode:
+                status_widget.update("Status: Container ready")
+                self._container_ready = True
+                self.query_one("#btn-login", Button).disabled = False
+                if self._poll_timer:
+                    self._poll_timer.stop()
+                    self._poll_timer = None
+            else:
+                status_widget.update("Status: Initializing\u2026")
+        elif state:
+            status_widget.update(f"Status: {state}")
+        elif self._poll_count >= self._POLL_STALL_THRESHOLD:
+            status_widget.update("Status: Launch may have failed \u2014 check notifications")
+
+    def _update_prompt_state(self) -> None:
+        """Enable/disable prompt input based on selected agent."""
+        agent_select = self.query_one("#login-agent", Select)
+        prompt_input = self.query_one("#launch-prompt", Input)
+        if agent_select.value == "bash":
+            prompt_input.value = ""
+            prompt_input.disabled = True
+        else:
+            prompt_input.disabled = False
+
+    def on_select_changed(self, event: "Select.Changed") -> None:  # type: ignore[name-defined]
+        """Update prompt visibility when agent selection changes."""
+        self._update_prompt_state()
+
+    def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
+        """Treat Enter in the prompt input as Login if container is ready."""
+        if self._container_ready:
+            self._do_login()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Login or Dismiss button clicks."""
+        if event.button.id == "btn-login":
+            self._do_login()
+        elif event.button.id == "btn-dismiss":
+            self.dismiss(None)
+
+    def _do_login(self) -> None:
+        """Dismiss with launch context + selected agent and optional prompt."""
+        agent_select = self.query_one("#login-agent", Select)
+        agent = agent_select.value
+        prompt_input = self.query_one("#launch-prompt", Input)
+        prompt = prompt_input.value.strip() or None
+        if agent == "bash":
+            prompt = None
+        self.dismiss((self._project_id, self._task_id, self._container_name, agent, prompt))
+
+    def action_dismiss_screen(self) -> None:
+        """Dismiss the launch screen without logging in."""
+        self.dismiss(None)
+
+    def on_unmount(self) -> None:
+        """Clean up the polling timer."""
+        if self._poll_timer:
+            self._poll_timer.stop()
+            self._poll_timer = None
+
+
+# ---------------------------------------------------------------------------
 # Task Details Screen
 # ---------------------------------------------------------------------------
 
@@ -1116,8 +1439,8 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         yield detail_pane
 
         options: list[Option | None] = [
-            Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
-            Option("Start \\[T]oad task  (new task + browser TUI)", id="task_start_toad"),
+            Option("Start \\[c]li task  (new task + run CLI)", id="task_start_cli"),
+            Option("Start Toad task  \\[w]  (new task + browser TUI)", id="task_start_toad"),
         ]
         if is_experimental():
             options.append(Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"))
@@ -1129,8 +1452,6 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             if self._task_meta and self._task_meta.mode:
                 options.append(Option("view \\[f]ormatted logs", id="follow_logs"))
             options.append(None)
-            options.append(Option("run \\[c]li agent", id="cli"))
-            options.append(Option("run \\[w]eb Toad (browser)", id="toad"))
             options.append(Option("\\[r]estart container", id="restart"))
             if (
                 self._task_meta
@@ -1150,8 +1471,6 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(Option("shield \\[D]own (bypass)", id="shield_down"))
             if not get_shield_bypass_firewall_no_protection():
                 options.append(Option("\\[s]hield up (deny-all)", id="shield_up"))
-        options.append(None)
-        options.append(Option("New task (no run)  \\[C]", id="new"))
 
         yield OptionList(*options, id="actions-list")
 
@@ -1183,12 +1502,9 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Shift keys (uppercase) — N/A/C always available, H/P/X/D require tasks
+        # Shift keys (uppercase) — A always available, H/P/X/D require tasks
         shift_map: dict[str, str] = {
-            "N": "task_start_cli",
-            "T": "task_start_toad",
             "A": "task_start_autopilot",
-            "C": "new",
             "H": "diff_head",
             "P": "diff_prev",
             "X": "delete",
@@ -1203,10 +1519,18 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Lowercase keys — all require tasks to exist
+        # c/w — start new tasks (always available, same shortcuts as main screen)
+        start_map: dict[str, str] = {
+            "c": "task_start_cli",
+            "w": "task_start_toad",
+        }
+        if key in start_map:
+            self.dismiss(start_map[key])
+            event.stop()
+            return
+
+        # Lowercase keys — require tasks to exist
         lower_map: dict[str, str] = {
-            "c": "cli",
-            "w": "toad",
             "r": "restart",
             "l": "login",
             "u": "followup",

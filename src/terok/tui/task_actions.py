@@ -7,7 +7,10 @@ Handles task creation, deletion, renaming, running (CLI/web/autopilot),
 login, restart, follow-up, log viewing, and diff copying.
 """
 
+import io
+import shlex
 from collections.abc import Callable
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from ..lib.containers.agents import parse_md_agent
@@ -37,8 +40,27 @@ from ..lib.facade import (
     task_run_web,
 )
 from .clipboard import copy_to_clipboard_detailed
-from .screens import AgentSelectionScreen, AutopilotPromptScreen, SubagentInfo, TaskNameScreen
+from .screens import (
+    AgentSelectionScreen,
+    AutopilotPromptScreen,
+    SubagentInfo,
+    TaskCreateScreen,
+    TaskLaunchScreen,
+    TaskNameScreen,
+)
 from .widgets import TaskList
+
+
+def _build_interactive_agent_command(provider: object, prompt: str | None) -> str:
+    """Build shell command to launch an agent interactively with optional prompt.
+
+    Uses the binary as a positional command — the prompt is a first-turn
+    argument, NOT the headless ``-p`` flag.  The agent runs interactively
+    inside tmux so the user can re-attach later.
+    """
+    if not prompt:
+        return provider.binary
+    return f"{provider.binary} {shlex.quote(prompt)}"
 
 
 class TaskActionsMixin:
@@ -115,47 +137,33 @@ class TaskActionsMixin:
         except Exception as e:
             return project_id, task_id, task_name, str(e)
 
+    # ---------- Background container start helpers ----------
+
+    def _start_cli_container_quiet(
+        self, pid: str, task_id: str
+    ) -> tuple[str, str, str, str | None]:
+        """Background worker: start CLI container, suppress stdout."""
+        cname = container_name(pid, "cli", task_id)
+        try:
+            with redirect_stdout(io.StringIO()):
+                task_run_cli(pid, task_id)
+            return pid, task_id, cname, None
+        except (SystemExit, Exception) as e:
+            return pid, task_id, cname, str(e)
+
+    def _start_toad_container_quiet(
+        self, pid: str, task_id: str
+    ) -> tuple[str, str, str, str | None]:
+        """Background worker: start Toad container, suppress stdout."""
+        cname = container_name(pid, "toad", task_id)
+        try:
+            with redirect_stdout(io.StringIO()):
+                task_run_toad(pid, task_id)
+            return pid, task_id, cname, None
+        except (SystemExit, Exception) as e:
+            return pid, task_id, cname, str(e)
+
     # ---------- Task lifecycle actions ----------
-
-    async def action_new_task(self) -> None:
-        """Create a new task for the current project."""
-        if not self.current_project_id:
-            self.notify("No project selected.")
-            return
-
-        default_name = generate_task_name(self.current_project_id)
-        await self.push_screen(
-            TaskNameScreen(default_name=default_name),
-            self._on_new_task_name,
-        )
-
-    async def _on_new_task_name(self, name: str | None) -> None:
-        """Handle name result from TaskNameScreen for new task creation."""
-        if name is None or not self.current_project_id:
-            return
-        pid = self.current_project_id
-
-        def work() -> None:
-            """Create the task and update focus state."""
-            task_id = task_new(pid, name=name)
-            self._focus_task_after_creation(pid, task_id)
-
-        await self._run_suspended(work, success_msg="Task created.", refresh="tasks")
-
-    async def action_run_cli(self) -> None:
-        """Run the CLI agent for the currently selected task."""
-        if not self.current_project_id or not self.current_task:
-            self.notify("No task selected.")
-            return
-        pid = self.current_project_id
-        tid = self.current_task.task_id
-
-        def work() -> None:
-            """Launch the CLI container for this task."""
-            print(f"Running CLI for {pid}/{tid}...\n")
-            task_run_cli(pid, tid)
-
-        await self._run_suspended(work, refresh="tasks")
 
     async def action_run_web(self) -> None:
         """Public action for running web UI (delegates to _action_run_web)."""
@@ -180,21 +188,6 @@ class TaskActionsMixin:
 
         await self._run_suspended(work, refresh="tasks")
 
-    async def action_run_toad(self) -> None:
-        """Run Toad multi-agent TUI (browser access) for current task."""
-        if not self.current_project_id or not self.current_task:
-            self.notify("No task selected.")
-            return
-        pid = self.current_project_id
-        tid = self.current_task.task_id
-
-        def work() -> None:
-            """Launch Toad serve container."""
-            print(f"Starting Toad for {pid}/{tid}...\n")
-            task_run_toad(pid, tid)
-
-        await self._run_suspended(work, refresh="tasks")
-
     async def _action_task_start_cli(self) -> None:
         """Create a new task and immediately run CLI agent."""
         if not self.current_project_id:
@@ -211,16 +204,84 @@ class TaskActionsMixin:
         """Handle name result from TaskNameScreen for CLI task start."""
         if name is None or not self.current_project_id:
             return
+        await self._start_cli_task_background(name)
+
+    async def _start_cli_task_background(self, name: str) -> None:
+        """Create a CLI task and start its container in the background."""
         pid = self.current_project_id
-
-        def work() -> None:
-            """Create a new task and immediately launch CLI mode."""
+        if not pid:
+            return
+        try:
             task_id = task_new(pid, name=name)
-            self._focus_task_after_creation(pid, task_id)
-            print(f"\nRunning CLI for {pid}/{task_id}...\n")
-            task_run_cli(pid, task_id)
+        except (SystemExit, Exception) as e:
+            self.notify(f"Failed to create task: {e}")
+            return
+        self._focus_task_after_creation(pid, task_id)
+        cname = container_name(pid, "cli", task_id)
 
-        await self._run_suspended(work, refresh="tasks")
+        self.run_worker(
+            lambda: self._start_cli_container_quiet(pid, task_id),
+            name=f"cli-launch:{pid}:{task_id}",
+            group="cli-launch",
+            thread=True,
+            exit_on_error=False,
+        )
+
+        # Resolve default login agent: project → global → "bash"
+        default_login = "bash"
+        try:
+            project = load_project(pid)
+            default_login = project.default_login or "bash"
+        except (SystemExit, Exception):
+            pass
+
+        await self.push_screen(
+            TaskLaunchScreen(
+                container_name=cname,
+                project_id=pid,
+                task_id=task_id,
+                default_login=default_login,
+            ),
+            self._on_launch_screen_result,
+        )
+        await self.refresh_tasks()
+
+    async def _on_launch_screen_result(
+        self, result: "tuple[str, str, str, str, str | None] | None"
+    ) -> None:
+        """Handle the result from TaskLaunchScreen.
+
+        The result carries the full launch context captured at creation time
+        so it is immune to ``self.current_task`` changes while the modal is open.
+        """
+        if result is None:
+            await self.refresh_tasks()
+            return
+
+        pid, tid, cname, agent, prompt = result
+
+        # All agents (including bash) launch interactively inside tmux so the
+        # user can re-attach later with 'login'.  The base command is always
+        # podman exec -it <cname> tmux new-session -A -s main [bash -lc <cmd>].
+        try:
+            base_cmd = get_login_command(pid, tid)
+        except SystemExit as e:
+            self.notify(str(e))
+            return
+
+        if agent == "bash":
+            cmd = base_cmd
+        else:
+            from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+
+            provider = HEADLESS_PROVIDERS.get(agent)
+            if not provider:
+                self.notify(f"Unknown agent: {agent}")
+                return
+            agent_cmd = _build_interactive_agent_command(provider, prompt)
+            cmd = [*base_cmd, "bash", "-lc", agent_cmd]
+
+        await self._launch_terminal_session(cmd, title=f"{pid}:{tid}", cname=cname)
 
     async def _action_task_start_toad(self) -> None:
         """Create a new task and immediately run Toad serve."""
@@ -238,16 +299,29 @@ class TaskActionsMixin:
         """Handle name result from TaskNameScreen for Toad task start."""
         if name is None or not self.current_project_id:
             return
+        await self._start_toad_task_background(name)
+
+    async def _start_toad_task_background(self, name: str) -> None:
+        """Create a Toad task and start its container in the background."""
         pid = self.current_project_id
-
-        def work() -> None:
-            """Create a new task and immediately launch Toad serve."""
+        if not pid:
+            return
+        try:
             task_id = task_new(pid, name=name)
-            self._focus_task_after_creation(pid, task_id)
-            print(f"\nStarting Toad for {pid}/{task_id}...\n")
-            task_run_toad(pid, task_id)
+        except (SystemExit, Exception) as e:
+            self.notify(f"Failed to create task: {e}")
+            return
+        self._focus_task_after_creation(pid, task_id)
 
-        await self._run_suspended(work, refresh="tasks")
+        self.run_worker(
+            lambda: self._start_toad_container_quiet(pid, task_id),
+            name=f"toad-launch:{pid}:{task_id}",
+            group="toad-launch",
+            thread=True,
+            exit_on_error=False,
+        )
+        self.notify("Starting Toad task\u2026")
+        await self.refresh_tasks()
 
     async def _action_task_start_web(self) -> None:
         """Create a new task and immediately run Web UI."""
@@ -704,3 +778,28 @@ class TaskActionsMixin:
     async def action_follow_logs_from_main(self) -> None:
         """Follow logs for the selected autopilot task from the main screen."""
         await self._action_follow_logs()
+
+    async def action_create_task_from_main(self) -> None:
+        """Show the task creation modal from the main screen."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskCreateScreen(default_name=default_name),
+            self._on_create_task_result,
+        )
+
+    async def _on_create_task_result(self, result: "tuple[str, str] | None") -> None:
+        """Dispatch create-task result to the appropriate background launcher."""
+        if result is None:
+            return
+        name, mode = result
+        if mode == "cli":
+            await self._start_cli_task_background(name)
+        elif mode == "toad":
+            await self._start_toad_task_background(name)
+        elif mode == "autopilot":
+            await self._on_autopilot_name_result(name)
+        elif mode == "web":
+            await self._on_task_start_web_name(name)

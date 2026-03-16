@@ -228,6 +228,7 @@ class RawProjectYaml(BaseModel):
     shield: RawShieldProjectSection = Field(default_factory=RawShieldProjectSection)
     docker: RawDockerSection = Field(default_factory=RawDockerSection)
     default_agent: str | None = None
+    default_login: str | None = None
     agent: dict[str, Any] = Field(default_factory=dict)
 
     _SECTION_KEYS: ClassVar[frozenset[str]] = frozenset(
@@ -347,6 +348,7 @@ class RawGlobalConfig(BaseModel):
     tasks: RawTasksGlobalSection = Field(default_factory=RawTasksGlobalSection)
     git: RawGlobalGitSection = Field(default_factory=RawGlobalGitSection)
     default_agent: str | None = None
+    default_login: str | None = None
     agent: dict[str, Any] = Field(default_factory=dict)
 
     _SECTION_KEYS: ClassVar[frozenset[str]] = frozenset(

@@ -41,7 +41,8 @@ class ModeInfo:
 
 STATUS_DISPLAY: dict[str, StatusInfo] = {
     "running": StatusInfo(label="running", emoji="\U0001f7e2", color="green"),
-    "stopped": StatusInfo(label="stopped", emoji="\U0001f7e1", color="yellow"),
+    "init": StatusInfo(label="init", emoji="\U0001f7e1", color="yellow"),
+    "stopped": StatusInfo(label="stopped", emoji="\U0001f534", color="red"),
     "completed": StatusInfo(label="completed", emoji="\u2705", color="green"),
     "failed": StatusInfo(label="failed", emoji="\u274c", color="red"),
     "created": StatusInfo(label="created", emoji="\U0001f195", color="yellow"),
@@ -108,6 +109,13 @@ def has_gpu(project: Any) -> bool:
     return False
 
 
+def _exit_code_status(exit_code: int | None) -> str | None:
+    """Map an exit code to a terminal status, or ``None`` if not terminal."""
+    if exit_code is None:
+        return None
+    return "completed" if exit_code == 0 else "failed"
+
+
 def effective_status(task: TaskMeta) -> str:
     """Compute the display status from task metadata + live container state.
 
@@ -118,35 +126,27 @@ def effective_status(task: TaskMeta) -> str:
     - ``exit_code`` (int | None): process exit code, or None
     - ``deleting`` (bool): persisted to YAML before deletion starts
 
-    Returns one of: ``"deleting"``, ``"running"``, ``"stopped"``,
-    ``"completed"``, ``"failed"``, ``"created"``, ``"not found"``.
+    Returns one of: ``"deleting"``, ``"running"``, ``"init"``,
+    ``"stopped"``, ``"completed"``, ``"failed"``, ``"created"``,
+    ``"not found"``.
     """
     if task.deleting:
         return "deleting"
 
     cs = task.container_state
-    mode = task.mode
-    exit_code = task.exit_code
 
     if cs == "running":
-        return "running"
+        # Green only once the runner finished init (mode written to YAML).
+        # While starting up, show yellow for monotonic new → init → running.
+        return "running" if task.mode is not None else "init"
 
     if cs is not None:
-        # Container exists but is not running
-        if exit_code is not None and exit_code == 0:
-            return "completed"
-        if exit_code is not None and exit_code != 0:
-            return "failed"
-        return "stopped"
+        return _exit_code_status(task.exit_code) or "stopped"
 
     # No container found
-    if mode is None:
+    if task.mode is None:
         return "created"
-    if exit_code is not None and exit_code == 0:
-        return "completed"
-    if exit_code is not None and exit_code != 0:
-        return "failed"
-    return "not found"
+    return _exit_code_status(task.exit_code) or "not found"
 
 
 def mode_info(task: TaskMeta) -> ModeInfo:

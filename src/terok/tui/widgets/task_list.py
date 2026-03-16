@@ -37,6 +37,7 @@ class TaskList(ListView):
 
     BINDINGS = [
         ("enter", "app.show_task_actions", "Task\u2026"),
+        ("n", "app.create_task_from_main", "New"),
         ("H", "app.copy_diff_head", "Diff HEAD"),
         ("P", "app.copy_diff_prev", "Diff PREV"),
         ("A", "app.run_autopilot_from_main", "Autopilot"),

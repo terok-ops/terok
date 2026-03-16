@@ -35,6 +35,7 @@ def render_task_details(
     empty_message: str | None = None,
     css_variables: dict[str, str] | None = None,
     show_workspace: bool = True,
+    shield_hooks_ok: bool | None = None,
 ) -> Text:
     """Render task details as a Rich Text object."""
     if task is None:
@@ -88,21 +89,35 @@ def render_task_details(
         success_color = variables.get("success", "green")
         error_color = variables.get("error", "red")
         warning_color = variables.get("warning", "yellow")
-        shield_colors = {
-            "UP": success_color,
-            "DOWN": warning_color,
-            "INACTIVE": error_color,
-            "DISABLED": error_color,
-        }
-        shield_color = shield_colors.get(task.shield_state, warning_color)
-        lines.append(
-            Text.assemble(
-                "Shield:    ",
-                Text(task.shield_state.lower(), style=Style(color=shield_color)),
+
+        container_live = task.container_state == "running"
+        # INACTIVE + container not running + hooks healthy → "ready" (no alarm)
+        hooks_ok = shield_hooks_ok is not False  # True or unknown (None)
+        if task.shield_state == "INACTIVE" and not container_live and hooks_ok:
+            lines.append(
+                Text.assemble(
+                    "Shield:    ",
+                    Text("ready", style=Style(dim=True)),
+                )
             )
-        )
-        if task.shield_state in {"DISABLED", "INACTIVE"}:
-            lines.append(Text(f"           {SHIELD_SECURITY_HINT}", style=Style(color=error_color)))
+        else:
+            shield_colors = {
+                "UP": success_color,
+                "DOWN": warning_color,
+                "INACTIVE": error_color,
+                "DISABLED": error_color,
+            }
+            shield_color = shield_colors.get(task.shield_state, warning_color)
+            lines.append(
+                Text.assemble(
+                    "Shield:    ",
+                    Text(task.shield_state.lower(), style=Style(color=shield_color)),
+                )
+            )
+            if task.shield_state in {"DISABLED", "INACTIVE"}:
+                lines.append(
+                    Text(f"           {SHIELD_SECURITY_HINT}", style=Style(color=error_color))
+                )
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))
@@ -144,6 +159,16 @@ class TaskDetails(Static):
             self.current_project_id = None
         else:
             self.current_project_id = self.app.current_project_id if self.app else None
+
+        # Determine shield hook health from the cached project-level env check.
+        hooks_ok: bool | None = None
+        try:
+            shield_env = getattr(self.app, "_last_shield_env", None)
+            if shield_env is not None:
+                hooks_ok = shield_env.health == "ok"
+        except Exception:
+            pass
+
         rendered = render_task_details(
             task,
             self.current_project_id,
@@ -151,5 +176,6 @@ class TaskDetails(Static):
             empty_message,
             _get_css_variables(self),
             show_workspace=False,
+            shield_hooks_ok=hooks_ok,
         )
         content.update(rendered)

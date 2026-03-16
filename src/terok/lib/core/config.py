@@ -269,6 +269,11 @@ def get_global_default_agent() -> str | None:
     return _load_validated().default_agent
 
 
+def get_global_default_login() -> str | None:
+    """Return default_login from global config, or None if not set."""
+    return _load_validated().default_login
+
+
 def get_tui_default_tmux() -> bool:
     """Return whether to default to tmux mode for TUI, or False if not set."""
     return _load_validated().tui.default_tmux

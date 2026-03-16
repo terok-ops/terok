@@ -133,9 +133,6 @@ if _HAS_TEXTUAL:
         "task_start_toad": "_action_task_start_toad",
         "task_start_web": "_action_task_start_web",
         "task_start_autopilot": "_action_task_start_autopilot",
-        "new": "action_new_task",
-        "cli": "action_run_cli",
-        "toad": "action_run_toad",
         "web": "_action_run_web",
         "delete": "action_delete_task",
         "restart": "_action_restart_task",
@@ -763,6 +760,30 @@ if _HAS_TEXTUAL:
                 if project_id != self.current_project_id:
                     return
                 await self.refresh_tasks()
+
+            if worker.group == "cli-launch":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, _cname, error = result
+                if error:
+                    self.notify(f"CLI task failed: {error}")
+                if project_id == self.current_project_id:
+                    await self.refresh_tasks()
+                return
+
+            if worker.group == "toad-launch":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, _cname, error = result
+                if error:
+                    self.notify(f"Toad task failed: {error}")
+                else:
+                    self.notify(f"Toad task {task_id} is running")
+                if project_id == self.current_project_id:
+                    await self.refresh_tasks()
+                return
 
             if worker.group == "autopilot-launch":
                 result = worker.result

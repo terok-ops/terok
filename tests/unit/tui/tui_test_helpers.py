@@ -187,7 +187,34 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
         def clear(self) -> None:
             self.entries.clear()
 
+    class Input(_StubObject):
+        """Stub input widget that only captures construction args."""
+
+        class Submitted(_StubObject):
+            """Stub input submitted event."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.value = kwargs.get("value", "")
+
+        def focus(self) -> None:
+            pass
+
+    class Select(_StubObject):
+        """Stub select widget that only captures construction args."""
+
+        BLANK = ""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.value = kwargs.get("value", self.BLANK)
+
+        @classmethod
+        def __class_getitem__(cls, item: type) -> type:
+            return cls
+
     widgets_mod.Button = Button
+    widgets_mod.Input = Input
     widgets_mod.Footer = Footer
     widgets_mod.Header = Header
     widgets_mod.ListItem = ListItem
@@ -196,6 +223,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     widgets_mod.OptionList = OptionList
     widgets_mod.TextArea = TextArea
     widgets_mod.SelectionList = SelectionList
+    widgets_mod.Select = Select
     widgets_mod.RichLog = RichLog
 
     option_list_mod = types.ModuleType("textual.widgets.option_list")

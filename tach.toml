@@ -685,6 +685,7 @@ expose = [
     "get_global_human_name",
     "get_global_human_email",
     "get_global_default_agent",
+    "get_global_default_login",
     "global_config_path",
     "global_config_search_paths",
     "load_global_config",

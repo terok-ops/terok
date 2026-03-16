@@ -18,6 +18,7 @@ from .config import (
     bundled_presets_dir,
     config_root,
     get_global_default_agent,
+    get_global_default_login,
     get_global_section,
     global_presets_dir,
     state_root,
@@ -131,6 +132,9 @@ def _build_project_config(
     # Default agent: project → global → None
     default_agent = raw.default_agent or get_global_default_agent()
 
+    # Default login agent: project → global → None (UI falls back to "bash")
+    default_login = raw.default_login or get_global_default_login()
+
     # Agent config (stays as dict — semi-structured, _inherit merging)
     agent_cfg = dict(raw.agent)
     _resolve_subagent_files(agent_cfg.get("subagents", []), root)
@@ -158,6 +162,7 @@ def _build_project_config(
         auto_sync_enabled=raw.gatekeeping.auto_sync.enabled,
         auto_sync_branches=raw.gatekeeping.auto_sync.branches,
         default_agent=default_agent,
+        default_login=default_login,
         agent_config=agent_cfg,
         shutdown_timeout=raw.run.shutdown_timeout,
         task_name_categories=raw.tasks.name_categories,
