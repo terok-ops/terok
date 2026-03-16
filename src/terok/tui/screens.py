@@ -1127,11 +1127,12 @@ class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
 # ---------------------------------------------------------------------------
 
 
-class TaskLaunchScreen(screen.ModalScreen["tuple[str, str | None] | None"]):
+class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str | None] | None"]):
     """Post-creation modal for CLI tasks: agent selection + optional prompt.
 
-    Dismisses with ``(agent_name, prompt_or_None)`` on Login,
-    or ``None`` on Dismiss.
+    Dismisses with ``(project_id, task_id, container_name, agent, prompt)``
+    on Login, or ``None`` on Dismiss.  The full launch context is captured
+    at creation time so the callback is immune to selection changes.
     """
 
     BINDINGS = [
@@ -1283,14 +1284,14 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str | None] | None"]):
             self.dismiss(None)
 
     def _do_login(self) -> None:
-        """Dismiss with the selected agent and optional prompt."""
+        """Dismiss with launch context + selected agent and optional prompt."""
         agent_select = self.query_one("#login-agent", Select)
         agent = agent_select.value
         prompt_input = self.query_one("#launch-prompt", Input)
         prompt = prompt_input.value.strip() or None
         if agent == "bash":
             prompt = None
-        self.dismiss((agent, prompt))
+        self.dismiss((self._project_id, self._task_id, self._container_name, agent, prompt))
 
     def action_dismiss_screen(self) -> None:
         """Dismiss the launch screen without logging in."""

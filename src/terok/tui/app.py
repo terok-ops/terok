@@ -765,7 +765,7 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, task_id, cname, error = result
+                project_id, task_id, _cname, error = result
                 if error:
                     self.notify(f"CLI task failed: {error}")
                 if project_id == self.current_project_id:
@@ -776,7 +776,7 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, task_id, cname, error = result
+                project_id, task_id, _cname, error = result
                 if error:
                     self.notify(f"Toad task failed: {error}")
                 else:

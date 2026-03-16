@@ -169,7 +169,7 @@ class TestTaskLaunchScreen:
         screen.query_one = query_one
 
         screen._do_login()
-        screen.dismiss.assert_called_once_with(("claude", "fix the bug"))
+        screen.dismiss.assert_called_once_with(("p", "1", "c", "claude", "fix the bug"))
 
     def test_do_login_bash_clears_prompt(self) -> None:
         screens, _ = import_screens()
@@ -189,7 +189,7 @@ class TestTaskLaunchScreen:
         screen.query_one = query_one
 
         screen._do_login()
-        screen.dismiss.assert_called_once_with(("bash", None))
+        screen.dismiss.assert_called_once_with(("p", "1", "c", "bash", None))
 
     def test_login_button_blocked_when_not_ready(self) -> None:
         screens, _ = import_screens()

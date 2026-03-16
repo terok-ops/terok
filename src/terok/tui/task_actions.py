@@ -246,20 +246,19 @@ class TaskActionsMixin:
         )
         await self.refresh_tasks()
 
-    async def _on_launch_screen_result(self, result: "tuple[str, str | None] | None") -> None:
-        """Handle the result from TaskLaunchScreen."""
+    async def _on_launch_screen_result(
+        self, result: "tuple[str, str, str, str, str | None] | None"
+    ) -> None:
+        """Handle the result from TaskLaunchScreen.
+
+        The result carries the full launch context captured at creation time
+        so it is immune to ``self.current_task`` changes while the modal is open.
+        """
         if result is None:
             await self.refresh_tasks()
             return
 
-        agent, prompt = result
-        pid = self.current_project_id
-        if not pid or not self.current_task:
-            return
-        tid = self.current_task.task_id
-        mode = self.current_task.mode or "cli"
-        cname = container_name(pid, mode, tid)
-        task_name = self.current_task.name or tid
+        pid, tid, cname, agent, prompt = result
 
         # All agents (including bash) launch interactively inside tmux so the
         # user can re-attach later with 'login'.  The base command is always
@@ -282,7 +281,7 @@ class TaskActionsMixin:
             agent_cmd = _build_interactive_agent_command(provider, prompt)
             cmd = [*base_cmd, "bash", "-lc", agent_cmd]
 
-        await self._launch_terminal_session(cmd, title=f"{pid}:{tid}:{task_name}", cname=cname)
+        await self._launch_terminal_session(cmd, title=f"{pid}:{tid}", cname=cname)
 
     async def _action_task_start_toad(self) -> None:
         """Create a new task and immediately run Toad serve."""
