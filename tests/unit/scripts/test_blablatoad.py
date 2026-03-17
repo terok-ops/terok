@@ -184,7 +184,7 @@ class TestBlablatoadDockerfile:
         with project_env(yaml_text, project_id="proj_blablatoad_test"):
             generate_dockerfiles("proj_blablatoad_test")
             content = (build_root() / "proj_blablatoad_test" / "L1.cli.Dockerfile").read_text()
-            assert "COPY scripts/blablatoad /usr/local/bin/blablatoad" in content
+            assert "/usr/local/bin/blablatoad" in content
 
     def test_l1_cli_blablatoad_script_staged(self) -> None:
         """Verify the blablatoad script is staged in the build context."""

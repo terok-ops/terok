@@ -186,7 +186,7 @@ def test_build_blablador_update(blablador_module, model: str, models: list[str])
     [
         pytest.param(
             "proj_blablador_test",
-            ["COPY scripts/blablador /usr/local/bin/blablador"],
+            ["/usr/local/bin/blablador"],
             [],
             id="installs-wrapper",
         ),

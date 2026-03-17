@@ -10,34 +10,35 @@ ENV DEBIAN_FRONTEND=noninteractive \
 USER root
 ENV HOME=/root
 
+# All system packages in a single layer.  The GitHub CLI apt source is
+# registered first so the NodeSource setup script's apt-get update
+# (which runs inside setup_22.x) picks up both external repos at once.
+# gh itself is installed below the cache bust point (fast-moving), but
+# having the source pre-registered avoids an extra apt-get update there.
 RUN set -eux; \
-    apt-get update; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -sSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+      "https://cli.github.com/packages/githubcli-archive-keyring.gpg"; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends \
             curl ca-certificates gnupg \
-            python-is-python3 python3 python3-pip python3-venv pipx ; \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
-    apt-get install -y --no-install-recommends nodejs; \
+            python-is-python3 python3 python3-pip python3-venv pipx \
+            nodejs fd-find jq wget; \
     rm -rf /var/lib/apt/lists/*
 
-# Code exploration tools (fd-find, jq, wget are apt; yq and ast-grep need separate install)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      fd-find jq wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# yq (YAML processor, like jq but for YAML)
+# Binary tools: yq (YAML processor), ast-grep (structural code search via AST),
+# uv (Python package manager with built-in Python version management — used to
+# install Toad with its own Python 3.14 without touching system Python).
 RUN set -eux; \
     ARCH=$(dpkg --print-architecture); \
+    YQ_VERSION=v4.52.4; \
     curl -fsSL -o /usr/local/bin/yq \
-      "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"; \
-    chmod +x /usr/local/bin/yq
-
-# ast-grep (structural code search/rewrite using AST patterns)
-# Installed via pip to avoid /usr/bin/sg name conflict with coreutils sg(1).
-RUN pip install --break-system-packages ast-grep-cli
-
-# uv (Python package manager with built-in Python version management)
-# Used to install Toad with its own Python 3.14 without touching system Python.
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+      "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}"; \
+    chmod +x /usr/local/bin/yq; \
+    pip install --break-system-packages ast-grep-cli; \
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
 # Pre-create managed config directories for per-task permission mode.
 # init-ssh-and-repo.sh writes config here when TEROK_UNRESTRICTED=1.
@@ -74,60 +75,51 @@ RUN mkdir -p /usr/local/share/terok && \
 # === Cache bust point ===
 # Changing AGENT_CACHE_BUST invalidates all layers below: terok scripts,
 # agent CLIs (gh, glab, vibe, codex, copilot, claude, opencode, toad),
-# and ACP adapters.  Only system packages (apt, nodejs, python, pipx,
-# uv, yq, ast-grep) and shell config are cached above.
+# and ACP adapters.  System packages (apt, nodejs, python, pipx, uv,
+# yq, ast-grep) and shell config are cached above.
 ARG AGENT_CACHE_BUST=0
 
-# terok scripts (refreshed on agent rebuild)
-# Note: AGENT_CACHE_BUST is referenced here to make cache invalidation explicit,
-# though Docker invalidates all layers below a changed ARG regardless.
-RUN mkdir -p /usr/local/share/terok && echo "cache-bust: ${AGENT_CACHE_BUST}" > /dev/null
-COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
-COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
-COPY scripts/terok-env-git-identity.sh /usr/local/share/terok/terok-env-git-identity.sh
-COPY scripts/terok-env.sh /etc/profile.d/terok-env.sh
-COPY scripts/hilfe /usr/local/bin/hilfe
-COPY scripts/blablador /usr/local/bin/blablador
-COPY scripts/blablador-acp /usr/local/bin/blablador-acp
-COPY scripts/blablatoad /usr/local/bin/blablatoad
-COPY scripts/kisski /usr/local/bin/kisski
-COPY scripts/kisski-acp /usr/local/bin/kisski-acp
-COPY scripts/kisskitoad /usr/local/bin/kisskitoad
-COPY scripts/toad /usr/local/bin/toad
-COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
-COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
-COPY scripts/allthethings.sh /usr/local/bin/allthethings.sh
-COPY scripts/update-all-the-things /usr/local/bin/update-all-the-things
-RUN chmod +x \
-    /usr/local/bin/setup-codex-auth.sh \
-    /usr/local/share/terok/terok-env-git-identity.sh \
-    /usr/local/bin/hilfe \
-    /usr/local/bin/blablador \
-    /usr/local/bin/blablador-acp \
-    /usr/local/bin/blablatoad \
-    /usr/local/bin/kisski \
-    /usr/local/bin/kisski-acp \
-    /usr/local/bin/kisskitoad \
-    /usr/local/bin/toad \
-    /usr/local/bin/vibe-model-sync \
-    /usr/local/bin/mistral-model-sync.py \
-    /usr/local/bin/allthethings.sh \
-    /usr/local/bin/update-all-the-things
+# terok scripts — single COPY + distribute (refreshed on agent rebuild)
+COPY scripts/ /tmp/terok-scripts/
+RUN set -eux; \
+    cp /tmp/terok-scripts/terok-env-git-identity.sh /usr/local/share/terok/; \
+    cp /tmp/terok-scripts/terok-env.sh /etc/profile.d/terok-env.sh; \
+    cp /tmp/terok-scripts/opencode-session-plugin.mjs /usr/local/share/terok/; \
+    cp /tmp/terok-scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync; \
+    for f in setup-codex-auth.sh hilfe blablador blablador-acp blablatoad \
+             kisski kisski-acp kisskitoad toad \
+             mistral-model-sync.py allthethings.sh update-all-the-things; do \
+        cp "/tmp/terok-scripts/$f" "/usr/local/bin/$f"; \
+    done; \
+    chmod +x \
+        /usr/local/share/terok/terok-env-git-identity.sh \
+        /usr/local/bin/setup-codex-auth.sh \
+        /usr/local/bin/hilfe \
+        /usr/local/bin/blablador \
+        /usr/local/bin/blablador-acp \
+        /usr/local/bin/blablatoad \
+        /usr/local/bin/kisski \
+        /usr/local/bin/kisski-acp \
+        /usr/local/bin/kisskitoad \
+        /usr/local/bin/toad \
+        /usr/local/bin/vibe-model-sync \
+        /usr/local/bin/mistral-model-sync.py \
+        /usr/local/bin/allthethings.sh \
+        /usr/local/bin/update-all-the-things; \
+    rm -rf /tmp/terok-scripts
 
 # Root-level agent installs (need apt/pipx — refreshed on agent rebuild)
 RUN set -eux; \
     pipx install mistral-vibe; \
     pipx inject mistral-vibe mistralai
 
-# Install GitHub CLI (gh) from official APT repository
+# Install GitHub CLI (gh) — apt source is pre-registered above the cache
+# bust point; apt-get update is still needed to refresh the package index
+# since earlier layers cleared /var/lib/apt/lists/*.
 RUN set -eux; \
-    curl -sSL -o /tmp/githubcli-archive-keyring.gpg \
-      "https://cli.github.com/packages/githubcli-archive-keyring.gpg"; \
-    install -o root -g root -m 644 /tmp/githubcli-archive-keyring.gpg /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends gh; \
-    rm -rf /var/lib/apt/lists/* /tmp/githubcli-archive-keyring.gpg
+    rm -rf /var/lib/apt/lists/*
 
 # Install GitLab CLI (glab) from official GitLab releases
 RUN set -eux; \
@@ -151,14 +143,14 @@ ENV NPM_CONFIG_PREFIX=/home/dev/.npm-packages \
 USER dev
 WORKDIR /home/dev
 
-# Install AI agent CLIs as dev user
-RUN mkdir -p "$NPM_CONFIG_PREFIX" && npm config set prefix "$NPM_CONFIG_PREFIX"
-RUN npm install -g @openai/codex
-RUN npm install -g @github/copilot
-RUN npm install -g @zed-industries/claude-code-acp
+# Install AI agent CLIs as dev user (single npm call to reduce overhead)
+RUN set -eux; \
+    mkdir -p "$NPM_CONFIG_PREFIX"; \
+    npm config set prefix "$NPM_CONFIG_PREFIX"; \
+    npm install -g @openai/codex @github/copilot @zed-industries/claude-code-acp; \
+    npm cache clean --force
 RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN curl -fsSL https://opencode.ai/install | bash
-RUN npm cache clean --force
 
 # Toad — universal multi-agent TUI via ACP (requires Python >=3.14)
 # uv downloads a standalone Python 3.14, leaving system Python untouched.
