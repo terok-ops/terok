@@ -92,7 +92,11 @@ def _check_unfired_hooks(
             if not meta_path.is_file():
                 continue
 
-            meta = _yaml_load(meta_path.read_text()) or {}
+            try:
+                meta = _yaml_load(meta_path.read_text()) or {}
+            except Exception:
+                results.append(("warn", f"Task {pid}/{tid}", f"bad metadata: {meta_path}"))
+                continue
             mode = meta.get("mode")
             if not mode:
                 continue
@@ -109,17 +113,20 @@ def _check_unfired_hooks(
 
             label = f"Task {pid}/{tid}"
             if fix:
-                run_hook(
-                    "post_stop",
-                    project.hook_post_stop,
-                    project_id=pid,
-                    task_id=tid,
-                    mode=mode,
-                    cname=cname,
-                    task_dir=project.tasks_root / str(tid),
-                    meta_path=meta_path,
-                )
-                results.append(("ok", label, "post_stop hook reconciled"))
+                try:
+                    run_hook(
+                        "post_stop",
+                        project.hook_post_stop,
+                        project_id=pid,
+                        task_id=tid,
+                        mode=mode,
+                        cname=cname,
+                        task_dir=project.tasks_root / str(tid),
+                        meta_path=meta_path,
+                    )
+                    results.append(("ok", label, "post_stop hook reconciled"))
+                except Exception as exc:
+                    results.append(("error", label, f"post_stop hook failed: {exc}"))
             else:
                 results.append(
                     (

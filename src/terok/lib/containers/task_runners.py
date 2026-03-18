@@ -396,6 +396,7 @@ def task_run_cli(
             mode="cli",
             cname=cname,
             task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
         )
         meta["mode"] = "cli"
         meta_path.write_text(_yaml_dump(meta))
@@ -534,6 +535,7 @@ def task_run_toad(
             cname=cname,
             web_port=port,
             task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
         )
         print("Container started.")
         print(f"Toad: {_blue(url, color_enabled)}")
@@ -996,6 +998,16 @@ def task_restart(project_id: str, task_id: str) -> None:
             raise SystemExit("podman not found; please install podman")
         except subprocess.CalledProcessError as e:
             raise SystemExit(f"Failed to stop container: {e}")
+        run_hook(
+            "post_stop",
+            project.hook_post_stop,
+            project_id=project_id,
+            task_id=task_id,
+            mode=mode,
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
+        )
 
     if container_state is not None:
         # Container exists (stopped/exited, or just stopped above) - start it
@@ -1009,6 +1021,7 @@ def task_restart(project_id: str, task_id: str) -> None:
             mode=mode,
             cname=cname,
             task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
         )
 
         color_enabled = _supports_color()
