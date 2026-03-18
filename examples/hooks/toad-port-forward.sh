@@ -7,7 +7,7 @@
 # Usage in config.yml or project.yml:
 #   hooks:
 #     post_ready: /path/to/toad-port-forward.sh
-#     pre_stop: /path/to/toad-port-forward.sh
+#     post_stop: /path/to/toad-port-forward.sh
 #
 # Requires: socat
 
@@ -20,7 +20,7 @@ case "$TEROK_HOOK" in
         socat TCP-LISTEN:"$TEROK_WEB_PORT",fork,reuseaddr TCP:127.0.0.1:"$TEROK_WEB_PORT" &
         echo $! > "$PID_FILE"
         ;;
-    pre_stop)
+    post_stop)
         if [ -f "$PID_FILE" ]; then
             kill "$(cat "$PID_FILE")" 2>/dev/null
             rm -f "$PID_FILE"

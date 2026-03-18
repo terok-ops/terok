@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Task lifecycle hook execution.
+"""Task lifecycle hook execution and tracking.
 
 Runs user-configured shell commands at task lifecycle points on the host.
-Hook commands receive task context via environment variables.
+Hook commands receive task context via environment variables.  Tracks
+which hooks have fired in task metadata so sickbay can detect and
+reconcile missed hooks (e.g. post_stop after an unclean shutdown).
 """
 
 from __future__ import annotations
@@ -14,9 +16,14 @@ import os
 import subprocess
 from pathlib import Path
 
+from ..util.yaml import dump as _yaml_dump, load as _yaml_load
+
 logger = logging.getLogger(__name__)
 
-_HOOK_TIMEOUT = 30  # seconds for synchronous hooks (pre_stop)
+_HOOK_TIMEOUT = 30  # seconds for post_stop timeout
+
+#: Hooks that fire during the task lifecycle.
+HOOK_NAMES = ("pre_start", "post_start", "post_ready", "post_stop")
 
 
 def _build_hook_env(
@@ -45,6 +52,21 @@ def _build_hook_env(
     return env
 
 
+def _record_hook(meta_path: Path, hook_name: str) -> None:
+    """Append *hook_name* to the ``hooks_fired`` list in task metadata."""
+    if not meta_path.is_file():
+        return
+    try:
+        meta = _yaml_load(meta_path.read_text()) or {}
+        fired = meta.get("hooks_fired") or []
+        if hook_name not in fired:
+            fired.append(hook_name)
+        meta["hooks_fired"] = fired
+        meta_path.write_text(_yaml_dump(meta))
+    except Exception:
+        logger.warning("failed to record hook %s in %s", hook_name, meta_path, exc_info=True)
+
+
 def run_hook(
     hook_name: str,
     command: str | None,
@@ -55,6 +77,7 @@ def run_hook(
     cname: str,
     web_port: int | None = None,
     task_dir: Path | None = None,
+    meta_path: Path | None = None,
 ) -> None:
     """Execute a lifecycle hook command if configured.
 
@@ -62,26 +85,25 @@ def run_hook(
     variables.  Errors are logged as warnings — hooks must not break the
     task lifecycle.
 
-    For ``pre_stop``, the command runs synchronously with a timeout.
-    For ``post_start`` and ``post_ready``, it also runs synchronously
-    but failures are non-fatal.
+    If *meta_path* is provided, the hook name is recorded in the task's
+    ``hooks_fired`` metadata list (even when *command* is None — the hook
+    point was reached, so it counts as "fired").
     """
+    # Always record that this hook point was reached, even if no command
+    if meta_path:
+        _record_hook(meta_path, hook_name)
+
     if not command:
         return
 
     env = _build_hook_env(
-        project_id,
-        task_id,
-        mode,
-        cname,
-        hook_name,
-        web_port=web_port,
-        task_dir=task_dir,
+        project_id, task_id, mode, cname, hook_name,
+        web_port=web_port, task_dir=task_dir,
     )
 
     logger.debug("hook %s: running %r", hook_name, command)
 
-    timeout = _HOOK_TIMEOUT if hook_name == "pre_stop" else None
+    timeout = _HOOK_TIMEOUT if hook_name == "post_stop" else None
     try:
         subprocess.run(
             ["sh", "-c", command],

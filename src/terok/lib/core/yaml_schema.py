@@ -186,9 +186,10 @@ class RawHooksSection(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    pre_start: str | None = None
     post_start: str | None = None
     post_ready: str | None = None
-    pre_stop: str | None = None
+    post_stop: str | None = None
 
 
 class RawRunSection(BaseModel):

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.containers.hooks import _build_hook_env, run_hook
+from terok.lib.containers.hooks import _build_hook_env, _record_hook, run_hook
 
 
 class TestBuildHookEnv:
@@ -42,6 +42,40 @@ class TestBuildHookEnv:
         monkeypatch.setenv("MY_CUSTOM_VAR", "hello")
         env = _build_hook_env("p", "1", "cli", "c", "post_start")
         assert env["MY_CUSTOM_VAR"] == "hello"
+
+
+class TestRecordHook:
+    """Tests for _record_hook metadata tracking."""
+
+    def test_record_hook_writes_to_metadata(self, tmp_path: Path) -> None:
+        """Verify _record_hook appends hook_name to hooks_fired list."""
+        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+
+        _record_hook(meta_path, "post_start")
+
+        meta = _yaml_load(meta_path.read_text())
+        assert meta["hooks_fired"] == ["post_start"]
+
+    def test_record_hook_appends_without_duplicates(self, tmp_path: Path) -> None:
+        """Verify _record_hook doesn't duplicate existing entries."""
+        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(_yaml_dump({"task_id": "1", "hooks_fired": ["post_start"]}))
+
+        _record_hook(meta_path, "post_start")
+        _record_hook(meta_path, "post_ready")
+
+        meta = _yaml_load(meta_path.read_text())
+        assert meta["hooks_fired"] == ["post_start", "post_ready"]
+
+    def test_record_hook_skips_missing_file(self, tmp_path: Path) -> None:
+        """Verify _record_hook is a no-op when the metadata file doesn't exist."""
+        meta_path = tmp_path / "nonexistent.yml"
+        _record_hook(meta_path, "post_start")  # should not raise
 
 
 class TestRunHook:
@@ -76,14 +110,23 @@ class TestRunHook:
             assert env["TEROK_HOOK"] == "post_start"
             assert env["TEROK_PROJECT_ID"] == "proj"
 
-    def test_pre_stop_has_timeout(self) -> None:
-        """Verify pre_stop hooks have a 30s timeout."""
+    def test_post_stop_has_timeout(self) -> None:
+        """Verify post_stop hooks have a 30s timeout."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "pre_stop", "cleanup.sh",
+                "post_stop", "cleanup.sh",
                 project_id="p", task_id="1", mode="cli", cname="c",
             )
             assert mock_run.call_args[1]["timeout"] == 30
+
+    def test_pre_start_no_timeout(self) -> None:
+        """Verify pre_start hooks have no timeout."""
+        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+            run_hook(
+                "pre_start", "setup.sh",
+                project_id="p", task_id="1", mode="cli", cname="c",
+            )
+            assert mock_run.call_args[1]["timeout"] is None
 
     def test_post_start_no_timeout(self) -> None:
         """Verify post_start hooks have no timeout."""
@@ -123,6 +166,39 @@ class TestRunHook:
             side_effect=subprocess.TimeoutExpired(cmd="x", timeout=30),
         ):
             run_hook(
-                "pre_stop", "slow.sh",
+                "post_stop", "slow.sh",
                 project_id="p", task_id="1", mode="cli", cname="c",
             )
+
+    def test_run_hook_with_meta_path_records(self, tmp_path: Path) -> None:
+        """Verify run_hook records the hook name in metadata when meta_path is given."""
+        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+
+        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run"):
+            run_hook(
+                "post_start", "echo hi",
+                project_id="p", task_id="1", mode="cli", cname="c",
+                meta_path=meta_path,
+            )
+
+        meta = _yaml_load(meta_path.read_text())
+        assert "post_start" in meta["hooks_fired"]
+
+    def test_run_hook_records_even_without_command(self, tmp_path: Path) -> None:
+        """Verify run_hook records even when command is None (hook point reached)."""
+        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+
+        run_hook(
+            "post_ready", None,
+            project_id="p", task_id="1", mode="cli", cname="c",
+            meta_path=meta_path,
+        )
+
+        meta = _yaml_load(meta_path.read_text())
+        assert "post_ready" in meta["hooks_fired"]

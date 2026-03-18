@@ -695,19 +695,20 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
     except Exception as exc:
         _log_debug(f"task_delete: token revoke failed: {exc}")
 
+    _log_debug("task_delete: calling _stop_task_containers")
+    stop_task_containers(project, str(task_id))
+    _log_debug("task_delete: _stop_task_containers returned")
+
     if mode:
         from .hooks import run_hook
 
         run_hook(
-            "pre_stop", project.hook_pre_stop,
+            "post_stop", project.hook_post_stop,
             project_id=project.id, task_id=task_id, mode=mode,
             cname=container_name(project.id, mode, task_id),
             task_dir=workspace,
+            meta_path=meta_path,
         )
-
-    _log_debug("task_delete: calling _stop_task_containers")
-    stop_task_containers(project, str(task_id))
-    _log_debug("task_delete: _stop_task_containers returned")
 
     if workspace.is_dir():
         _log_debug("task_delete: removing workspace directory")
@@ -820,14 +821,6 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
     if state not in ("running", "paused"):
         raise SystemExit(f"Task {task_id} container is not stoppable (state: {state})")
 
-    from .hooks import run_hook
-
-    run_hook(
-        "pre_stop", project.hook_pre_stop,
-        project_id=project.id, task_id=task_id, mode=mode,
-        cname=cname, task_dir=project.tasks_root / str(task_id),
-    )
-
     try:
         subprocess.run(
             ["podman", "stop", "--time", str(effective_timeout), cname],
@@ -839,6 +832,15 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Failed to stop container: {e}")
+
+    from .hooks import run_hook
+
+    run_hook(
+        "post_stop", project.hook_post_stop,
+        project_id=project.id, task_id=task_id, mode=mode,
+        cname=cname, task_dir=project.tasks_root / str(task_id),
+        meta_path=meta_path,
+    )
 
     color_enabled = _supports_color()
     print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")

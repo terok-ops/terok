@@ -414,6 +414,11 @@ def task_run_cli(
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
     task_dir = project.tasks_root / str(task_id)
+    run_hook(
+        "pre_start", project.hook_pre_start,
+        project_id=project.id, task_id=task_id, mode="cli",
+        cname=cname, task_dir=task_dir, meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -429,7 +434,7 @@ def task_run_cli(
     run_hook(
         "post_start", project.hook_post_start,
         project_id=project.id, task_id=task_id, mode="cli",
-        cname=cname, task_dir=task_dir,
+        cname=cname, task_dir=task_dir, meta_path=meta_path,
     )
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
@@ -444,7 +449,7 @@ def task_run_cli(
     run_hook(
         "post_ready", project.hook_post_ready,
         project_id=project.id, task_id=task_id, mode="cli",
-        cname=cname, task_dir=task_dir,
+        cname=cname, task_dir=task_dir, meta_path=meta_path,
     )
 
     meta["mode"] = "cli"
@@ -531,6 +536,11 @@ def task_run_toad(
         f" --public-url http://{pub_host}:{port}"
         f" /workspace"
     )
+    run_hook(
+        "pre_start", project.hook_pre_start,
+        project_id=project.id, task_id=task_id, mode="toad",
+        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -545,7 +555,7 @@ def task_run_toad(
     run_hook(
         "post_start", project.hook_post_start,
         project_id=project.id, task_id=task_id, mode="toad",
-        cname=cname, web_port=port, task_dir=task_dir,
+        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
     )
 
     def _toad_ready(line: str) -> bool:
@@ -565,7 +575,7 @@ def task_run_toad(
     run_hook(
         "post_ready", project.hook_post_ready,
         project_id=project.id, task_id=task_id, mode="toad",
-        cname=cname, web_port=port, task_dir=task_dir,
+        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
     )
 
     color_enabled = _supports_color()
@@ -714,6 +724,12 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     # Build podman command (DETACHED)
     cname = container_name(project.id, "run", task_id)
 
+    meta, meta_path = load_task_meta(project.id, task_id)
+    run_hook(
+        "pre_start", project.hook_pre_start,
+        project_id=project.id, task_id=task_id, mode="run",
+        cname=cname, task_dir=task_dir, meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -727,11 +743,10 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     run_hook(
         "post_start", project.hook_post_start,
         project_id=project.id, task_id=task_id, mode="run",
-        cname=cname, task_dir=task_dir,
+        cname=cname, task_dir=task_dir, meta_path=meta_path,
     )
 
     # Update task metadata
-    meta, meta_path = load_task_meta(project.id, task_id)
     meta["mode"] = "run"
     meta["provider"] = resolved.name
     meta["unrestricted"] = unrestricted
