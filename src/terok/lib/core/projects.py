@@ -142,6 +142,9 @@ def _build_project_config(
     agent_cfg = dict(raw.agent)
     _resolve_subagent_files(agent_cfg.get("subagents", []), root)
 
+    # Hooks: project run.hooks overrides global hooks
+    g_pre_start, g_post_start, g_post_ready, g_post_stop = get_global_hooks()
+
     return ProjectConfig(
         id=pid,
         security_class=sec,
@@ -170,10 +173,10 @@ def _build_project_config(
         shutdown_timeout=raw.run.shutdown_timeout,
         task_name_categories=raw.tasks.name_categories,
         shield_drop_on_task_start=raw.shield.drop_on_task_start,
-        hook_pre_start=raw.run.hooks.pre_start or get_global_hooks()[0],
-        hook_post_start=raw.run.hooks.post_start or get_global_hooks()[1],
-        hook_post_ready=raw.run.hooks.post_ready or get_global_hooks()[2],
-        hook_post_stop=raw.run.hooks.post_stop or get_global_hooks()[3],
+        hook_pre_start=raw.run.hooks.pre_start or g_pre_start,
+        hook_post_start=raw.run.hooks.post_start or g_post_start,
+        hook_post_ready=raw.run.hooks.post_ready or g_post_ready,
+        hook_post_stop=raw.run.hooks.post_stop or g_post_stop,
         docker_base_image=raw.docker.base_image,
         docker_snippet_inline=raw.docker.user_snippet_inline,
         docker_snippet_file=raw.docker.user_snippet_file,

@@ -84,23 +84,35 @@ class TestRunHook:
     def test_none_command_is_noop(self) -> None:
         """A None command should be a silent no-op."""
         run_hook(
-            "post_start", None,
-            project_id="p", task_id="1", mode="cli", cname="c",
+            "post_start",
+            None,
+            project_id="p",
+            task_id="1",
+            mode="cli",
+            cname="c",
         )
 
     def test_empty_string_is_noop(self) -> None:
         """An empty string command should be a silent no-op."""
         run_hook(
-            "post_start", "",
-            project_id="p", task_id="1", mode="cli", cname="c",
+            "post_start",
+            "",
+            project_id="p",
+            task_id="1",
+            mode="cli",
+            cname="c",
         )
 
     def test_command_is_executed(self) -> None:
         """Verify a hook command is executed via sh -c with correct env."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "post_start", "echo hello",
-                project_id="proj", task_id="1", mode="cli", cname="proj-cli-1",
+                "post_start",
+                "echo hello",
+                project_id="proj",
+                task_id="1",
+                mode="cli",
+                cname="proj-cli-1",
             )
 
             mock_run.assert_called_once()
@@ -114,8 +126,12 @@ class TestRunHook:
         """Verify post_stop hooks have a 30s timeout."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "post_stop", "cleanup.sh",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "post_stop",
+                "cleanup.sh",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
             )
             assert mock_run.call_args[1]["timeout"] == 30
 
@@ -123,8 +139,12 @@ class TestRunHook:
         """Verify pre_start hooks have no timeout."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "pre_start", "setup.sh",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "pre_start",
+                "setup.sh",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
             )
             assert mock_run.call_args[1]["timeout"] is None
 
@@ -132,8 +152,12 @@ class TestRunHook:
         """Verify post_start hooks have no timeout."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "post_start", "setup.sh",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "post_start",
+                "setup.sh",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
             )
             assert mock_run.call_args[1]["timeout"] is None
 
@@ -141,8 +165,12 @@ class TestRunHook:
         """Verify web_port is forwarded to the hook environment."""
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
             run_hook(
-                "post_ready", "fwd.sh",
-                project_id="p", task_id="1", mode="toad", cname="c",
+                "post_ready",
+                "fwd.sh",
+                project_id="p",
+                task_id="1",
+                mode="toad",
+                cname="c",
                 web_port=7861,
             )
             env = mock_run.call_args[1]["env"]
@@ -155,8 +183,12 @@ class TestRunHook:
             side_effect=OSError("boom"),
         ):
             run_hook(
-                "post_start", "fail.sh",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "post_start",
+                "fail.sh",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
             )
 
     def test_timeout_does_not_raise(self) -> None:
@@ -166,8 +198,12 @@ class TestRunHook:
             side_effect=subprocess.TimeoutExpired(cmd="x", timeout=30),
         ):
             run_hook(
-                "post_stop", "slow.sh",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "post_stop",
+                "slow.sh",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
             )
 
     def test_run_hook_with_meta_path_records(self, tmp_path: Path) -> None:
@@ -179,8 +215,12 @@ class TestRunHook:
 
         with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run"):
             run_hook(
-                "post_start", "echo hi",
-                project_id="p", task_id="1", mode="cli", cname="c",
+                "post_start",
+                "echo hi",
+                project_id="p",
+                task_id="1",
+                mode="cli",
+                cname="c",
                 meta_path=meta_path,
             )
 
@@ -195,8 +235,12 @@ class TestRunHook:
         meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
 
         run_hook(
-            "post_ready", None,
-            project_id="p", task_id="1", mode="cli", cname="c",
+            "post_ready",
+            None,
+            project_id="p",
+            task_id="1",
+            mode="cli",
+            cname="c",
             meta_path=meta_path,
         )
 

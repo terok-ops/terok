@@ -388,6 +388,15 @@ def task_run_cli(
         print(f"Starting existing container {_green(cname, color_enabled)}...")
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project.id,
+            task_id=task_id,
+            mode="cli",
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+        )
         meta["mode"] = "cli"
         meta_path.write_text(_yaml_dump(meta))
         print("Container started.")
@@ -415,9 +424,14 @@ def task_run_cli(
     # This allows `task restart` to quickly resume stopped containers.
     task_dir = project.tasks_root / str(task_id)
     run_hook(
-        "pre_start", project.hook_pre_start,
-        project_id=project.id, task_id=task_id, mode="cli",
-        cname=cname, task_dir=task_dir, meta_path=meta_path,
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
     _run_container(
         cname=cname,
@@ -432,9 +446,14 @@ def task_run_cli(
     )
     _maybe_drop_shield(project, cname, task_dir)
     run_hook(
-        "post_start", project.hook_post_start,
-        project_id=project.id, task_id=task_id, mode="cli",
-        cname=cname, task_dir=task_dir, meta_path=meta_path,
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
@@ -447,9 +466,14 @@ def task_run_cli(
     # Verify the container is still alive after log streaming
     _assert_running(cname)
     run_hook(
-        "post_ready", project.hook_post_ready,
-        project_id=project.id, task_id=task_id, mode="cli",
-        cname=cname, task_dir=task_dir, meta_path=meta_path,
+        "post_ready",
+        project.hook_post_ready,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
 
     meta["mode"] = "cli"
@@ -501,6 +525,16 @@ def task_run_toad(
         print(f"Starting existing container {_green(cname, color_enabled)}...")
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project.id,
+            task_id=task_id,
+            mode="toad",
+            cname=cname,
+            web_port=port,
+            task_dir=project.tasks_root / str(task_id),
+        )
         print("Container started.")
         print(f"Toad: {_blue(url, color_enabled)}")
         return
@@ -537,9 +571,15 @@ def task_run_toad(
         f" /workspace"
     )
     run_hook(
-        "pre_start", project.hook_pre_start,
-        project_id=project.id, task_id=task_id, mode="toad",
-        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
     _run_container(
         cname=cname,
@@ -553,9 +593,15 @@ def task_run_toad(
     )
     _maybe_drop_shield(project, cname, task_dir)
     run_hook(
-        "post_start", project.hook_post_start,
-        project_id=project.id, task_id=task_id, mode="toad",
-        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
 
     def _toad_ready(line: str) -> bool:
@@ -573,9 +619,15 @@ def task_run_toad(
         raise SystemExit(1)
 
     run_hook(
-        "post_ready", project.hook_post_ready,
-        project_id=project.id, task_id=task_id, mode="toad",
-        cname=cname, web_port=port, task_dir=task_dir, meta_path=meta_path,
+        "post_ready",
+        project.hook_post_ready,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
 
     color_enabled = _supports_color()
@@ -726,9 +778,14 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     meta, meta_path = load_task_meta(project.id, task_id)
     run_hook(
-        "pre_start", project.hook_pre_start,
-        project_id=project.id, task_id=task_id, mode="run",
-        cname=cname, task_dir=task_dir, meta_path=meta_path,
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
     _run_container(
         cname=cname,
@@ -741,9 +798,14 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     )
     _maybe_drop_shield(project, cname, task_dir)
     run_hook(
-        "post_start", project.hook_post_start,
-        project_id=project.id, task_id=task_id, mode="run",
-        cname=cname, task_dir=task_dir, meta_path=meta_path,
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
     )
 
     # Update task metadata
@@ -939,6 +1001,15 @@ def task_restart(project_id: str, task_id: str) -> None:
         # Container exists (stopped/exited, or just stopped above) - start it
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project_id,
+            task_id=task_id,
+            mode=mode,
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+        )
 
         color_enabled = _supports_color()
         print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")

@@ -97,20 +97,31 @@ def run_hook(
         return
 
     env = _build_hook_env(
-        project_id, task_id, mode, cname, hook_name,
-        web_port=web_port, task_dir=task_dir,
+        project_id,
+        task_id,
+        mode,
+        cname,
+        hook_name,
+        web_port=web_port,
+        task_dir=task_dir,
     )
 
     logger.debug("hook %s: running %r", hook_name, command)
 
     timeout = _HOOK_TIMEOUT if hook_name == "post_stop" else None
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["sh", "-c", command],
             env=env,
             timeout=timeout,
             check=False,
+            capture_output=True,
+            text=True,
         )
+        if result.stdout:
+            logger.debug("hook %s stdout: %s", hook_name, result.stdout.rstrip())
+        if result.stderr:
+            logger.debug("hook %s stderr: %s", hook_name, result.stderr.rstrip())
     except subprocess.TimeoutExpired:
         logger.warning("hook %s timed out after %ds", hook_name, _HOOK_TIMEOUT)
     except Exception:

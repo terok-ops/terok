@@ -703,8 +703,11 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
         from .hooks import run_hook
 
         run_hook(
-            "post_stop", project.hook_post_stop,
-            project_id=project.id, task_id=task_id, mode=mode,
+            "post_stop",
+            project.hook_post_stop,
+            project_id=project.id,
+            task_id=task_id,
+            mode=mode,
             cname=container_name(project.id, mode, task_id),
             task_dir=workspace,
             meta_path=meta_path,
@@ -836,9 +839,13 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
     from .hooks import run_hook
 
     run_hook(
-        "post_stop", project.hook_post_stop,
-        project_id=project.id, task_id=task_id, mode=mode,
-        cname=cname, task_dir=project.tasks_root / str(task_id),
+        "post_stop",
+        project.hook_post_stop,
+        project_id=project.id,
+        task_id=task_id,
+        mode=mode,
+        cname=cname,
+        task_dir=project.tasks_root / str(task_id),
         meta_path=meta_path,
     )
 

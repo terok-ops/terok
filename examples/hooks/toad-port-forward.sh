@@ -11,6 +11,7 @@
 #
 # Requires: socat
 
+[ -n "$TEROK_TASK_ID" ] || exit 0
 PID_FILE="/tmp/terok-socat-${TEROK_TASK_ID}.pid"
 
 case "$TEROK_HOOK" in
