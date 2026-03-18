@@ -241,6 +241,8 @@ def start_daemon(port: int | None = None) -> None:
     """Start a ``terok-gate`` daemon process (non-systemd fallback).
 
     Writes a PID file to ``runtime_root() / "gate-server.pid"``.
+    If ``TEROK_GATE_ADMIN_TOKEN`` is set in the environment, it is
+    forwarded to the daemon for host-level access to all repos.
     """
     from .gate_tokens import token_file_path
 
@@ -250,18 +252,22 @@ def start_daemon(port: int | None = None) -> None:
     pidfile = _pid_file()
     pidfile.parent.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(
-        [
-            "terok-gate",
-            f"--base-path={gate_base}",
-            f"--token-file={token_file_path()}",
-            f"--port={effective_port}",
-            "--detach",
-            f"--pid-file={pidfile}",
-        ],
-        check=True,
-        timeout=10,
-    )
+    cmd = [
+        "terok-gate",
+        f"--base-path={gate_base}",
+        f"--token-file={token_file_path()}",
+        f"--port={effective_port}",
+        "--detach",
+        f"--pid-file={pidfile}",
+    ]
+    admin_token = os.environ.get("TEROK_GATE_ADMIN_TOKEN")
+    if admin_token:
+        cmd.append(f"--admin-token={admin_token}")
+    bind_addr = os.environ.get("TEROK_GATE_BIND")
+    if bind_addr:
+        cmd.append(f"--bind={bind_addr}")
+
+    subprocess.run(cmd, check=True, timeout=10)
 
 
 def stop_daemon() -> None:

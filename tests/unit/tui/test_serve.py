@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for the terok-web serve entry point."""
@@ -64,7 +65,9 @@ class TestMain:
 
         main()
 
-        mock_server_cls.assert_called_once_with("terok", host="localhost", port=8566)
+        mock_server_cls.assert_called_once_with(
+            "terok", host="localhost", port=8566, public_url=None
+        )
         mock_server_instance.serve.assert_called_once()
 
     def test_server_created_with_custom_args(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -81,5 +84,5 @@ class TestMain:
 
         main()
 
-        mock_server_cls.assert_called_once_with("terok", host="0.0.0.0", port=9000)
+        mock_server_cls.assert_called_once_with("terok", host="0.0.0.0", port=9000, public_url=None)
         mock_server_instance.serve.assert_called_once()

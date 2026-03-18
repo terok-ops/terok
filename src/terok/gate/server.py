@@ -62,14 +62,24 @@ def _validate_token_data(data: object) -> dict[str, dict[str, str]]:
     }
 
 
+_ADMIN_WILDCARD = "*"
+"""Sentinel returned by :meth:`TokenStore.validate` for admin tokens."""
+
+
 class TokenStore:
     """Read-only view of ``tokens.json`` with lazy reload on mtime change."""
 
-    def __init__(self, token_file: Path) -> None:
-        """Initialize with the path to the tokens JSON file."""
+    def __init__(self, token_file: Path, *, admin_token: str | None = None) -> None:
+        """Initialize with the path to the tokens JSON file.
+
+        When *admin_token* is set, it grants access to **all** repos,
+        bypassing the per-task project scope.  Intended for host-level
+        access in containerised deployments.
+        """
         self._path = token_file
         self._mtime_ns: int = 0
         self._tokens: dict[str, dict[str, str]] = {}
+        self._admin_token = admin_token
 
     def _maybe_reload(self) -> None:
         """Reload the token file if its mtime has changed."""
@@ -90,8 +100,12 @@ class TokenStore:
     def validate(self, token: str) -> str | None:
         """Return project_id if *token* is valid, else ``None``.
 
-        Reloads the token file when its mtime changes.
+        Returns :data:`_ADMIN_WILDCARD` (``"*"``) for admin tokens,
+        granting access to any repo.  Reloads the token file when its
+        mtime changes.
         """
+        if self._admin_token and token == self._admin_token:
+            return _ADMIN_WILDCARD
         self._maybe_reload()
         info = self._tokens.get(token)
         if info is None:
@@ -271,7 +285,10 @@ def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHT
                 return
 
             project_id = token_store.validate(token)
-            if project_id is None or repo != f"{project_id}.git":
+            if project_id is None:
+                self.send_error(403, "Forbidden")
+                return
+            if project_id != _ADMIN_WILDCARD and repo != f"{project_id}.git":
                 self.send_error(403, "Forbidden")
                 return
 
@@ -420,11 +437,15 @@ def _serve_inetd(base_path: Path, token_store: TokenStore) -> None:
 
 
 def _serve_daemon(
-    base_path: Path, token_store: TokenStore, port: int, pid_file: Path | None
+    base_path: Path,
+    token_store: TokenStore,
+    port: int,
+    pid_file: Path | None,
+    bind: str = _LISTEN_ADDR,
 ) -> None:
     """Bind socket, fork, write PID file, run accept loop in child."""
     handler_class = _make_handler_class(base_path, token_store)
-    server = _ThreadingHTTPServer((_LISTEN_ADDR, port), handler_class)
+    server = _ThreadingHTTPServer((bind, port), handler_class)
 
     pid = os.fork()
     if pid > 0:
@@ -479,22 +500,35 @@ def main() -> None:
     parser.add_argument("--base-path", required=True, help="Root directory for git repos")
     parser.add_argument("--token-file", required=True, help="Path to tokens.json")
     parser.add_argument("--port", type=int, default=9418, help="Listen port (daemon mode)")
+    parser.add_argument(
+        "--bind",
+        default=_LISTEN_ADDR,
+        help=f"Address to bind to (default: {_LISTEN_ADDR}). "
+        "Use 0.0.0.0 to accept connections from outside.",
+    )
     parser.add_argument("--inetd", action="store_true", help="Handle one request on fd 0, exit")
     parser.add_argument("--detach", action="store_true", help="Fork and run as daemon")
     parser.add_argument("--pid-file", default=None, help="PID file path (daemon mode)")
+    parser.add_argument(
+        "--admin-token",
+        default=None,
+        help="Admin token granting access to all repos. "
+        "Falls back to TEROK_GATE_ADMIN_TOKEN env var.",
+    )
 
     args = parser.parse_args()
     if args.inetd and args.detach:
         parser.error("--inetd and --detach are mutually exclusive")
     _configure_logging(daemon=args.detach)
 
+    admin_token = args.admin_token or os.environ.get("TEROK_GATE_ADMIN_TOKEN")
     base_path = Path(args.base_path)
-    token_store = TokenStore(Path(args.token_file))
+    token_store = TokenStore(Path(args.token_file), admin_token=admin_token)
 
     if args.inetd:
         _serve_inetd(base_path, token_store)
     elif args.detach:
         pid_file = Path(args.pid_file) if args.pid_file else None
-        _serve_daemon(base_path, token_store, args.port, pid_file)
+        _serve_daemon(base_path, token_store, args.port, pid_file, bind=args.bind)
     else:
         parser.error("One of --inetd or --detach is required")

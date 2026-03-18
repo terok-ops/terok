@@ -19,6 +19,7 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 | [Shared Directories](docs/shared-dirs.md) | Volume mounts and SSH configuration |
 | [Security Modes](docs/git-gate-and-security-modes.md) | Online vs gatekeeping modes |
 | [Login Design](docs/login-design.md) | Login session architecture |
+| [Docker](docs/docker.md) | Running terok inside Docker (experimental) |
 
 ## Quick Start
 
@@ -27,6 +28,9 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 - Podman installed and configured
 - Python 3.12+
 - OpenSSH client (for private git repos)
+
+> **No Podman?** A [Docker-based setup](docs/docker.md) is available for
+> evaluation, but native Podman is recommended for regular use.
 
 ### Installation
 

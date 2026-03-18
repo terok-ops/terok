@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for core config helpers."""
@@ -120,6 +121,16 @@ def test_experimental_flag_roundtrip() -> None:
     assert cfg.is_experimental()
     cfg.set_experimental(False)
     assert not cfg.is_experimental()
+
+
+def test_get_public_host_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TEROK_PUBLIC_HOST", raising=False)
+    assert cfg.get_public_host() == "127.0.0.1"
+
+
+def test_get_public_host_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEROK_PUBLIC_HOST", "myserver.local")
+    assert cfg.get_public_host() == "myserver.local"
 
 
 @pytest.mark.parametrize(

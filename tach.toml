@@ -708,6 +708,7 @@ expose = [
     "is_experimental",
     "set_experimental",
     "get_shield_bypass_firewall_no_protection",
+    "get_public_host",
 ]
 from = ["terok.lib.core.config"]
 

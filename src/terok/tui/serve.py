@@ -57,9 +57,16 @@ def main() -> None:
         default=_DEFAULT_PORT,
         help=f"Port to listen on (default: {_DEFAULT_PORT})",
     )
+    parser.add_argument(
+        "--public-url",
+        default=None,
+        help="Public URL for browser-facing links and WebSocket connections "
+        "(e.g. http://myhost:8566). Required when serving to LAN or "
+        "behind a reverse proxy. If omitted, derived from --host and --port.",
+    )
     args = parser.parse_args()
 
-    server = Server("terok", host=args.host, port=args.port)
+    server = Server("terok", host=args.host, port=args.port, public_url=args.public_url)
     server.serve()
 
 
