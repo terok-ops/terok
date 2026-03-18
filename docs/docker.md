@@ -125,17 +125,14 @@ bind-mount ownership) and then drops to `podman` internally.
 | `TEROK_GATE_ADMIN_TOKEN` | Stable gate admin token (auto-generated if unset) |
 | `TEROK_GATE_BIND` | Gate bind address (defaults to `0.0.0.0` in Docker) |
 
-## Known limitations
+## Networking notes
 
-**Toad web access from LAN:** Toad containers run inside nested
-rootless Podman, which uses pasta for port forwarding.  Pasta only
-forwards connections arriving on `127.0.0.1` — external traffic
-delivered to the container's network interface by Docker's `-p`
-mapping is not forwarded.  Toad is therefore reachable on
-`127.0.0.1` from the Docker host but not from other LAN machines.
-The web TUI and gate server are unaffected (they run directly in
-the Docker container's process space).  `socat` is included in the
-image for manual port forwarding if needed.
+Toad (web agent) containers run inside nested rootless Podman, which
+uses pasta for port forwarding.  Pasta only forwards loopback
+connections, so the image includes a lifecycle hook that automatically
+starts a `socat` relay when a toad task becomes ready and kills it
+when the task stops.  This makes toad reachable from the LAN with
+both `--network host` and bridge networking modes.
 
 ## Architecture
 

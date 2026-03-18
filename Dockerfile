@@ -37,7 +37,14 @@ RUN pip install --break-system-packages poetry-dynamic-versioning \
     && pip install --break-system-packages /opt/terok-src \
     && rm -rf /opt/terok-src
 
-# ── 3. Prepare terok directories and shell completions ────────────
+# ── 3. Install toad port-forwarding hook ──────────────────────────
+# Rootless Podman's pasta only forwards loopback connections.
+# This hook starts a socat relay on post_ready and kills it on
+# post_stop, making toad reachable from the LAN.
+COPY examples/hooks/toad-port-forward.sh /usr/local/bin/toad-port-forward.sh
+RUN chmod +x /usr/local/bin/toad-port-forward.sh
+
+# ── 4. Prepare terok directories, config, and shell completions ───
 # Switch to the image's podman user (uid 1000) for all user-space
 # setup — directories are created with correct ownership naturally.
 USER podman
@@ -46,6 +53,11 @@ RUN mkdir -p \
         ~/.local/share/terok/gate \
         ~/.cache/terok \
         ~/.cache/containers \
+    && printf '%s\n' \
+        'hooks:' \
+        '  post_ready: /usr/local/bin/toad-port-forward.sh' \
+        '  post_stop: /usr/local/bin/toad-port-forward.sh' \
+        > ~/.config/terok/config.yml \
     && terokctl completions install --shell bash
 USER root
 
