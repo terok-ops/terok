@@ -28,12 +28,9 @@ RUN dnf install -y \
         socat \
     && dnf clean all
 
-# ── 2. Install terok from source ────────────────────────────────
-ARG TEROK_REPO=https://github.com/terok-ai/terok.git
-ARG TEROK_REF=master
-
+# ── 2. Install terok from local source tree ──────────────────────
+COPY . /opt/terok-src
 RUN pip install --break-system-packages poetry-dynamic-versioning \
-    && git clone --branch "${TEROK_REF}" "${TEROK_REPO}" /opt/terok-src \
     && pip install --break-system-packages /opt/terok-src \
     && rm -rf /opt/terok-src
 
