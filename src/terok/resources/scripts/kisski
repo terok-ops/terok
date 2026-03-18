@@ -79,9 +79,7 @@ def _fetch_models(base_url: str, api_key: str) -> list[str] | None:
     return sorted(set(models)) if models else None
 
 
-def _build_kisski_update(
-    base_url: str, api_key: str, model: str, models: list[str] | None
-) -> dict:
+def _build_kisski_update(base_url: str, api_key: str, model: str, models: list[str] | None) -> dict:
     """Build the KISSKI-specific config fragment to merge into opencode.json.
 
     Returns a dict containing only the keys that KISSKI needs to set or
