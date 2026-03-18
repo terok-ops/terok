@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for KISSKI (OpenCode with KISSKI config).
+# Points OpenCode's ACP server to KISSKI's separate config which
+# includes the Academic Cloud API endpoint, credentials, and terok's
+# system instructions (injected by prepare_agent_config_dir).
+
+exec env OPENCODE_CONFIG="$HOME/.kisski/opencode/opencode.json" opencode acp "$@"

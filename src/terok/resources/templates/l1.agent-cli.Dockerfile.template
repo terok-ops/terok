@@ -91,6 +91,7 @@ COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/blablador-acp /usr/local/bin/blablador-acp
 COPY scripts/blablatoad /usr/local/bin/blablatoad
 COPY scripts/kisski /usr/local/bin/kisski
+COPY scripts/kisski-acp /usr/local/bin/kisski-acp
 COPY scripts/toad /usr/local/bin/toad
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
@@ -104,6 +105,7 @@ RUN chmod +x \
     /usr/local/bin/blablador-acp \
     /usr/local/bin/blablatoad \
     /usr/local/bin/kisski \
+    /usr/local/bin/kisski-acp \
     /usr/local/bin/toad \
     /usr/local/bin/vibe-model-sync \
     /usr/local/bin/mistral-model-sync.py \
