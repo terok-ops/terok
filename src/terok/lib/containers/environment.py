@@ -20,6 +20,7 @@ from ..core.config import get_envs_base_dir
 from ..core.projects import ProjectConfig
 from ..security.gate_server import ensure_server_reachable, get_gate_base_path, get_gate_server_port
 from ..util.fs import ensure_dir_writable
+from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 
 # ---------- Shared config directories ----------
 
@@ -245,7 +246,7 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
     - Provide REPO_ROOT and git info for the init script.
     """
     task_dir = project.tasks_root / str(task_id)
-    repo_dir = task_dir / "workspace-dangerous"
+    repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
     repo_dir.mkdir(parents=True, exist_ok=True)
 
     envs_base = get_envs_base_dir()

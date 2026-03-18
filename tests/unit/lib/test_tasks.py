@@ -663,143 +663,95 @@ class TestTask:
                 meta = yaml_load(meta_path.read_text())
                 assert meta["mode"] == "cli"
 
-    def test_get_workspace_git_diff_no_workspace(self) -> None:
-        """Test get_workspace_git_diff returns None when workspace doesn't exist."""
+    def test_get_workspace_git_diff_no_task(self) -> None:
+        """Test get_workspace_git_diff returns None when task doesn't exist."""
         project_id = "proj_diff_1"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
         ):
-            # Try to get diff for non-existent task
             result = get_workspace_git_diff(project_id, "999")
             assert result is None
 
-    def test_get_workspace_git_diff_no_git_repo(self) -> None:
-        """Test get_workspace_git_diff returns None when workspace is not a git repo."""
+    def test_get_workspace_git_diff_no_mode(self) -> None:
+        """Test get_workspace_git_diff returns None when task has no mode set."""
         project_id = "proj_diff_2"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
         ):
             task_new(project_id)
-            # Workspace exists but .git directory doesn't
+            # Task exists but has never been run (mode=None)
             result = get_workspace_git_diff(project_id, "1")
             assert result is None
 
-    def test_get_workspace_git_diff_clean_working_tree(self) -> None:
-        """Test get_workspace_git_diff returns empty string for clean working tree."""
+    def test_get_workspace_git_diff_delegates_to_container(self) -> None:
+        """Test get_workspace_git_diff delegates to container_git_diff."""
         project_id = "proj_diff_3"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
-        ) as ctx:
+        ):
             task_new(project_id)
+            from terok.lib.containers.tasks import tasks_meta_dir
 
-            # Mock subprocess.run to simulate clean git repository
-            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = ""
-                run_mock.return_value = mock_result
+            meta_path = tasks_meta_dir(project_id) / "1.yml"
+            meta = yaml_load(meta_path.read_text())
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml_dump(meta))
 
-                # Also need to mock .git existence check
-                workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-                git_dir = workspace_dir / ".git"
-                git_dir.mkdir(parents=True, exist_ok=True)
-
-                result = get_workspace_git_diff(project_id, "1")
-                assert result == ""
-
-    def test_get_workspace_git_diff_with_changes(self) -> None:
-        """Test get_workspace_git_diff returns diff output when there are changes."""
-        project_id = "proj_diff_4"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-        ) as ctx:
-            task_new(project_id)
-
-            expected_diff = "diff --git a/file.txt b/file.txt\n+new line\n"
-
-            with (
-                mock_git_config(),
-                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
-            ):
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = expected_diff
-                run_mock.return_value = mock_result
-
-                workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-                git_dir = workspace_dir / ".git"
-                git_dir.mkdir(parents=True, exist_ok=True)
-
+            expected = "diff --git a/f.txt b/f.txt\n+line\n"
+            with unittest.mock.patch(
+                "terok.lib.containers.tasks.container_git_diff",
+                return_value=expected,
+            ) as mock_diff:
                 result = get_workspace_git_diff(project_id, "1", "HEAD")
-                assert result == expected_diff
-
-                # Verify git diff command was called correctly
-                run_mock.assert_called_once()
-                call_args = run_mock.call_args[0][0]
-                assert call_args[0] == "git"
-                assert call_args[1] == "-C"
-                assert call_args[3] == "diff"
-                assert call_args[4] == "HEAD"
+                assert result == expected
+                mock_diff.assert_called_once_with(project_id, "1", "cli", "HEAD")
 
     def test_get_workspace_git_diff_prev_commit(self) -> None:
-        """Test get_workspace_git_diff with PREV option."""
+        """Test get_workspace_git_diff with PREV option passes HEAD~1..HEAD."""
         project_id = "proj_diff_5"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
-        ) as ctx:
+        ):
             task_new(project_id)
+            from terok.lib.containers.tasks import tasks_meta_dir
 
-            expected_diff = "diff --git a/file.txt b/file.txt\n+previous commit change\n"
+            meta_path = tasks_meta_dir(project_id) / "1.yml"
+            meta = yaml_load(meta_path.read_text())
+            meta["mode"] = "run"
+            meta_path.write_text(yaml_dump(meta))
 
-            with (
-                mock_git_config(),
-                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
-            ):
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 0
-                mock_result.stdout = expected_diff
-                run_mock.return_value = mock_result
-
-                workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-                git_dir = workspace_dir / ".git"
-                git_dir.mkdir(parents=True, exist_ok=True)
-
+            expected = "diff --git a/f.txt b/f.txt\n+prev\n"
+            with unittest.mock.patch(
+                "terok.lib.containers.tasks.container_git_diff",
+                return_value=expected,
+            ) as mock_diff:
                 result = get_workspace_git_diff(project_id, "1", "PREV")
-                assert result == expected_diff
+                assert result == expected
+                mock_diff.assert_called_once_with(project_id, "1", "run", "HEAD~1", "HEAD")
 
-                # Verify git command was called with HEAD~1
-                run_mock.assert_called_once()
-                call_args = run_mock.call_args[0][0]
-                assert call_args[0] == "git"
-                assert call_args[1] == "-C"
-                assert call_args[3] == "diff"
-                assert call_args[4] == "HEAD~1"
-                assert call_args[5] == "HEAD"
-
-    def test_get_workspace_git_diff_error(self) -> None:
-        """Test get_workspace_git_diff returns None when git command fails."""
+    def test_get_workspace_git_diff_container_failure(self) -> None:
+        """Test get_workspace_git_diff returns None when container exec fails."""
         project_id = "proj_diff_6"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
-        ) as ctx:
+        ):
             task_new(project_id)
+            from terok.lib.containers.tasks import tasks_meta_dir
 
-            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
-                # Simulate git command failure
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 1
-                run_mock.return_value = mock_result
+            meta_path = tasks_meta_dir(project_id) / "1.yml"
+            meta = yaml_load(meta_path.read_text())
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml_dump(meta))
 
-                workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-                git_dir = workspace_dir / ".git"
-                git_dir.mkdir(parents=True, exist_ok=True)
-
+            with unittest.mock.patch(
+                "terok.lib.containers.tasks.container_git_diff",
+                return_value=None,
+            ):
                 result = get_workspace_git_diff(project_id, "1")
                 assert result is None
 

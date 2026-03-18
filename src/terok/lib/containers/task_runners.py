@@ -36,6 +36,7 @@ from ..util.podman import _podman_userns_args
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .agent_config import resolve_agent_config, resolve_provider_value
 from .agents import AgentConfigSpec, prepare_agent_config_dir
+from .container_exec import container_git_diff
 from .environment import build_task_env_and_volumes
 from .hooks import run_hook
 from .instructions import resolve_instructions
@@ -643,24 +644,21 @@ def task_run_toad(
     )
 
 
-def _print_run_summary(workspace: Path) -> None:
-    """Print a summary of changes made by the headless agent."""
-    try:
-        diff_stat = subprocess.check_output(
-            ["git", "-C", str(workspace), "diff", "--stat", "HEAD@{1}..HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-        if diff_stat:
+def _print_run_summary(project_id: str, task_id: str, mode: str, workspace: Path) -> None:
+    """Print a summary of changes made by the headless agent.
+
+    Runs ``git diff --stat`` **inside** the task container to avoid executing
+    potentially poisoned git hooks on the host.
+    """
+    diff_stat = container_git_diff(project_id, task_id, mode, "--stat", "HEAD@{1}..HEAD")
+    if diff_stat is not None:
+        stripped = diff_stat.strip()
+        if stripped:
             print("\n── Changes ──────────────────────────────")
-            print(diff_stat)
+            print(stripped)
         else:
             print("\n── No changes committed ──────────────────")
-        print(f"  Workspace: {workspace}")
-    except subprocess.CalledProcessError:
-        print(f"\n  Workspace: {workspace}")
-    except FileNotFoundError:
-        print(f"\n  Workspace: {workspace}")
+    print(f"  Workspace: {workspace}")
 
 
 def task_run_headless(request: HeadlessRunRequest) -> str:
@@ -822,7 +820,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     if request.follow:
         exit_code = wait_for_exit(cname)
-        _print_run_summary(task_dir / "workspace-dangerous")
+        _print_run_summary(project.id, task_id, "run", task_dir / "workspace-dangerous")
 
         update_task_exit_code(project.id, task_id, exit_code)
 
@@ -949,7 +947,7 @@ def task_followup_headless(
 
     if follow:
         exit_code = wait_for_exit(cname)
-        _print_run_summary(task_dir / "workspace-dangerous")
+        _print_run_summary(project.id, task_id, "run", task_dir / "workspace-dangerous")
 
         update_task_exit_code(project.id, task_id, exit_code)
 

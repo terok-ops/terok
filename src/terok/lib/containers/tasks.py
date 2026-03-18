@@ -29,8 +29,10 @@ from ..util.ansi import (
 )
 from ..util.emoji import render_emoji
 from ..util.fs import archive_timestamp, create_archive_dir, ensure_dir
+from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 from ..util.logging_utils import _log_debug
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
+from .container_exec import container_git_diff
 from .runtime import (
     container_name,
     get_container_state,
@@ -209,47 +211,35 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
 
 
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
-    """Get git diff from a task's workspace.
+    """Get git diff from a task's workspace via container exec.
+
+    Runs ``git diff`` **inside** the task container rather than on the host,
+    so that even poisoned git hooks only execute within the container sandbox.
 
     Args:
         project_id: The project ID
         task_id: The task ID
-        against: What to diff against ("HEAD" or "PREV")
+        against: What to diff against (``"HEAD"`` or ``"PREV"``)
 
     Returns:
-        The git diff output as a string, or None if failed
+        The git diff output as a string, or ``None`` if failed
     """
     try:
-        project = load_project(project_id)
-        tasks_root = project.tasks_root
-        workspace_dir = tasks_root / task_id / "workspace-dangerous"
-
-        if not workspace_dir.exists() or not workspace_dir.is_dir():
+        load_project(project_id)  # validate project exists
+        meta_dir = tasks_meta_dir(project_id)
+        meta_path = meta_dir / f"{task_id}.yml"
+        if not meta_path.is_file():
+            return None
+        meta = _yaml_load(meta_path.read_text()) or {}
+        mode = meta.get("mode")
+        if not mode:
             return None
 
-        # Check if this is a git repository
-        git_dir = workspace_dir / ".git"
-        if not git_dir.exists():
-            return None
-
-        # Determine what to diff against
         if against == "PREV":
-            # Diff against previous commit
-            cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD~1", "HEAD"]
-        else:
-            # Default: diff against HEAD (uncommitted changes)
-            cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD"]
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            # Non-zero return code indicates an error; treat as failure
-            return None
-
-        # Successful run; stdout may be empty if there is no diff
-        return result.stdout
+            return container_git_diff(project_id, task_id, mode, "HEAD~1", "HEAD")
+        return container_git_diff(project_id, task_id, mode, "HEAD")
 
     except Exception:
-        # If anything goes wrong, return None - this is a best-effort operation
         return None
 
 
@@ -329,7 +319,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
     ws = tasks_root / next_id
     ensure_dir(ws)
 
-    workspace_dir = ws / "workspace-dangerous"
+    workspace_dir = ws / WORKSPACE_DANGEROUS_DIRNAME
     ensure_dir(workspace_dir)
     workspace_dir.chmod(0o700)
     marker_path = workspace_dir / ".new-task-marker"

@@ -198,6 +198,7 @@ depends_on = [
 path = "terok.lib.containers.tasks"
 layer = "services"
 depends_on = [
+    "terok.lib.containers.container_exec",
     "terok.lib.containers.hooks",
     "terok.lib.containers.runtime",
     "terok.lib.containers.task_display",
@@ -208,6 +209,7 @@ depends_on = [
     "terok.lib.util.ansi",
     "terok.lib.util.emoji",
     "terok.lib.util.fs",
+    "terok.lib.util.host_cmd",
     "terok.lib.util.logging_utils",
     "terok.lib.util.yaml",
 ]
@@ -225,6 +227,7 @@ layer = "services"
 depends_on = [
     "terok.lib.containers.agent_config",
     "terok.lib.containers.agents",
+    "terok.lib.containers.container_exec",
     "terok.lib.containers.environment",
     "terok.lib.containers.headless_providers",
     "terok.lib.containers.hooks",
@@ -241,6 +244,12 @@ depends_on = [
     "terok.lib.util.yaml",
 ]
 
+# Container-based command execution (sandboxed git via podman exec)
+[[modules]]
+path = "terok.lib.containers.container_exec"
+layer = "services"
+depends_on = ["terok.lib.containers.runtime", "terok.lib.util.logging_utils"]
+
 # Container state, GPU args, log streaming
 [[modules]]
 path = "terok.lib.containers.runtime"
@@ -251,7 +260,7 @@ depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils", "terok.
 [[modules]]
 path = "terok.lib.containers.environment"
 layer = "services"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.security.gate_tokens", "terok.lib.util.fs", "terok.lib.containers.headless_providers"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.security.gate_tokens", "terok.lib.util.fs", "terok.lib.containers.headless_providers", "terok.lib.util.host_cmd"]
 
 # Task port allocation
 [[modules]]
@@ -489,6 +498,13 @@ utility = true
 # Centralised YAML I/O (round-trip via ruamel.yaml)
 [[modules]]
 path = "terok.lib.util.yaml"
+layer = "core"
+depends_on = []
+utility = true
+
+# Host-side subprocess safety guards
+[[modules]]
+path = "terok.lib.util.host_cmd"
 layer = "core"
 depends_on = []
 utility = true
@@ -851,6 +867,16 @@ from = ["terok.lib.project"]
 [[interfaces]]
 expose = ["Task"]
 from = ["terok.lib.task"]
+
+# Host-side subprocess guard interface
+[[interfaces]]
+expose = ["WORKSPACE_DANGEROUS_DIRNAME", "is_in_dangerous_workspace", "assert_not_in_dangerous_workspace"]
+from = ["terok.lib.util.host_cmd"]
+
+# Container-based command execution interface
+[[interfaces]]
+expose = ["container_git_diff"]
+from = ["terok.lib.containers.container_exec"]
 
 # YAML I/O utility interface
 [[interfaces]]
