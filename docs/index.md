@@ -89,6 +89,7 @@ per-project in `<project>/presets/`. See the
 
 ## Documentation
 
+- [Concepts](concepts.md) — Architecture, security model, and design rationale
 - [User Guide](usage.md) — Complete user documentation
 - [Container Layers](container-layers.md) — Docker image architecture
 - [Container Lifecycle](container-lifecycle.md) — Container and image lifecycle

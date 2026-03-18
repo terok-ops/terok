@@ -83,6 +83,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - User Guide:
+    - Concepts: concepts.md
     - Getting Started: usage.md
     - Config Reference: config-reference.md
     - Container Layers: container-layers.md
