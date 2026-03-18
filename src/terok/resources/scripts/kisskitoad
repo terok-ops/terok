@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+"""Launch toad with the KISSKI ACP agent and Dracula theme."""
+
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+TOAD_THEME = "dracula"
+TOAD_CONFIG = Path.home() / ".config" / "toad" / "toad.json"
+
+
+def _set_toad_theme(theme: str) -> None:
+    """Ensure toad's config has the desired UI theme."""
+    config: dict = {}
+    if TOAD_CONFIG.exists():
+        try:
+            config = json.loads(TOAD_CONFIG.read_text())
+        except (json.JSONDecodeError, OSError):
+            config = {}
+    if not isinstance(config, dict):
+        config = {}
+    if not isinstance(config.get("ui"), dict):
+        config["ui"] = {}
+    if config["ui"].get("theme") == theme:
+        return
+    config["ui"]["theme"] = theme
+    TOAD_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    TOAD_CONFIG.write_text(json.dumps(config, indent=4) + "\n")
+
+
+def main() -> None:
+    """Entry point for the kisskitoad command."""
+    toad = shutil.which("toad")
+    if not toad:
+        print("error: toad is not installed", file=sys.stderr)
+        sys.exit(1)
+    _set_toad_theme(TOAD_THEME)
+    os.execvp(toad, [toad, "acp", "kisski-acp", *sys.argv[1:]])
+
+
+if __name__ == "__main__":
+    main()
