@@ -320,7 +320,7 @@ def get_shield_bypass_firewall_no_protection() -> bool:
 
 def get_public_host() -> str:
     """Return the advertised hostname from ``TEROK_PUBLIC_HOST``, or ``127.0.0.1``."""
-    return os.environ.get("TEROK_PUBLIC_HOST", "127.0.0.1")
+    return os.environ.get("TEROK_PUBLIC_HOST", "").strip() or "127.0.0.1"
 
 
 def get_gate_server_port() -> int:

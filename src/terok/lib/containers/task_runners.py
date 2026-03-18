@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from ..core.project_model import ProjectConfig
 
 _LOCALHOST = "127.0.0.1"
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 _TOAD_CONTAINER_PORT = 8080
 _FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
 
@@ -509,9 +510,8 @@ def task_run_toad(
         meta["preset"] = preset
     meta_path.write_text(_yaml_dump(meta))
 
-    # Bind address: use 0.0.0.0 when a public host is configured so that
-    # the port is reachable from outside the host (LAN / reverse-proxy).
-    bind_addr = "0.0.0.0" if pub_host != _LOCALHOST else _LOCALHOST
+    # Bind to all interfaces when serving to LAN (non-loopback public host).
+    bind_addr = _LOCALHOST if pub_host in _LOOPBACK_HOSTS else "0.0.0.0"  # nosec B104
 
     task_dir = project.tasks_root / str(task_id)
     toad_cmd = (
