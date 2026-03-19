@@ -1460,6 +1460,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
                 options.append(Option("view \\[f]ormatted logs", id="follow_logs"))
             options.append(None)
             options.append(Option("\\[r]estart container", id="restart"))
+            options.append(Option("s\\[t]op container", id="stop"))
             if (
                 self._task_meta
                 and self._task_meta.mode == "run"
@@ -1475,7 +1476,8 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(None)
             from ..lib.core.config import get_shield_bypass_firewall_no_protection
 
-            options.append(Option("shield \\[D]own (bypass)", id="shield_down"))
+            options.append(Option("shield \\[d]own (bypass)", id="shield_down"))
+            options.append(Option("shield \\[D]own --all (+ private ranges)", id="shield_down_all"))
             if not get_shield_bypass_firewall_no_protection():
                 options.append(Option("\\[s]hield up (deny-all)", id="shield_up"))
 
@@ -1509,13 +1511,13 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Shift keys (uppercase) — A always available, H/P/X/D require tasks
+        # Shift keys (uppercase) — A always available, others require tasks
         shift_map: dict[str, str] = {
             "A": "task_start_autopilot",
             "H": "diff_head",
             "P": "diff_prev",
             "X": "delete",
-            "D": "shield_down",
+            "D": "shield_down_all",
         }
         if key in shift_map:
             if key in ("H", "P", "X", "D") and not self._has_tasks:
@@ -1537,9 +1539,11 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         # Lowercase keys — require tasks to exist
         lower_map: dict[str, str] = {
             "r": "restart",
+            "t": "stop",
             "l": "login",
             "u": "followup",
             "n": "rename",
+            "d": "shield_down",
             "s": "shield_up",
         }
         if key in lower_map:

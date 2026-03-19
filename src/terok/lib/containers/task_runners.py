@@ -37,6 +37,7 @@ from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .agent_config import resolve_agent_config, resolve_provider_value
 from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import build_task_env_and_volumes
+from .hooks import run_hook
 from .instructions import resolve_instructions
 from .ports import assign_web_port
 from .runtime import (
@@ -387,6 +388,16 @@ def task_run_cli(
         print(f"Starting existing container {_green(cname, color_enabled)}...")
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project.id,
+            task_id=task_id,
+            mode="cli",
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
+        )
         meta["mode"] = "cli"
         meta_path.write_text(_yaml_dump(meta))
         print("Container started.")
@@ -413,6 +424,16 @@ def task_run_cli(
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
     task_dir = project.tasks_root / str(task_id)
+    run_hook(
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -425,6 +446,16 @@ def task_run_cli(
         command=["bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null"],
     )
     _maybe_drop_shield(project, cname, task_dir)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
     stream_initial_logs(
@@ -435,6 +466,16 @@ def task_run_cli(
 
     # Verify the container is still alive after log streaming
     _assert_running(cname)
+    run_hook(
+        "post_ready",
+        project.hook_post_ready,
+        project_id=project.id,
+        task_id=task_id,
+        mode="cli",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     meta["mode"] = "cli"
     meta["unrestricted"] = unrestricted
@@ -485,6 +526,17 @@ def task_run_toad(
         print(f"Starting existing container {_green(cname, color_enabled)}...")
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project.id,
+            task_id=task_id,
+            mode="toad",
+            cname=cname,
+            web_port=port,
+            task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
+        )
         print("Container started.")
         print(f"Toad: {_blue(url, color_enabled)}")
         return
@@ -520,6 +572,17 @@ def task_run_toad(
         f" --public-url http://{pub_host}:{port}"
         f" /workspace"
     )
+    run_hook(
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -531,6 +594,17 @@ def task_run_toad(
         command=["bash", "-lc", toad_cmd],
     )
     _maybe_drop_shield(project, cname, task_dir)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     def _toad_ready(line: str) -> bool:
         """Return True when textual-serve reports it is serving."""
@@ -545,6 +619,18 @@ def task_run_toad(
     if not ready or not is_container_running(cname):
         print(f"Toad failed to start. Check logs: podman logs {cname}")
         raise SystemExit(1)
+
+    run_hook(
+        "post_ready",
+        project.hook_post_ready,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=port,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     color_enabled = _supports_color()
     url = f"http://{pub_host}:{port}/"
@@ -692,6 +778,17 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     # Build podman command (DETACHED)
     cname = container_name(project.id, "run", task_id)
 
+    meta, meta_path = load_task_meta(project.id, task_id)
+    run_hook(
+        "pre_start",
+        project.hook_pre_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -702,9 +799,18 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         command=["bash", "-lc", headless_cmd],
     )
     _maybe_drop_shield(project, cname, task_dir)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     # Update task metadata
-    meta, meta_path = load_task_meta(project.id, task_id)
     meta["mode"] = "run"
     meta["provider"] = resolved.name
     meta["unrestricted"] = unrestricted
@@ -824,6 +930,16 @@ def task_followup_headless(
     # which reads prompt.txt and session files from the volume)
     _podman_start(cname)
     _assert_running(cname)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     # Clear previous exit_code so effective_status shows "running" until new exit
     meta["exit_code"] = None
@@ -892,11 +1008,31 @@ def task_restart(project_id: str, task_id: str) -> None:
             raise SystemExit("podman not found; please install podman")
         except subprocess.CalledProcessError as e:
             raise SystemExit(f"Failed to stop container: {e}")
+        run_hook(
+            "post_stop",
+            project.hook_post_stop,
+            project_id=project_id,
+            task_id=task_id,
+            mode=mode,
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
+        )
 
     if container_state is not None:
         # Container exists (stopped/exited, or just stopped above) - start it
         _podman_start(cname)
         _assert_running(cname)
+        run_hook(
+            "post_start",
+            project.hook_post_start,
+            project_id=project_id,
+            task_id=task_id,
+            mode=mode,
+            cname=cname,
+            task_dir=project.tasks_root / str(task_id),
+            meta_path=meta_path,
+        )
 
         color_enabled = _supports_color()
         print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")

@@ -46,7 +46,8 @@ class TaskList(ListView):
         ("l", "app.login_from_main", "Login"),
         ("f", "app.follow_logs_from_main", "Logs"),
         ("X", "app.delete_task_from_main", "Delete"),
-        ("D", "app.shield_down_from_main", "Shield\u2193"),
+        ("d", "app.shield_down_from_main", "Shield\u2193"),
+        ("D", "app.shield_down_all_from_main", "Shield\u2193\u2193"),
         ("s", "app.shield_up_from_main", "Shield\u2191"),
     ]
 

@@ -127,11 +127,14 @@ def pre_start(container: str, task_dir: Path) -> list[str]:
         raise SystemExit(f"{exc}\n\nRun 'terokctl shield setup' to install global hooks.") from None
 
 
-def down(container: str, task_dir: Path) -> None:
-    """Set shield to bypass mode (allow egress) for a running container."""
+def down(container: str, task_dir: Path, *, allow_all: bool = False) -> None:
+    """Set shield to bypass mode (allow egress) for a running container.
+
+    When *allow_all* is True, also permits private-range (RFC 1918) traffic.
+    """
     if get_shield_bypass_firewall_no_protection():
         return
-    make_shield(task_dir).down(container)
+    make_shield(task_dir).down(container, allow_all=allow_all)
 
 
 def up(container: str, task_dir: Path) -> None:

@@ -39,11 +39,15 @@ layer = "presentation"
 depends_on = [
     "terok.lib.containers.agent_config",
     "terok.lib.containers.headless_providers",
+    "terok.lib.containers.hooks",
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.facade",
     "terok.lib.util.emoji",
+    "terok.lib.util.yaml",
     "terok.lib.wizards.new_project",
     "terok.ui_utils.terminal",
 ]
@@ -194,6 +198,7 @@ depends_on = [
 path = "terok.lib.containers.tasks"
 layer = "services"
 depends_on = [
+    "terok.lib.containers.hooks",
     "terok.lib.containers.runtime",
     "terok.lib.containers.task_display",
     "terok.lib.containers.work_status",
@@ -207,6 +212,12 @@ depends_on = [
     "terok.lib.util.yaml",
 ]
 
+# Task lifecycle hooks (host-side)
+[[modules]]
+path = "terok.lib.containers.hooks"
+layer = "services"
+depends_on = ["terok.lib.util.yaml"]
+
 # Task container runners (CLI, headless, toad, restart)
 [[modules]]
 path = "terok.lib.containers.task_runners"
@@ -216,6 +227,7 @@ depends_on = [
     "terok.lib.containers.agents",
     "terok.lib.containers.environment",
     "terok.lib.containers.headless_providers",
+    "terok.lib.containers.hooks",
     "terok.lib.containers.instructions",
     "terok.lib.containers.ports",
     "terok.lib.containers.runtime",
@@ -582,6 +594,10 @@ expose = [
 from = ["terok.lib.containers.tasks"]
 
 [[interfaces]]
+expose = ["run_hook", "HOOK_NAMES"]
+from = ["terok.lib.containers.hooks"]
+
+[[interfaces]]
 expose = ["task_run_cli", "task_run_toad", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
 from = ["terok.lib.containers.task_runners"]
 
@@ -707,6 +723,7 @@ expose = [
     "get_prefix",
     "is_experimental",
     "set_experimental",
+    "get_global_hooks",
     "get_shield_bypass_firewall_no_protection",
     "get_public_host",
 ]

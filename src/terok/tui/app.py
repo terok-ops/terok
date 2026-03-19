@@ -140,7 +140,9 @@ if _HAS_TEXTUAL:
         "login": "_action_login",
         "follow_logs": "_action_follow_logs",
         "rename": "_action_rename_task",
+        "stop": "_action_stop_task",
         "shield_down": "_action_shield_down",
+        "shield_down_all": "_action_shield_down_all",
         "shield_up": "_action_shield_up",
     }
 

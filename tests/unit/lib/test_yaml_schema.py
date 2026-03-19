@@ -261,6 +261,35 @@ class RawGlobalConfigTests(unittest.TestCase):
             )
         self.assertIn("upstream_url", str(ctx.exception))
 
+    def test_global_hooks_section(self) -> None:
+        """Global hooks section parses all four hook fields."""
+        cfg = RawGlobalConfig.model_validate(
+            {"hooks": {"post_ready": "notify.sh", "post_stop": "cleanup.sh"}}
+        )
+        self.assertIsNone(cfg.hooks.pre_start)
+        self.assertIsNone(cfg.hooks.post_start)
+        self.assertEqual(cfg.hooks.post_ready, "notify.sh")
+        self.assertEqual(cfg.hooks.post_stop, "cleanup.sh")
+
+    def test_global_hooks_rejects_unknown_keys(self) -> None:
+        """Global hooks section rejects unknown hook names."""
+        with self.assertRaises(ValidationError):
+            RawGlobalConfig.model_validate({"hooks": {"on_crash": "oops.sh"}})
+
+    def test_project_run_hooks(self) -> None:
+        """Project run.hooks section parses correctly."""
+        raw = RawProjectYaml.model_validate(
+            {"run": {"hooks": {"pre_start": "setup.sh", "post_ready": "fwd.sh"}}}
+        )
+        self.assertEqual(raw.run.hooks.pre_start, "setup.sh")
+        self.assertEqual(raw.run.hooks.post_ready, "fwd.sh")
+        self.assertIsNone(raw.run.hooks.post_stop)
+
+    def test_project_run_hooks_none_coercion(self) -> None:
+        """Project run.hooks: None is coerced to empty (default hooks)."""
+        raw = RawProjectYaml.model_validate({"run": {"hooks": None}})
+        self.assertIsNone(raw.run.hooks.pre_start)
+
 
 class ProjectYamlValidationErrorTests(unittest.TestCase):
     """Tests for user-facing error messages from load_project() with bad YAML."""

@@ -699,6 +699,20 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
     stop_task_containers(project, str(task_id))
     _log_debug("task_delete: _stop_task_containers returned")
 
+    if mode:
+        from .hooks import run_hook
+
+        run_hook(
+            "post_stop",
+            project.hook_post_stop,
+            project_id=project.id,
+            task_id=task_id,
+            mode=mode,
+            cname=container_name(project.id, mode, task_id),
+            task_dir=workspace,
+            meta_path=meta_path,
+        )
+
     if workspace.is_dir():
         _log_debug("task_delete: removing workspace directory")
         shutil.rmtree(workspace)
@@ -821,6 +835,19 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Failed to stop container: {e}")
+
+    from .hooks import run_hook
+
+    run_hook(
+        "post_stop",
+        project.hook_post_stop,
+        project_id=project.id,
+        task_id=task_id,
+        mode=mode,
+        cname=cname,
+        task_dir=project.tasks_root / str(task_id),
+        meta_path=meta_path,
+    )
 
     color_enabled = _supports_color()
     print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")

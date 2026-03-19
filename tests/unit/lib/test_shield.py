@@ -193,9 +193,24 @@ def test_shield_functions_delegate_to_per_task_shield(
     result = func("my-container", MOCK_TASK_DIR)
 
     mock_make.assert_called_once_with(MOCK_TASK_DIR)
-    getattr(mock_shield, method_name).assert_called_once_with("my-container")
+    if method_name == "down":
+        getattr(mock_shield, method_name).assert_called_once_with("my-container", allow_all=False)
+    else:
+        getattr(mock_shield, method_name).assert_called_once_with("my-container")
     if expected is not None:
         assert result == expected
+
+
+@patch("terok.lib.security.shield.make_shield")
+def test_shield_down_allow_all(mock_make: MagicMock) -> None:
+    """The ``down`` wrapper passes ``allow_all=True`` when requested."""
+    mock_shield = make_mock_shield()
+    mock_make.return_value = mock_shield
+
+    down("my-container", MOCK_TASK_DIR, allow_all=True)
+
+    mock_make.assert_called_once_with(MOCK_TASK_DIR)
+    mock_shield.down.assert_called_once_with("my-container", allow_all=True)
 
 
 @patch("terok.lib.security.shield.get_global_section", return_value={})

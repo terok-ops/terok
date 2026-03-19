@@ -59,6 +59,11 @@ class ProjectConfig(BaseModel):
     shutdown_timeout: int = 10
     task_name_categories: list[str] | None = None
     shield_drop_on_task_start: bool = True
+    # Lifecycle hooks (host-side commands)
+    hook_pre_start: str | None = None
+    hook_post_start: str | None = None
+    hook_post_ready: str | None = None
+    hook_post_stop: str | None = None
     # Docker configuration (flattened from docker: section)
     docker_base_image: str = "ubuntu:24.04"
     docker_snippet_inline: str | None = None

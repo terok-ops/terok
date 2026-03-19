@@ -129,13 +129,11 @@ bind-mount ownership) and then drops to `podman` internally.
 
 **Toad web access from LAN:** Toad containers run inside nested
 rootless Podman, which uses pasta for port forwarding.  Pasta only
-forwards connections arriving on `127.0.0.1` — external traffic
-delivered to the container's network interface by Docker's `-p`
-mapping is not forwarded.  Toad is therefore reachable on
-`127.0.0.1` from the Docker host but not from other LAN machines.
-The web TUI and gate server are unaffected (they run directly in
-the Docker container's process space).  `socat` is included in the
-image for manual port forwarding if needed.
+forwards connections arriving on `127.0.0.1`, so toad is reachable
+from the Docker host but not from other LAN machines.  The web TUI
+and gate server are unaffected (they run directly in the Docker
+container's process space).  A future reverse-proxy integration
+(nginx) will resolve this.
 
 ## Architecture
 

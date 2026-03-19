@@ -25,16 +25,16 @@ RUN dnf install -y \
         python3-devel \
         git \
         nftables \
-        socat \
     && dnf clean all
 
-# ── 2. Install terok from source ────────────────────────────────
-ARG TEROK_REPO=https://github.com/terok-ai/terok.git
-ARG TEROK_REF=master
-
+# ── 2. Install terok from local source tree ──────────────────────
+COPY . /opt/terok-src
 RUN pip install --break-system-packages poetry-dynamic-versioning \
-    && git clone --branch "${TEROK_REF}" "${TEROK_REPO}" /opt/terok-src \
-    && pip install --break-system-packages /opt/terok-src \
+    && cd /opt/terok-src \
+    && git init && git add -A \
+    && git -c user.name=build -c user.email=build@localhost commit -m init \
+    && git tag v0.0.0 \
+    && pip install --break-system-packages . \
     && rm -rf /opt/terok-src
 
 # ── 3. Prepare terok directories and shell completions ────────────
@@ -43,9 +43,13 @@ RUN pip install --break-system-packages poetry-dynamic-versioning \
 USER podman
 RUN mkdir -p \
         ~/.config/terok \
+        ~/.config/containers \
         ~/.local/share/terok/gate \
         ~/.cache/terok \
         ~/.cache/containers \
+    && printf '%s\n' \
+        'unqualified-search-registries = ["docker.io"]' \
+        > ~/.config/containers/registries.conf \
     && terokctl completions install --shell bash
 USER root
 
@@ -78,6 +82,5 @@ EXPOSE 8566 9418 7860-7880
 
 ENV HOME=/home/podman
 ENV TEROK_GATE_BIND=0.0.0.0
-ENV TEROK_PUBLIC_HOST=0.0.0.0
 
 ENTRYPOINT ["docker-entrypoint.sh"]

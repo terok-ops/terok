@@ -181,6 +181,17 @@ class RawGatekeepingSection(BaseModel):
         return data
 
 
+class RawHooksSection(BaseModel):
+    """Task lifecycle hook commands (run on host, not inside containers)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pre_start: str | None = None
+    post_start: str | None = None
+    post_ready: str | None = None
+    post_stop: str | None = None
+
+
 class RawRunSection(BaseModel):
     """The ``run:`` section of project.yml."""
 
@@ -188,6 +199,17 @@ class RawRunSection(BaseModel):
 
     shutdown_timeout: int = 10
     gpus: str | bool | None = None
+    hooks: RawHooksSection = Field(default_factory=RawHooksSection)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_none_subsections(cls, data: Any) -> Any:
+        """Coerce None sub-sections to empty dicts."""
+        if isinstance(data, dict):
+            for key in ("hooks",):
+                if data.get(key) is None:
+                    data[key] = {}
+        return data
 
 
 class RawShieldProjectSection(BaseModel):
@@ -347,6 +369,7 @@ class RawGlobalConfig(BaseModel):
     gate_server: RawGateServerSection = Field(default_factory=RawGateServerSection)
     tasks: RawTasksGlobalSection = Field(default_factory=RawTasksGlobalSection)
     git: RawGlobalGitSection = Field(default_factory=RawGlobalGitSection)
+    hooks: RawHooksSection = Field(default_factory=RawHooksSection)
     default_agent: str | None = None
     default_login: str | None = None
     agent: dict[str, Any] = Field(default_factory=dict)
@@ -362,6 +385,7 @@ class RawGlobalConfig(BaseModel):
             "gate_server",
             "tasks",
             "git",
+            "hooks",
             "agent",
         }
     )

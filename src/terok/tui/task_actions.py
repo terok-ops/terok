@@ -37,6 +37,7 @@ from ..lib.facade import (
     task_run_cli,
     task_run_headless,
     task_run_toad,
+    task_stop,
 )
 from .clipboard import copy_to_clipboard_detailed
 from .screens import (
@@ -534,6 +535,15 @@ class TaskActionsMixin:
         tid = self.current_task.task_id
         await self._run_suspended(lambda: task_restart(pid, tid), refresh="tasks")
 
+    async def _action_stop_task(self) -> None:
+        """Stop a running task container."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        pid = self.current_project_id
+        tid = self.current_task.task_id
+        await self._run_suspended(lambda: task_stop(pid, tid), refresh="tasks")
+
     async def _action_login(self) -> None:
         """Log into the selected task's running container."""
         if not self.current_project_id or not self.current_task:
@@ -696,6 +706,12 @@ class TaskActionsMixin:
             return
         self._action_shield_toggle("up", shield_up)
 
+    def _action_shield_down_all(self) -> None:
+        """Drop the shield with allow_all (also permit private-range traffic)."""
+        if self._notify_shield_bypassed():
+            return
+        self._action_shield_toggle("down", lambda c, d: shield_down(c, d, allow_all=True))
+
     # --- Main-screen task pane shortcuts (c/w/X/D/s) ---
 
     async def action_run_cli_from_main(self) -> None:
@@ -715,6 +731,10 @@ class TaskActionsMixin:
         if self._notify_shield_bypassed():
             return
         self._action_shield_toggle("down", shield_down)
+
+    def action_shield_down_all_from_main(self) -> None:
+        """Drop the shield with allow_all (+ private ranges) for the current task."""
+        self._action_shield_down_all()
 
     def action_shield_up_from_main(self) -> None:
         """Raise the shield from the main screen."""

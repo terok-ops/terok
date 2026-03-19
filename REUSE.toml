@@ -15,6 +15,7 @@ path = [
   "sonar-project.properties",
   "**/*.dockerinclude",
   ".gitignore",
+  ".dockerignore",
   "MANIFEST.in",
   "Makefile",
   "completions/**",

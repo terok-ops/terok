@@ -10,6 +10,7 @@ Complete guide to installing, configuring, and using terok.
 - [From Zero to First Run](#from-zero-to-first-run)
 - [Headless Agent Runs (Autopilot)](#headless-agent-runs-autopilot)
 - [Presets](#presets)
+- [Task Lifecycle Hooks](#task-lifecycle-hooks)
 - [Image Management](#image-management)
 - [Project Management](#project-management)
 - [GPU Passthrough](#gpu-passthrough)
@@ -821,6 +822,73 @@ terokctl task start myproj --preset solo
 ```
 
 Each task remembers its preset — `terokctl task restart` reuses it automatically.
+
+---
+
+## Task Lifecycle Hooks
+
+Hooks run user-configured shell commands on the **host** at key points during
+a task container's lifecycle.  They are useful for port forwarding, notifications,
+logging, or custom setup/teardown.
+
+### Hook points
+
+| Hook | When | Use case |
+|------|------|----------|
+| `pre_start` | Before the container is created | Validate prerequisites, set up host resources |
+| `post_start` | After the container is running | Start sidecars, register with service discovery |
+| `post_ready` | After the application is ready (CLI ready marker / toad serving) | Port forwarding, open browser, notify |
+| `post_stop` | After the container stops | Clean up port forwards, notify, archive logs |
+
+### Configuration
+
+Hooks can be set globally (all projects) or per-project:
+
+```yaml
+# ~/.config/terok/config.yml (global)
+hooks:
+  post_ready: ~/.config/terok/hooks/on-ready.sh
+  post_stop: ~/.config/terok/hooks/on-stop.sh
+```
+
+```yaml
+# project.yml (per-project, overrides global)
+run:
+  hooks:
+    post_ready: ./hooks/on-ready.sh
+```
+
+### Environment variables
+
+Hook commands receive task context via environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `TEROK_HOOK` | Hook name | `post_ready` |
+| `TEROK_PROJECT_ID` | Project ID | `myproject` |
+| `TEROK_TASK_ID` | Task number | `3` |
+| `TEROK_TASK_MODE` | Task mode | `cli`, `toad`, `run` |
+| `TEROK_CONTAINER_NAME` | Podman container name | `myproject-toad-3` |
+| `TEROK_WEB_PORT` | Web port (toad only) | `7861` |
+| `TEROK_TASK_DIR` | Host-side task directory | `/home/user/.local/share/terok/tasks/myproject/3` |
+
+### Hook tracking and sickbay
+
+Hooks are tracked in task metadata (`hooks_fired` list).  If a task stops
+without its `post_stop` hook running (e.g. after a crash or host reboot),
+`terokctl sickbay` detects the inconsistency:
+
+```bash
+terokctl sickbay                    # check all projects
+terokctl sickbay myproject          # check one project
+terokctl sickbay myproject 3        # check one task
+terokctl sickbay --fix              # auto-reconcile (run missed hooks)
+```
+
+### Example: task lifecycle logging
+
+See `examples/hooks/task-notify.sh` for a simple example that logs
+lifecycle events with task context to stderr.
 
 ---
 

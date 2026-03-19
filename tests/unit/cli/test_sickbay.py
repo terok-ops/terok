@@ -1,0 +1,164 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for sickbay health checks and hook reconciliation."""
+
+from __future__ import annotations
+
+import unittest.mock
+from pathlib import Path
+
+import pytest
+
+from terok.cli.commands.sickbay import _check_task_hook, _reconcile_post_stop, _update_worst
+from terok.lib.util.yaml import dump as yaml_dump
+
+MOCK_BASE = Path("/tmp/terok-testing")
+
+
+@pytest.fixture()
+def task_meta_dir(tmp_path: Path) -> Path:
+    """Create a temporary task metadata directory."""
+    meta_dir = tmp_path / "tasks"
+    meta_dir.mkdir()
+    return meta_dir
+
+
+def _write_meta(meta_dir: Path, tid: str, meta: dict) -> Path:
+    """Write task metadata to a YAML file and return the path."""
+    p = meta_dir / f"{tid}.yml"
+    p.write_text(yaml_dump(meta))
+    return p
+
+
+class TestUpdateWorst:
+    def test_ok_stays_ok(self) -> None:
+        assert _update_worst("ok", "ok") == "ok"
+
+    def test_warn_upgrades_ok(self) -> None:
+        assert _update_worst("ok", "warn") == "warn"
+
+    def test_error_upgrades_warn(self) -> None:
+        assert _update_worst("warn", "error") == "error"
+
+    def test_error_stays_error(self) -> None:
+        assert _update_worst("error", "ok") == "error"
+
+    def test_warn_stays_warn(self) -> None:
+        assert _update_worst("warn", "ok") == "warn"
+
+
+class TestCheckTaskHook:
+    def test_missing_meta_file_returns_none(self, tmp_path: Path) -> None:
+        project = unittest.mock.MagicMock()
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_hook("proj", "99", project, fix=False) is None
+
+    def test_no_mode_returns_none(self, task_meta_dir: Path) -> None:
+        _write_meta(task_meta_dir, "1", {"status": "created"})
+        project = unittest.mock.MagicMock()
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+        ):
+            assert _check_task_hook("proj", "1", project, fix=False) is None
+
+    def test_running_container_returns_none(self, task_meta_dir: Path) -> None:
+        _write_meta(task_meta_dir, "1", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        with (
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.get_container_state", return_value="running"
+            ),
+        ):
+            assert _check_task_hook("proj", "1", project, fix=False) is None
+
+    def test_already_fired_returns_none(self, task_meta_dir: Path) -> None:
+        _write_meta(task_meta_dir, "1", {"mode": "cli", "hooks_fired": ["post_stop"]})
+        project = unittest.mock.MagicMock()
+        with (
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.get_container_state", return_value="exited"
+            ),
+        ):
+            assert _check_task_hook("proj", "1", project, fix=False) is None
+
+    def test_unfired_returns_warn(self, task_meta_dir: Path) -> None:
+        _write_meta(task_meta_dir, "1", {"mode": "cli", "hooks_fired": ["post_start"]})
+        project = unittest.mock.MagicMock()
+        with (
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.get_container_state", return_value="exited"
+            ),
+        ):
+            result = _check_task_hook("proj", "1", project, fix=False)
+            assert result is not None
+            assert result[0] == "warn"
+            assert "post_stop" in result[2]
+
+    def test_fix_calls_reconcile(self, task_meta_dir: Path) -> None:
+        _write_meta(task_meta_dir, "1", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        project.hook_post_stop = "echo cleanup"
+        project.tasks_root = task_meta_dir.parent
+        with (
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.get_container_state", return_value=None
+            ),
+            unittest.mock.patch("terok.cli.commands.sickbay.run_hook") as mock_hook,
+        ):
+            result = _check_task_hook("proj", "1", project, fix=True)
+            assert result is not None
+            assert result[0] == "ok"
+            assert "reconciled" in result[2]
+            mock_hook.assert_called_once()
+
+    def test_bad_metadata_returns_warn(self, task_meta_dir: Path) -> None:
+        bad_path = task_meta_dir / "1.yml"
+        bad_path.write_bytes(b"\x80\x81\x82")  # invalid UTF-8
+        project = unittest.mock.MagicMock()
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
+        ):
+            result = _check_task_hook("proj", "1", project, fix=False)
+            assert result is not None
+            assert result[0] == "warn"
+            assert "bad metadata" in result[2]
+
+
+class TestReconcilePostStop:
+    def test_success(self, tmp_path: Path) -> None:
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(yaml_dump({"mode": "cli"}))
+        project = unittest.mock.MagicMock()
+        project.hook_post_stop = "echo done"
+        project.tasks_root = tmp_path
+        with unittest.mock.patch("terok.cli.commands.sickbay.run_hook"):
+            result = _reconcile_post_stop("p", "1", "cli", "c", project, meta_path, "Task p/1")
+            assert result[0] == "ok"
+
+    def test_failure(self, tmp_path: Path) -> None:
+        meta_path = tmp_path / "1.yml"
+        meta_path.write_text(yaml_dump({"mode": "cli"}))
+        project = unittest.mock.MagicMock()
+        project.hook_post_stop = "exit 1"
+        project.tasks_root = tmp_path
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.run_hook", side_effect=RuntimeError("boom")
+        ):
+            result = _reconcile_post_stop("p", "1", "cli", "c", project, meta_path, "Task p/1")
+            assert result[0] == "error"
+            assert "boom" in result[2]
