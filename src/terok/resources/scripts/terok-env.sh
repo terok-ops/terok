@@ -21,10 +21,17 @@ _terok_env_ready && return 0
 # ── PATH ──────────────────────────────────────────────────────────────────────
 
 # Guard against duplicate PATH prepends on re-source.
-case ":$PATH:" in
-  *":$HOME/.npm-packages/bin:"*) ;;
-  *) export PATH="$HOME/.npm-packages/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH" ;;
-esac
+_terok_prepend_path_once() {
+  case ":$PATH:" in
+    *":$1:"*) ;;
+    *) PATH="$1:$PATH" ;;
+  esac
+}
+
+_terok_prepend_path_once "$HOME/.opencode/bin"
+_terok_prepend_path_once "$HOME/.local/bin"
+_terok_prepend_path_once "$HOME/.npm-packages/bin"
+export PATH
 
 # ── Git identity ──────────────────────────────────────────────────────────────
 
