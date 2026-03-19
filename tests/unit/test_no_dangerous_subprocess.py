@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """AST-based static analysis: ban subprocess calls co-located with workspace-dangerous.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Container-based command execution for agent workspaces.
@@ -76,6 +76,12 @@ def container_git_diff(
 
     restarted = False
     if state != "running":
+        if mode == "run":
+            # Never restart exited headless containers — podman start replays
+            # the original entrypoint (the agent command), causing duplicate
+            # commits, network calls, and other side effects.
+            _log_debug(f"container_git_diff: refusing to restart exited headless container {cname}")
+            return None
         if not _podman_start(cname):
             return None
         restarted = True

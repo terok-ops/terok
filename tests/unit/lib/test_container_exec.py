@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for container-based command execution."""
@@ -35,7 +35,7 @@ class TestContainerGitDiff:
             assert all("start" not in cmd for cmd in calls)
 
     def test_stopped_container_restarts_and_stops(self) -> None:
-        """Stopped container is started, exec'd, and stopped again."""
+        """Stopped CLI container is started, exec'd, and stopped again."""
         expected = " 1 file changed\n"
         with (
             unittest.mock.patch(
@@ -55,20 +55,20 @@ class TestContainerGitDiff:
             stop_result = unittest.mock.Mock()
             mock_run.side_effect = [start_result, exec_result, stop_result]
 
-            result = container_git_diff("proj", "2", "run", "--stat", "HEAD@{1}..HEAD")
+            result = container_git_diff("proj", "2", "cli", "--stat", "HEAD@{1}..HEAD")
             assert result == expected
             assert mock_run.call_count == 3
 
             # Verify start was called
             start_cmd = mock_run.call_args_list[0][0][0]
-            assert start_cmd == ["podman", "start", "proj-run-2"]
+            assert start_cmd == ["podman", "start", "proj-cli-2"]
 
             # Verify exec was called with correct git args
             exec_cmd = mock_run.call_args_list[1][0][0]
             assert exec_cmd == [
                 "podman",
                 "exec",
-                "proj-run-2",
+                "proj-cli-2",
                 "git",
                 "-C",
                 "/workspace",
@@ -77,9 +77,19 @@ class TestContainerGitDiff:
                 "HEAD@{1}..HEAD",
             ]
 
-            # Verify stop was called
+            # Verify stop was called with correct container name
             stop_cmd = mock_run.call_args_list[2][0][0]
-            assert "stop" in stop_cmd
+            assert stop_cmd[:2] == ["podman", "stop"]
+            assert "proj-cli-2" in stop_cmd
+
+    def test_exited_headless_container_not_restarted(self) -> None:
+        """Exited headless (run mode) containers must not be restarted."""
+        with unittest.mock.patch(
+            "terok.lib.containers.container_exec.get_container_state",
+            return_value="exited",
+        ):
+            result = container_git_diff("proj", "1", "run", "--stat", "HEAD@{1}..HEAD")
+            assert result is None
 
     def test_no_container_returns_none(self) -> None:
         """Return None when the container does not exist."""

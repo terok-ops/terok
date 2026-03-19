@@ -239,7 +239,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
             return container_git_diff(project_id, task_id, mode, "HEAD~1", "HEAD")
         return container_git_diff(project_id, task_id, mode, "HEAD")
 
-    except Exception:
+    except (Exception, SystemExit):
         return None
 
 
