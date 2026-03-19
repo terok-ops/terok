@@ -78,6 +78,18 @@ def _stage_scripts_into(dest: Path) -> None:
     _copy_package_tree("terok", pkg_rel, dest)
 
 
+def _stage_toad_agents_into(dest: Path) -> None:
+    """Stage Toad agent TOML files from package resources into dest/toad-agents.
+
+    These describe custom ACP agents (Blablador, KISSKI, etc.) that are injected
+    into Toad's bundled agent directory at container startup.
+    """
+    pkg_rel = "resources/toad-agents"
+    if dest.exists():
+        shutil.rmtree(dest)
+    _copy_package_tree("terok", pkg_rel, dest)
+
+
 def _stage_tmux_config_into(dest: Path) -> None:
     """Stage tmux config from package resources into dest/tmux.
 
@@ -229,6 +241,12 @@ def generate_dockerfiles(project_id: str) -> None:
         _stage_scripts_into(out_dir / "scripts")
     except OSError as e:
         print(f"Warning: could not stage build scripts: {e}")
+
+    # Stage Toad agent TOML files for custom ACP agents.
+    try:
+        _stage_toad_agents_into(out_dir / "toad-agents")
+    except OSError as e:
+        print(f"Warning: could not stage toad agent definitions: {e}")
 
     # Stage tmux config for container login sessions.
     try:
