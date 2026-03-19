@@ -562,8 +562,13 @@ def task_run_toad(
         meta["preset"] = preset
     meta_path.write_text(_yaml_dump(meta))
 
-    # Bind to all interfaces when serving to LAN (non-loopback public host).
-    bind_addr = _LOCALHOST if pub_host in _LOOPBACK_HOSTS else "0.0.0.0"  # nosec B104
+    # TEROK_TOAD_BIND overrides the pasta bind address (e.g. Docker sets
+    # 127.0.0.1 so socat can handle external access without port conflict).
+    bind_override = os.environ.get("TEROK_TOAD_BIND", "").strip()
+    if bind_override:
+        bind_addr = bind_override
+    else:
+        bind_addr = _LOCALHOST if pub_host in _LOOPBACK_HOSTS else "0.0.0.0"  # nosec B104
 
     task_dir = project.tasks_root / str(task_id)
     toad_cmd = (
