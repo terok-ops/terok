@@ -11,18 +11,20 @@ Runs during ``mkdocs build`` via the mkdocs-gen-files plugin.  Introspects
 - A full annotated YAML example for each config file
 
 The Pydantic models are the **single source of truth** — if a field exists in
-the schema, it appears in the docs automatically.
+the schema, it appears in the docs automatically.  Table and YAML rendering
+is delegated to ``mkdocs_terok.config_reference``.
 """
 
 from __future__ import annotations
 
 import io
-import json
-from typing import get_args, get_origin
 
 import mkdocs_gen_files
-from pydantic import BaseModel
-from pydantic.fields import FieldInfo
+from mkdocs_terok.config_reference import (
+    render_json_schema,
+    render_model_tables,
+    render_yaml_example,
+)
 
 from terok.lib.core.yaml_schema import RawGlobalConfig, RawProjectYaml
 
@@ -98,213 +100,6 @@ _FIELD_DOCS: dict[str, str] = {
 }
 
 
-def _type_str(field_info: FieldInfo) -> str:
-    """Produce a human-readable type string from a Pydantic FieldInfo."""
-    annotation = field_info.annotation
-    if annotation is None:
-        return "any"
-
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-
-    # Handle Union types (e.g. str | None from Optional)
-    if origin is type(str | None):  # types.UnionType
-        non_none = [a for a in args if a is not type(None)]
-        if len(non_none) == 1:
-            inner = _simple_type_name(non_none[0])
-            return f"{inner} or null"
-        return " or ".join(_simple_type_name(a) for a in non_none) + " or null"
-
-    # Handle list[str] etc.
-    if origin is list:
-        inner = _simple_type_name(args[0]) if args else "any"
-        return f"list of {inner}"
-
-    if origin is dict:
-        return "mapping"
-
-    return _simple_type_name(annotation)
-
-
-def _simple_type_name(t: type) -> str:
-    """Return a short name for a type."""
-    names = {str: "string", int: "integer", bool: "boolean", float: "number"}
-    return names.get(t, getattr(t, "__name__", str(t)))
-
-
-def _factory_default_repr(field_info: FieldInfo) -> str:
-    """Produce a default-value string for fields with ``default_factory``."""
-    try:
-        val = field_info.default_factory()  # type: ignore[misc]
-        if isinstance(val, BaseModel):
-            return "*section defaults*"
-        if isinstance(val, list):
-            return "``[]``"
-        if isinstance(val, dict):
-            return "``{}``"
-    except Exception:
-        pass
-    return "*computed*"
-
-
-def _scalar_default_repr(d: object) -> str:
-    """Produce a default-value string for a scalar default."""
-    if d is None:
-        return "—"
-    if isinstance(d, bool):
-        return f"``{str(d).lower()}``"
-    if isinstance(d, (int, float)):
-        return f"``{d}``"
-    if isinstance(d, str):
-        return f'``"{d}"``' if d else "*empty*"
-    return f"``{d}``"
-
-
-def _default_repr(field_info: FieldInfo) -> str:
-    """Produce a human-readable default value string."""
-    if field_info.is_required():
-        return "*required*"
-    if field_info.default_factory is not None:
-        return _factory_default_repr(field_info)
-    return _scalar_default_repr(field_info.default)
-
-
-def _is_section_field(field_info: FieldInfo) -> bool:
-    """Check if a field is a nested Pydantic section model."""
-    ann = field_info.annotation
-    if ann is None:
-        return False
-    return isinstance(ann, type) and issubclass(ann, BaseModel)
-
-
-def _yaml_default(field_info: FieldInfo) -> str:
-    """Return the YAML-formatted default value for a field."""
-    if field_info.default_factory is not None:
-        try:
-            val = field_info.default_factory()
-            if isinstance(val, list):
-                return "[]"
-            if isinstance(val, dict):
-                return "{}"
-        except Exception:
-            pass
-        return ""
-    d = field_info.default
-    if d is None:
-        return ""
-    if isinstance(d, bool):
-        return str(d).lower()
-    if isinstance(d, str):
-        return f'"{d}"' if " " in d or not d else d
-    return str(d)
-
-
-def _render_section_table(
-    buf: io.StringIO,
-    model_class: type[BaseModel],
-    prefix: str,
-    *,
-    heading_level: int = 3,
-) -> None:
-    """Render a Markdown table for one section model, recursing into sub-sections."""
-    hashes = "#" * heading_level
-    section_name = prefix.rstrip(".")
-    buf.write(f"{hashes} `{section_name}:`\n\n")
-
-    # Collect leaf fields and sub-section fields separately
-    leaf_fields: list[tuple[str, str, FieldInfo]] = []
-    sub_sections: list[tuple[str, type[BaseModel], FieldInfo]] = []
-
-    for name, field_info in model_class.model_fields.items():
-        if _is_section_field(field_info):
-            sub_sections.append((name, field_info.annotation, field_info))
-        else:
-            leaf_fields.append((name, prefix + name, field_info))
-
-    if leaf_fields:
-        buf.write("| Key | Type | Default | Description |\n")
-        buf.write("|-----|------|---------|-------------|\n")
-        for name, dotpath, fi in leaf_fields:
-            type_s = _type_str(fi)
-            default_s = _default_repr(fi)
-            desc = _FIELD_DOCS.get(dotpath, fi.description or "")
-            buf.write(f"| `{name}` | {type_s} | {default_s} | {desc} |\n")
-        buf.write("\n")
-
-    for name, sub_model, _ in sub_sections:
-        _render_section_table(buf, sub_model, f"{prefix}{name}.", heading_level=heading_level + 1)
-
-
-def _render_top_level_table(
-    buf: io.StringIO,
-    model_class: type[BaseModel],
-) -> None:
-    """Render tables for all sections of a top-level model."""
-    # First, collect top-level leaf fields
-    leaf_fields: list[tuple[str, FieldInfo]] = []
-    sections: list[tuple[str, type[BaseModel], FieldInfo]] = []
-
-    for name, field_info in model_class.model_fields.items():
-        if _is_section_field(field_info):
-            sections.append((name, field_info.annotation, field_info))
-        else:
-            leaf_fields.append((name, field_info))
-
-    if leaf_fields:
-        buf.write("### Top-level keys\n\n")
-        buf.write("| Key | Type | Default | Description |\n")
-        buf.write("|-----|------|---------|-------------|\n")
-        for name, fi in leaf_fields:
-            type_s = _type_str(fi)
-            default_s = _default_repr(fi)
-            desc = _FIELD_DOCS.get(name, fi.description or "")
-            buf.write(f"| `{name}` | {type_s} | {default_s} | {desc} |\n")
-        buf.write("\n")
-
-    for name, sub_model, _ in sections:
-        _render_section_table(buf, sub_model, f"{name}.")
-
-
-def _write_yaml_leaf(
-    buf: io.StringIO, pad: str, name: str, field_info: FieldInfo, desc: str
-) -> None:
-    """Write a single commented-out leaf field to the YAML example."""
-    if desc:
-        buf.write(f"{pad}# {_strip_rst(desc)}\n")
-    default = _yaml_default(field_info)
-    buf.write(f"{pad}# {name}: {default}\n" if default else f"{pad}# {name}:\n")
-
-
-def _render_yaml_example_with_prefix(
-    buf: io.StringIO,
-    model_class: type[BaseModel],
-    prefix_path: str = "",
-    *,
-    indent: int = 0,
-) -> None:
-    """Render a full commented YAML example, using dotpath for doc lookup."""
-    pad = "  " * indent
-    for name, field_info in model_class.model_fields.items():
-        dotpath = f"{prefix_path}.{name}" if prefix_path else name
-        desc = _FIELD_DOCS.get(dotpath, field_info.description or "")
-
-        if _is_section_field(field_info):
-            if desc:
-                buf.write(f"{pad}# {_strip_rst(desc)}\n")
-            buf.write(f"{pad}{name}:\n")
-            _render_yaml_example_with_prefix(
-                buf, field_info.annotation, prefix_path=dotpath, indent=indent + 1
-            )
-            buf.write("\n")
-        else:
-            _write_yaml_leaf(buf, pad, name, field_info, desc)
-
-
-def _strip_rst(text: str) -> str:
-    """Strip RST/Markdown inline markup for YAML comments."""
-    return text.replace("``", "").replace("**", "")
-
-
 # ---------------------------------------------------------------------------
 # Main: assemble the page
 # ---------------------------------------------------------------------------
@@ -338,11 +133,11 @@ def _generate() -> str:
         "in config.yml) or the system config root.\n\n"
     )
 
-    _render_top_level_table(buf, RawProjectYaml)
+    buf.write(render_model_tables(RawProjectYaml, field_docs=_FIELD_DOCS))
 
     buf.write("### Full example\n\n")
     buf.write('```yaml title="project.yml"\n')
-    _render_yaml_example_with_prefix(buf, RawProjectYaml)
+    buf.write(render_yaml_example(RawProjectYaml, field_docs=_FIELD_DOCS))
     buf.write("```\n\n")
 
     # --- config.yml ---
@@ -356,11 +151,11 @@ def _generate() -> str:
         "4. `/etc/terok/config.yml`\n\n"
     )
 
-    _render_top_level_table(buf, RawGlobalConfig)
+    buf.write(render_model_tables(RawGlobalConfig, field_docs=_FIELD_DOCS))
 
     buf.write("### Full example\n\n")
     buf.write('```yaml title="config.yml"\n')
-    _render_yaml_example_with_prefix(buf, RawGlobalConfig)
+    buf.write(render_yaml_example(RawGlobalConfig, field_docs=_FIELD_DOCS))
     buf.write("```\n\n")
 
     # --- Validation ---
@@ -385,7 +180,12 @@ def _generate() -> str:
     return buf.getvalue()
 
 
-_SCHEMAS: dict[str, type[BaseModel]] = {
+_SCHEMA_TITLES: dict[str, str] = {
+    "project.schema.json": "terok project.yml",
+    "config.schema.json": "terok config.yml",
+}
+
+_SCHEMAS = {
     "project.schema.json": RawProjectYaml,
     "config.schema.json": RawGlobalConfig,
 }
@@ -393,14 +193,6 @@ _SCHEMAS: dict[str, type[BaseModel]] = {
 with mkdocs_gen_files.open("config-reference.md", "w") as f:
     f.write(_generate())
 
-_SCHEMA_TITLES: dict[str, str] = {
-    "project.schema.json": "terok project.yml",
-    "config.schema.json": "terok config.yml",
-}
-
 for filename, model in _SCHEMAS.items():
-    schema = model.model_json_schema(mode="validation")
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema["title"] = _SCHEMA_TITLES.get(filename, schema.get("title", ""))
     with mkdocs_gen_files.open(f"schemas/{filename}", "w") as f:
-        f.write(json.dumps(schema, indent=2) + "\n")
+        f.write(render_json_schema(model, title=_SCHEMA_TITLES.get(filename, "")))

@@ -3,18 +3,11 @@
 
 """MkDocs gen-files hook for the integration test map."""
 
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
 import mkdocs_gen_files
+from mkdocs_terok.test_map import TestMapConfig, generate_test_map
 
-DOCS_DIR = Path(__file__).resolve().parent
-if str(DOCS_DIR) not in sys.path:
-    sys.path.insert(0, str(DOCS_DIR))
+_DIR_ORDER = ("cli", "projects", "tasks", "setup", "gate", "launch", "containers")
 
-import test_map  # noqa: E402
-
-with mkdocs_gen_files.open("test_map.md", "w") as handle:
-    handle.write(test_map.generate_test_map())
+config = TestMapConfig(dir_order=_DIR_ORDER, show_markers=False)
+with mkdocs_gen_files.open("test_map.md", "w") as f:
+    f.write(generate_test_map(config=config))

@@ -1,34 +1,23 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the CI workflow map generator."""
+"""Tests for the CI workflow map generator (mkdocs_terok.ci_map)."""
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from textwrap import dedent
-from types import ModuleType
 
 import pytest
+from mkdocs_terok.ci_map import (
+    _artifact_names,
+    _render,
+    _trigger_summary,
+    generate_ci_map,
+    load_workflows,
+)
 
 from terok.lib.util.yaml import load as yaml_load
-
-
-def _load_ci_map_module() -> ModuleType:
-    """Load ``docs/ci_map.py`` as a module for direct function testing."""
-    path = Path(__file__).resolve().parents[2] / "docs" / "ci_map.py"
-    spec = importlib.util.spec_from_file_location("ci_map", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-@pytest.fixture
-def ci_map_module() -> ModuleType:
-    """Return the loaded CI map module."""
-    return _load_ci_map_module()
 
 
 @pytest.mark.parametrize(
@@ -54,15 +43,14 @@ def ci_map_module() -> ModuleType:
     ],
 )
 def test_trigger_summary(
-    ci_map_module: ModuleType,
     data: dict[object, object],
     expected: str,
 ) -> None:
     """Trigger summaries compactly describe the workflow trigger shape."""
-    assert ci_map_module._trigger_summary(data) == expected
+    assert _trigger_summary(data) == expected
 
 
-def test_artifact_names_extract_named_and_default_artifacts(ci_map_module: ModuleType) -> None:
+def test_artifact_names_extract_named_and_default_artifacts() -> None:
     """Artifact extraction returns explicit names and a fallback marker."""
     steps = [
         {"uses": "actions/upload-artifact@v4", "with": {"name": "coverage"}},
@@ -71,27 +59,23 @@ def test_artifact_names_extract_named_and_default_artifacts(ci_map_module: Modul
         {"uses": "actions/download-artifact@v5"},
     ]
 
-    assert ci_map_module._artifact_names(steps, "actions/upload-artifact") == (
+    assert _artifact_names(steps, "actions/upload-artifact") == (
         "coverage",
         "(all artifacts)",
     )
-    assert ci_map_module._artifact_names(steps, "actions/download-artifact") == (
+    assert _artifact_names(steps, "actions/download-artifact") == (
         "ruff",
         "(all artifacts)",
     )
 
 
-def test_render_formats_cells(ci_map_module: ModuleType) -> None:
+def test_render_formats_cells() -> None:
     """Rendered table cells join values with Markdown line breaks."""
-    assert ci_map_module._render(()) == "—"
-    assert ci_map_module._render(("unit-tests", "ruff")) == "`unit-tests`<br>`ruff`"
+    assert _render(()) == "—"
+    assert _render(("unit-tests", "ruff")) == "`unit-tests`<br>`ruff`"
 
 
-def test_load_workflows_normalizes_jobs_and_artifacts(
-    ci_map_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_load_workflows_normalizes_jobs_and_artifacts(tmp_path: Path) -> None:
     """Workflow loading normalizes needs and collects artifact names."""
     workflows_dir = tmp_path / "workflows"
     workflows_dir.mkdir()
@@ -122,9 +106,8 @@ def test_load_workflows_normalizes_jobs_and_artifacts(
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(ci_map_module, "WORKFLOWS_DIR", workflows_dir)
 
-    workflows = ci_map_module.load_workflows()
+    workflows = load_workflows(workflows_dir)
 
     assert workflows == [
         {
@@ -155,9 +138,9 @@ def test_load_workflows_normalizes_jobs_and_artifacts(
     ]
 
 
-def test_generate_ci_map_renders_tables(ci_map_module: ModuleType) -> None:
+def test_generate_ci_map_renders_tables() -> None:
     """Generated Markdown includes workflow and job rows."""
-    report = ci_map_module.generate_ci_map(
+    report = generate_ci_map(
         [
             {
                 "file_name": "analysis.yml",

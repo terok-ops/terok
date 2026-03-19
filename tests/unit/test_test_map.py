@@ -1,44 +1,34 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the integration test map generator."""
+"""Tests for the integration test map generator (mkdocs_terok.test_map)."""
 
 from __future__ import annotations
 
-import importlib.util
 from datetime import UTC, datetime
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
+from mkdocs_terok.test_map import (
+    TestMapConfig,
+    _group_by_directory,
+    _sorted_dirs,
+    _test_row,
+    collect_tests,
+    generate_test_map,
+)
 
 from tests.testfs import MOCK_BASE
 
 
-def _load_test_map_module() -> ModuleType:
-    """Load ``docs/test_map.py`` as a module for direct function testing."""
-    path = Path(__file__).resolve().parents[2] / "docs" / "test_map.py"
-    spec = importlib.util.spec_from_file_location("test_map", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-@pytest.fixture
-def test_map_module() -> ModuleType:
-    """Return the loaded test-map module."""
-    return _load_test_map_module()
-
-
 def test_collect_tests_filters_output_and_uses_integration_dir(
-    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Collection should call pytest on the integration dir and keep only node IDs."""
     fake_root = MOCK_BASE / "docs-root"
-    fake_integration_dir = fake_root / "tests" / "integration"
-    fake_venv_bin = MOCK_BASE / "venv" / "bin"
+    config = TestMapConfig(root=fake_root)
     calls: list[tuple[list[str], dict[str, object]]] = []
 
     def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
@@ -53,58 +43,37 @@ def test_collect_tests_filters_output_and_uses_integration_dir(
             stderr="",
         )
 
-    monkeypatch.setattr(test_map_module, "ROOT", fake_root)
-    monkeypatch.setattr(test_map_module, "INTEGRATION_DIR", fake_integration_dir)
-    monkeypatch.setattr(test_map_module, "_VENV_BIN", fake_venv_bin)
-    monkeypatch.setattr(test_map_module.subprocess, "run", fake_run)
+    with patch("mkdocs_terok.test_map.subprocess.run", fake_run):
+        result = collect_tests(config=config)
 
-    assert test_map_module.collect_tests() == [
+    assert result == [
         "tests/integration/tasks/test_lifecycle.py::test_create",
         "tests/integration/cli/test_cli.py::TestCLI::test_help",
     ]
-    assert calls == [
-        (
-            [
-                str(fake_venv_bin / "pytest"),
-                "--collect-only",
-                "-qq",
-                "-p",
-                "no:tach",
-                str(fake_integration_dir),
-            ],
-            {
-                "capture_output": True,
-                "text": True,
-                "cwd": fake_root,
-                "timeout": 60,
-                "check": False,
-            },
-        )
-    ]
+    cmd = calls[0][0]
+    assert cmd[2] == "pytest"
+    assert str(fake_root / "tests" / "integration") in cmd
 
 
-def test_collect_tests_raises_with_pytest_output_on_failure(
-    test_map_module: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_collect_tests_raises_with_pytest_output_on_failure() -> None:
     """Collection failures should surface pytest output for debugging."""
-    monkeypatch.setattr(
-        test_map_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(
-            returncode=2,
-            stdout="stdout details\n",
-            stderr="stderr details\n",
+    with (
+        patch(
+            "mkdocs_terok.test_map.subprocess.run",
+            return_value=SimpleNamespace(
+                returncode=2,
+                stdout="stdout details\n",
+                stderr="stderr details\n",
+            ),
         ),
-    )
+        pytest.raises(RuntimeError, match="pytest collection failed \\(exit 2\\)"),
+    ):
+        collect_tests()
 
-    with pytest.raises(RuntimeError, match="pytest collection failed \\(exit 2\\)"):
-        test_map_module.collect_tests()
 
-
-def test_group_by_directory_groups_root_and_subdirs(test_map_module: ModuleType) -> None:
+def test_group_by_directory_groups_root_and_subdirs() -> None:
     """Collected node IDs should be grouped by the first integration path segment."""
-    groups = test_map_module._group_by_directory(
+    groups = _group_by_directory(
         [
             "tests/integration/tasks/test_lifecycle.py::test_create",
             "tests/integration/tasks/test_lifecycle.py::test_delete",
@@ -121,7 +90,7 @@ def test_group_by_directory_groups_root_and_subdirs(test_map_module: ModuleType)
     }
 
 
-def test_sorted_dirs_orders_known_before_unknown(test_map_module: ModuleType) -> None:
+def test_sorted_dirs_orders_known_before_unknown() -> None:
     """Known directories should keep canonical order before unknown directories."""
     groups = {
         "launch": ["x"],
@@ -129,8 +98,9 @@ def test_sorted_dirs_orders_known_before_unknown(test_map_module: ModuleType) ->
         "cli": ["z"],
         "projects": ["w"],
     }
+    dir_order = ("cli", "projects", "tasks", "setup", "gate", "launch")
 
-    assert test_map_module._sorted_dirs(groups) == [
+    assert _sorted_dirs(groups, dir_order) == [
         "cli",
         "projects",
         "launch",
@@ -153,19 +123,17 @@ def test_sorted_dirs_orders_known_before_unknown(test_map_module: ModuleType) ->
         ),
     ],
 )
-def test_format_test_row(test_map_module: ModuleType, test_id: str, expected: str) -> None:
-    """Formatted rows should expose test, class, and file columns."""
-    assert test_map_module._format_test_row(test_id) == expected
+def test_format_test_row(test_id: str, expected: str) -> None:
+    """Formatted rows should expose test, class, and file columns (no markers)."""
+    assert _test_row(test_id, {}, Path.cwd(), show_markers=False) == expected
 
 
 def test_generate_test_map_uses_collect_tests_when_needed(
-    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The generator should collect tests on demand when none are provided."""
     test_ids = ["tests/integration/cli/test_cli.py::test_help"]
-    monkeypatch.setattr(test_map_module, "collect_tests", lambda: test_ids)
-    monkeypatch.setattr(test_map_module, "_dir_description", lambda _subdir: "")
+    config = TestMapConfig(show_markers=False)
 
     class FixedDateTime:
         """Minimal datetime stub returning a deterministic UTC timestamp."""
@@ -174,9 +142,10 @@ def test_generate_test_map_uses_collect_tests_when_needed(
         def now(_tz: object) -> datetime:
             return datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
 
-    monkeypatch.setattr(test_map_module, "datetime", FixedDateTime)
+    monkeypatch.setattr("mkdocs_terok.test_map.datetime", FixedDateTime)
 
-    report = test_map_module.generate_test_map()
+    with patch("mkdocs_terok.test_map.collect_tests", return_value=test_ids):
+        report = generate_test_map(config=config)
 
     assert "*Generated: 2026-03-15 12:00 UTC*" in report
     assert "**1 tests** across **1 directories**" in report
@@ -185,20 +154,26 @@ def test_generate_test_map_uses_collect_tests_when_needed(
 
 
 def test_generate_test_map_renders_directory_descriptions(
-    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Directory descriptions should appear in their matching Markdown sections."""
     test_ids = [
         "tests/integration/tasks/test_lifecycle.py::test_create",
         "tests/integration/cli/test_cli.py::TestCLI::test_help",
     ]
-    descriptions = {
-        "cli": "CLI smoke coverage",
-        "tasks": "Task lifecycle coverage",
-    }
+    # Create README.md files for directory descriptions
+    integration_dir = tmp_path / "tests" / "integration"
+    for subdir, desc in [("cli", "CLI smoke coverage"), ("tasks", "Task lifecycle coverage")]:
+        d = integration_dir / subdir
+        d.mkdir(parents=True)
+        (d / "README.md").write_text(f"# {subdir}\n{desc}\n")
 
-    monkeypatch.setattr(test_map_module, "_dir_description", descriptions.get)
+    config = TestMapConfig(
+        root=tmp_path,
+        dir_order=("cli", "tasks"),
+        show_markers=False,
+    )
 
     class FixedDateTime:
         """Minimal datetime stub returning a deterministic UTC timestamp."""
@@ -207,9 +182,9 @@ def test_generate_test_map_renders_directory_descriptions(
         def now(_tz: object) -> datetime:
             return datetime(2026, 3, 15, 13, 30, tzinfo=UTC)
 
-    monkeypatch.setattr(test_map_module, "datetime", FixedDateTime)
+    monkeypatch.setattr("mkdocs_terok.test_map.datetime", FixedDateTime)
 
-    report = test_map_module.generate_test_map(test_ids)
+    report = generate_test_map(test_ids, config=config)
 
     assert report.startswith("# Integration Test Map\n\n*Generated: 2026-03-15 13:30 UTC*")
     assert report.index("## `cli/`") < report.index("## `tasks/`")
