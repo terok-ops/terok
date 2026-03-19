@@ -58,6 +58,37 @@ if [[ -n "${TOAD_AGENTS_DIR}" ]] && [[ -d "${TEROK_TOAD_AGENTS}" ]]; then
   done
 fi
 
+# ---------------------------------------------------------------------------
+# Patch agent TOMLs to use terok ACP wrappers.
+#
+# Toad launches ACP agents by exec-ing the command from run_command."*" in
+# the agent's TOML file.  By default these point to the bare upstream
+# adapters (claude-code-acp, opencode acp, etc.) which bypass terok's
+# per-agent git identity setup.
+#
+# We replace those commands with terok wrappers that configure the
+# environment before exec-ing the real adapter.  Patching is idempotent.
+# ---------------------------------------------------------------------------
+_patch_run_command() {
+  local file="$1" wrapper="$2"
+  [[ -f "$file" ]] || return 0
+  # Anchor the check to the run_command line to avoid false positives from
+  # the wrapper name appearing in help text or comments.
+  grep -qE '^run_command\.\"\*\"[[:space:]]*=[[:space:]]*\"'"${wrapper}"'\"' "$file" 2>/dev/null \
+      && return 0
+  sed -i '/^run_command\.\"\*\"/s|= .*|= "'"${wrapper}"'"|' "$file"
+}
+
+if [[ -n "${TOAD_AGENTS_DIR}" ]]; then
+  _patch_run_command "${TOAD_AGENTS_DIR}/claude.com.toml"          "terok-claude-acp"
+  _patch_run_command "${TOAD_AGENTS_DIR}/openai.com.toml"          "terok-codex-acp"
+  _patch_run_command "${TOAD_AGENTS_DIR}/opencode.ai.toml"         "terok-opencode-acp"
+  _patch_run_command "${TOAD_AGENTS_DIR}/copilot.github.com.toml"  "terok-copilot-acp"
+  _patch_run_command "${TOAD_AGENTS_DIR}/vibe.mistral.ai.toml"     "terok-vibe-acp"
+  # OpenCode-based providers (blablador-acp, kisski-acp) are symlinks to
+  # opencode-provider-acp which already sources terok-acp-env.sh — no patching needed.
+fi
+
 if command -v jq >/dev/null 2>&1; then
   mkdir -p "$(dirname "${TOAD_CONFIG}")"
   existing='{}'

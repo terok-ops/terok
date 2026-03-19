@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for OpenAI Codex.
+#
+# Sets up per-agent git identity and unrestricted mode before exec-ing
+# the real codex-acp adapter.
+#
+# Unlike other agents, Codex has no env var for approval policy — only
+# the --yolo CLI flag (which doesn't apply to the ACP adapter) or
+# config.toml.  The codex-acp binary accepts -c key=value overrides
+# that apply to the same config tree without writing files.
+
+set -euo pipefail
+
+_AGENT_NAME="Codex"
+_AGENT_EMAIL="noreply@openai.com"
+. /usr/local/share/terok/terok-acp-env.sh
+
+_args=()
+if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then
+    _args+=(-c approval_policy=never -c sandbox_mode=danger-full-access)
+fi
+
+exec npx @zed-industries/codex-acp "${_args[@]}" "$@"

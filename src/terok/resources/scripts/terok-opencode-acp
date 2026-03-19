@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for OpenCode (base, non-provider variant).
+#
+# Sets up per-agent git identity before exec-ing the native opencode
+# acp adapter.
+#
+# Unrestricted mode: OPENCODE_PERMISSION env var is set at container level
+# by task_runners.py.  opencode reads process.env directly in ACP mode.
+
+set -euo pipefail
+
+_AGENT_NAME="OpenCode"
+_AGENT_EMAIL="noreply@opencode.ai"
+. /usr/local/share/terok/terok-acp-env.sh
+
+exec opencode acp "$@"

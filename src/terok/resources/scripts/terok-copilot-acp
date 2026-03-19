@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for GitHub Copilot.
+#
+# Sets up per-agent git identity before exec-ing the native copilot
+# ACP adapter.
+#
+# Unrestricted mode: COPILOT_ALLOW_ALL env var is set at container level
+# by task_runners.py.  copilot reads it regardless of --acp mode.
+# Alternative: --yolo/--allow-all flags also work with --acp.
+
+set -euo pipefail
+
+_AGENT_NAME="Copilot"
+_AGENT_EMAIL="noreply@github.com"
+. /usr/local/share/terok/terok-acp-env.sh
+
+exec copilot --acp "$@"

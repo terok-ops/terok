@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for Claude Code.
+#
+# Sets up per-agent git identity before exec-ing the real claude-code-acp
+# adapter.
+#
+# Unrestricted mode: claude-code-acp reads /etc/claude-code/managed-settings.json
+# (enterprise managed settings, highest precedence).  Written once by
+# init-ssh-and-repo.sh at container startup — no per-invocation action needed.
+
+set -euo pipefail
+
+_AGENT_NAME="Claude"
+_AGENT_EMAIL="noreply@anthropic.com"
+. /usr/local/share/terok/terok-acp-env.sh
+
+exec claude-code-acp "$@"

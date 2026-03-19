@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# ACP wrapper for Mistral Vibe.
+#
+# Sets up per-agent git identity before exec-ing the real vibe-acp
+# adapter.
+#
+# Unrestricted mode: VIBE_AUTO_APPROVE env var is set at container level
+# by task_runners.py.  VibeConfig uses pydantic-settings with
+# env_prefix="VIBE_", so the env var maps directly to the auto_approve
+# config field in both CLI and ACP modes.
+
+set -euo pipefail
+
+_AGENT_NAME="Vibe"
+_AGENT_EMAIL="noreply@mistral.ai"
+. /usr/local/share/terok/terok-acp-env.sh
+
+exec vibe-acp "$@"
