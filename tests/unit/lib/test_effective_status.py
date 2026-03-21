@@ -12,6 +12,7 @@ import pytest
 
 from terok.lib.core.task_display import (
     STATUS_DISPLAY,
+    TaskState,
     effective_status,
     mode_info,
 )
@@ -96,6 +97,50 @@ def test_mode_info_cases(task_kwargs: dict[str, object], emoji: str, label: str)
     info = mode_info(_task(**task_kwargs).mode)
     assert info.emoji == emoji
     assert info.label == label
+
+
+# ── TaskState / TaskMeta inheritance tests ────────────────────────
+
+
+class TestTaskStateInheritance:
+    """Verify the TaskState → TaskMeta inheritance contract."""
+
+    def test_task_meta_is_task_state(self) -> None:
+        """TaskMeta instances are valid TaskState instances."""
+        meta = _task(mode="cli")
+        assert isinstance(meta, TaskState)
+
+    def test_effective_status_accepts_bare_task_state(self) -> None:
+        """effective_status works with a plain TaskState, not just TaskMeta."""
+        state = TaskState(container_state="running", initialized=True)
+        assert effective_status(state) == "running"
+
+    def test_task_state_defaults(self) -> None:
+        """TaskState fields default to 'not yet started' values."""
+        state = TaskState()
+        assert state.container_state is None
+        assert state.exit_code is None
+        assert state.deleting is False
+        assert state.initialized is False
+        assert effective_status(state) == "created"
+
+    def test_initialized_controls_init_vs_running(self) -> None:
+        """A running container shows 'init' until initialized is set."""
+        uninit = TaskState(container_state="running", initialized=False)
+        assert effective_status(uninit) == "init"
+
+        ready = TaskState(container_state="running", initialized=True)
+        assert effective_status(ready) == "running"
+
+    def test_task_meta_status_property_delegates(self) -> None:
+        """TaskMeta.status property delegates to effective_status."""
+        meta = _task(mode="run", container_state="running")
+        assert meta.status == effective_status(meta)
+
+    def test_mode_info_with_unknown_mode(self) -> None:
+        """Unknown mode strings fall back to the None display entry."""
+        info = mode_info("nonexistent")
+        assert info == mode_info(None)
 
 
 @pytest.mark.parametrize(
