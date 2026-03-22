@@ -50,6 +50,8 @@ test-integration:
 	poetry run pytest tests/integration/ -v --junitxml=$(INTEGRATION_JUNIT_XML) -o junit_family=legacy
 
 # Run host-only integration tests (filesystem/process workflows; no podman/network)
+# needs_hooks tests are skipped automatically when hooks are absent;
+# hook installation happens only inside disposable matrix containers (run-matrix.sh).
 test-integration-host:
 	mkdir -p $(REPORTS_DIR)
 	poetry run pytest tests/integration/ -m "needs_host_features and not needs_internet and not needs_podman" -v --junitxml=$(INTEGRATION_HOST_JUNIT_XML) -o junit_family=legacy

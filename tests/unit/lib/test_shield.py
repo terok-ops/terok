@@ -323,65 +323,26 @@ def test_pre_start_converts_shield_needs_setup_to_system_exit(mock_make: MagicMo
 
 
 @pytest.mark.parametrize(
-    ("environment", "kwargs", "expected_call", "expected_message"),
+    ("kwargs", "expected_call"),
     [
-        pytest.param(
-            EnvironmentCheck(hooks="not-installed", needs_setup=True),
-            {},
-            None,
-            "--root",
-            id="missing-flags",
-        ),
-        pytest.param(
-            EnvironmentCheck(hooks="per-container", podman_version=(5, 8, 0)),
-            {},
-            None,
-            "per-task",
-            id="per-container-hooks",
-        ),
-        pytest.param(
-            EnvironmentCheck(hooks="not-installed", needs_setup=True),
-            {"user": True},
-            {"root": False},
-            None,
-            id="user-setup",
-        ),
-        pytest.param(
-            EnvironmentCheck(hooks="not-installed", needs_setup=True),
-            {"root": True},
-            {"root": True},
-            None,
-            id="root-setup",
-        ),
+        pytest.param({}, None, id="missing-flags"),
+        pytest.param({"user": True}, {"root": False}, id="user-setup"),
+        pytest.param({"root": True}, {"root": True}, id="root-setup"),
     ],
 )
 def test_run_setup(
-    environment: EnvironmentCheck,
     kwargs: dict[str, bool],
     expected_call: dict[str, bool] | None,
-    expected_message: str | None,
 ) -> None:
-    """Shield setup handles usage, no-op, user, and root installation paths."""
-    with (
-        patch("terok.lib.sandbox.shield.check_environment", return_value=environment),
-        patch("terok.lib.sandbox.shield.setup_hooks_direct") as mock_direct,
-        patch("builtins.print") as mock_print,
-    ):
-        if expected_call is None and environment.hooks != "per-container":
-            with pytest.raises(SystemExit, match=expected_message or ""):
+    """Shield setup handles usage, user, and root installation paths."""
+    with patch("terok.lib.sandbox.shield.setup_hooks_direct") as mock_direct:
+        if expected_call is None:
+            with pytest.raises(SystemExit, match="--root"):
                 run_setup(**kwargs)
             mock_direct.assert_not_called()
-            mock_print.assert_not_called()
-            return
-
-        run_setup(**kwargs)
-
-    if expected_call is None:
-        mock_direct.assert_not_called()
-        printed = " ".join(str(call) for call in mock_print.call_args_list)
-        assert expected_message is not None and expected_message in printed.lower()
-    else:
-        mock_direct.assert_called_once_with(**expected_call)
+        else:
+            run_setup(**kwargs)
+            mock_direct.assert_called_once_with(**expected_call)
 
 
 @pytest.mark.parametrize(

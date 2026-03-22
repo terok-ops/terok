@@ -97,7 +97,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             _add_arg(sp, arg)
 
     # Manually register setup (standalone_only in registry, needs subprocess passthrough)
-    p_setup = sub.add_parser("setup", help="Install global OCI hooks (podman < 5.6.0)")
+    p_setup = sub.add_parser("setup", help="Install global OCI hooks for shield")
     p_setup.add_argument("--root", action="store_true", help="System-wide (sudo)")
     p_setup.add_argument("--user", action="store_true", help="User-local")
 
@@ -146,11 +146,13 @@ def dispatch(args: argparse.Namespace) -> bool:
                 shield = make_shield(Path(tmp))
                 kwargs = _extract_handler_kwargs(args, cmd_def)
                 cmd_def.handler(shield, **kwargs)
-    except ExecError:
-        if has_task:
-            print(f"Error: container for task {args.task_id} is not running", file=sys.stderr)
-        else:
-            print("Error: shield command failed", file=sys.stderr)
+    except ExecError as exc:
+        print(
+            f"Error: shield operation failed for task {args.task_id}: {exc}"
+            if has_task
+            else f"Error: shield operation failed: {exc}",
+            file=sys.stderr,
+        )
         sys.exit(1)
     except (ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

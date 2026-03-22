@@ -43,10 +43,11 @@ from .helpers import (
 )
 
 try:
-    from terok_shield import Shield, ShieldConfig, ShieldMode
+    from terok_shield import Shield, ShieldConfig, ShieldMode, has_global_hooks
     from terok_shield.run import find_nft as _shield_find_nft
 except ImportError:  # pragma: no cover - optional integration dependency
     Shield = ShieldConfig = ShieldMode = None  # type: ignore[assignment]
+    has_global_hooks = None  # type: ignore[assignment]
     _shield_find_nft = None
 
 SHIELD_MISSING_SKIP_REASON = "terok_shield not installed"
@@ -91,6 +92,21 @@ podman_missing = pytest.mark.skipif(not _has("podman"), reason="podman not insta
 nft_missing = pytest.mark.skipif(not _find_nft(), reason="nft not installed")
 ssh_keygen_missing = pytest.mark.skipif(not _has("ssh-keygen"), reason="ssh-keygen not installed")
 skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
+
+
+def _hooks_available() -> bool:
+    """Return True if global OCI hooks are installed and detectable."""
+    if has_global_hooks is None:
+        return False
+    try:
+        return has_global_hooks()
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+hooks_unavailable = pytest.mark.skipif(
+    not _hooks_available(), reason="OCI global hooks not installed"
+)
 
 
 # ── Mock shield CommandRunner ─────────────────────────────
@@ -253,17 +269,37 @@ def mock_runner() -> MockRunner:
     return MockRunner()
 
 
+_PODMAN_RM_TIMEOUT = 30
+
+
+def _podman_rm(name: str, *, timeout: int = _PODMAN_RM_TIMEOUT) -> None:
+    """Force-remove a container with bounded timeout and error handling."""
+    try:
+        subprocess.run(
+            ["podman", "rm", "-f", name],
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:  # pragma: no cover - cleanup fallback
+        pass
+
+
 @pytest.fixture()
 def shielded_container(_pull_image: None, real_shield: Shield) -> Iterator[str]:
-    """Start a disposable podman container with shield hooks applied."""
+    """Start a disposable podman container with shield hooks applied.
+
+    Skips when global hooks are not installed (required for shield activation).
+    """
+    if not _hooks_available():
+        pytest.skip("OCI global hooks not installed")
     name = f"{PODMAN_CONTAINER_PREFIX}-{uuid.uuid4().hex[:8]}"
-    subprocess.run(["podman", "rm", "-f", name], capture_output=True, timeout=30)
+    _podman_rm(name)
     try:
         extra_args = real_shield.pre_start(name)
         start_shielded_container(name, extra_args, PODMAN_TEST_IMAGE)
         yield name
     finally:
-        subprocess.run(["podman", "rm", "-f", name], capture_output=True, timeout=30)
+        _podman_rm(name)
 
 
 # ── Isolated terok CLI environment ────────────────────────

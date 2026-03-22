@@ -194,20 +194,13 @@ def check_environment() -> EnvironmentCheck:
 
 
 def run_setup(*, root: bool = False, user: bool = False) -> None:
-    """Install global OCI hooks for podman < 5.6.0.
+    """Install global OCI hooks for shield egress firewalling.
 
-    Checks the environment first — if podman >= 5.6.0 uses per-container
-    hooks natively, prints a message and returns without installing anything.
+    Global hooks are required on all podman versions to survive
+    container stop/start cycles (terok-shield#122).
 
     Raises :class:`SystemExit` when neither ``--root`` nor ``--user`` is given.
     """
-    env = check_environment()
-    if env.hooks == "per-container":
-        print(
-            f"Podman {'.'.join(str(v) for v in env.podman_version)} uses per-task hooks natively.\n"
-            "Global hook setup is not needed."
-        )
-        return
     if not root and not user:
         raise SystemExit(
             "Specify --root (system-wide, uses sudo) or --user (user-local).\n"

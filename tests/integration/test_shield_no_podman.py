@@ -46,9 +46,16 @@ def _pre_start_with_mocks(
     rootless_mode: str = "pasta",
     euid: int = 1000,
 ) -> list[str]:
-    """Call ``shield.pre_start`` with a mock runner."""
+    """Call ``shield.pre_start`` with a mock runner.
+
+    Patches ``has_global_hooks`` so mock-based tests don't depend on
+    real hook filesystem state.
+    """
     shield = _make_shield(config, rootless_mode=rootless_mode)
-    with patch("os.geteuid", return_value=euid):
+    with (
+        patch("os.geteuid", return_value=euid),
+        patch("terok_shield.mode_hook.has_global_hooks", return_value=True),
+    ):
         return shield.pre_start(container)
 
 
@@ -75,7 +82,8 @@ class TestPreStartIntegration:
         ann_idx = args.index("--annotation")
         assert "terok.shield.profiles=dev-standard" in args[ann_idx + 1]
 
-        assert "--hooks-dir" in args
+        # Global hooks mode: no per-container --hooks-dir (hooks survive restart)
+        assert "--hooks-dir" not in args
         assert "--cap-drop" in args
         cap_drops = [args[i + 1] for i, v in enumerate(args) if v == "--cap-drop"]
         assert "NET_ADMIN" in cap_drops
@@ -209,6 +217,8 @@ class TestTaskRunnerShieldIntegration:
                     runner=MockRunner(),
                 ),
             ),
+            # Mock-based test: don't depend on real hook filesystem state
+            patch("terok_shield.mode_hook.has_global_hooks", return_value=True),
         ):
             from terok.lib.core.projects import ProjectConfig
             from terok.lib.orchestration.task_runners import _run_container

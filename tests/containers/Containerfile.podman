@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# Latest upstream podman (quay.io/podman/stable) for tracking bleeding-edge
+FROM quay.io/podman/stable:latest
+
+RUN dnf install -y \
+    nftables python3 python3-pip git curl \
+    && dnf clean all
+
+WORKDIR /src

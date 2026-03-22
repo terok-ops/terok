@@ -208,11 +208,11 @@ def test_dispatch_preview_all_without_down_prints_error(mock_make: MagicMock) ->
 
 @patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
 @patch("terok.cli.commands.shield.make_shield")
-def test_dispatch_exec_error_prints_not_running(
+def test_dispatch_exec_error_surfaces_details(
     mock_make: MagicMock,
     _resolve: MagicMock,
 ) -> None:
-    """NFT execution errors are translated into a user-facing not-running message."""
+    """NFT execution errors surface the actual error details."""
     mock_shield = MagicMock()
     mock_shield.state.side_effect = ExecError(["nft", "list"], 1, "no such process")
     mock_make.return_value = mock_shield
@@ -225,7 +225,8 @@ def test_dispatch_exec_error_prints_not_running(
         dispatch(args)
 
     assert exc_info.value.code == 1
-    assert "not running" in err.getvalue()
+    assert "shield operation failed" in err.getvalue()
+    assert "task 1" in err.getvalue()
 
 
 @patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))

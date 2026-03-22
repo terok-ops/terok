@@ -33,6 +33,7 @@ declare -A DISTROS=(
     [ubuntu2404]="ubuntu2404"
     [debian13]="debian13"
     [fedora43]="fedora43"
+    [podman]="podman"
 )
 
 # Expected podman versions (for reporting, not enforcement)
@@ -41,6 +42,7 @@ declare -A EXPECTED_VERSIONS=(
     [ubuntu2404]="4.9.x"
     [debian13]="5.4.x"
     [fedora43]="5.8.x"
+    [podman]="latest"
 )
 
 usage() {
@@ -75,18 +77,17 @@ run_tests() {
     local marker="${2:-$DEFAULT_MARKER}"
     local image="$IMAGE_PREFIX:$name"
     local ctr_name="$IMAGE_PREFIX-$name"
-    local pytest_args="tests/integration/ -v --tb=short"
     local status
-
-    if [[ -n "$marker" ]]; then
-        pytest_args="$pytest_args -m '$marker'"
-    fi
 
     echo ""
     echo "==> Testing $name (expected podman ${EXPECTED_VERSIONS[$name]})"
     echo "    marker: ${marker:-<all>}"
     echo ""
 
+    # Three-phase flow:
+    #   Phase 1: tests that do NOT need hooks
+    #   Phase 2: install global hooks via terokctl shield setup --user
+    #   Phase 3: tests that need hooks
     podman run --rm --name "$ctr_name" \
         --privileged \
         --security-opt label=disable \
@@ -116,8 +117,17 @@ run_tests() {
             poetry install --with test --quiet 2>&1 | tail -3
 
             echo ''
-            echo '--- running tests ---'
-            poetry run pytest $pytest_args
+            echo '--- phase 1: tests without hooks ---'
+            poetry run pytest tests/integration/ -v --tb=short -m '$marker and not needs_hooks'
+
+            echo ''
+            echo '--- phase 2: installing global hooks ---'
+            poetry run terokctl shield setup --user
+
+            echo ''
+            echo '--- phase 3: tests with hooks ---'
+            poetry run pytest tests/integration/ -v --tb=short -m '$marker and needs_hooks'
+
             echo ''
             echo '--- terokctl config ---'
             $TEROK_DIAGNOSTIC_COMMAND 2>&1 || true
