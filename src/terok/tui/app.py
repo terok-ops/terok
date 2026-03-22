@@ -869,7 +869,7 @@ if _HAS_TEXTUAL:
                     parts = (worker.name or "").split(":")
                     action = parts[1] if len(parts) >= 2 else ""
                     if action == "down":
-                        from ..lib.sandbox.shield import SHIELD_SECURITY_HINT
+                        from ..lib.domain.facade import SHIELD_SECURITY_HINT
 
                         self.notify(f"Shield dropped for task {task_id}. {SHIELD_SECURITY_HINT}")
                     elif action == "up":

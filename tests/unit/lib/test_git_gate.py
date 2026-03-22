@@ -10,16 +10,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from terok_sandbox.git_gate import (
+    _get_gate_branch_head,
+    _get_upstream_head,
+)
 
 from terok.lib.core.projects import load_project
 from terok.lib.domain.project import (
     find_projects_sharing_gate,
     make_git_gate,
     validate_gate_upstream_match,
-)
-from terok.lib.sandbox.git_gate import (
-    _get_gate_branch_head,
-    _get_upstream_head,
 )
 from tests.test_utils import project_env, write_project
 

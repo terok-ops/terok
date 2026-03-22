@@ -1239,8 +1239,8 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
         If the container never appears after many polls, updates the status
         to indicate a likely launch failure so the user can dismiss.
         """
+        from ..lib.domain.facade import get_container_state
         from ..lib.orchestration.tasks import get_task_meta
-        from ..lib.sandbox.runtime import get_container_state
 
         self._poll_count += 1
         state = get_container_state(self._container_name)

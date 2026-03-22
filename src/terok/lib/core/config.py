@@ -300,6 +300,10 @@ def get_task_name_categories() -> list[str] | None:
     return _load_validated().tasks.name_categories
 
 
+# Presentation-layer hint appended to CLI/TUI messages when the shield is weakened.
+SHIELD_SECURITY_HINT = "See: https://terok-ai.github.io/terok/shield-security/"
+
+
 def get_shield_bypass_firewall_no_protection() -> bool:
     """Return whether the shield firewall is globally bypassed.
 

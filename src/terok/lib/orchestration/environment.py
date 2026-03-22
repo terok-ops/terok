@@ -15,10 +15,15 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from terok_sandbox.gate_server import (
+    ensure_server_reachable,
+    get_gate_base_path,
+    get_gate_server_port,
+)
+
 from ..core.config import get_envs_base_dir
 from ..core.projects import ProjectConfig
 from ..instrumentation.headless_providers import collect_opencode_provider_env
-from ..sandbox.gate_server import ensure_server_reachable, get_gate_base_path, get_gate_server_port
 from ..util.fs import ensure_dir_writable
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 
@@ -118,7 +123,7 @@ def _security_mode_env_and_volumes(
     project: ProjectConfig, ssh_host_dir: Path, task_id: str
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
-    from ..sandbox.gate_tokens import create_token
+    from terok_sandbox.gate_tokens import create_token
 
     env: dict[str, str] = {}
     volumes: list[str] = []

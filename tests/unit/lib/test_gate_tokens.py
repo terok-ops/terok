@@ -13,14 +13,14 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-
-from terok.lib.sandbox.gate_tokens import (
+from terok_sandbox.gate_tokens import (
     _read_tokens,
     _write_tokens,
     create_token,
     revoke_token_for_task,
     token_file_path,
 )
+
 from tests.testfs import FAKE_TEROK_STATE_DIR, MISSING_TOKENS_PATH, NONEXISTENT_TOKENS_PATH
 
 
@@ -52,7 +52,7 @@ class TestTokenFilePath:
     """Tests for token_file_path."""
 
     def test_returns_path_under_state_root(self) -> None:
-        from terok.lib.sandbox.config import SandboxConfig
+        from terok_sandbox.config import SandboxConfig
 
         cfg = SandboxConfig(state_dir=FAKE_TEROK_STATE_DIR)
         path = token_file_path(cfg=cfg)

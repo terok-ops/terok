@@ -15,8 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-
-from terok.lib.sandbox.gate_server import (
+from terok_sandbox.gate_server import (
     _UNIT_VERSION,
     GateServerStatus,
     _installed_unit_version,
@@ -33,6 +32,7 @@ from terok.lib.sandbox.gate_server import (
     stop_daemon,
     uninstall_systemd_units,
 )
+
 from tests.testfs import FAKE_GATE_DIR, FAKE_STATE_DIR, NONEXISTENT_DIR
 from tests.testnet import GATE_PORT, LOCALHOST
 

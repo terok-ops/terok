@@ -8,9 +8,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from terok_sandbox.gate_server import GateServerStatus
 
 from terok.cli.commands.sickbay import _cmd_sickbay
-from terok.lib.sandbox.gate_server import GateServerStatus
 from tests.testgate import OUTDATED_UNITS_MESSAGE, make_gate_server_status
 
 

@@ -18,6 +18,7 @@ from ..lib.core.projects import load_project
 from ..lib.core.task_display import effective_status
 from ..lib.domain.facade import (
     HeadlessRunRequest,
+    get_container_state,
     shield_down,
     shield_up,
     task_delete,
@@ -39,7 +40,6 @@ from ..lib.orchestration.tasks import (
     get_workspace_git_diff,
     mark_task_deleting,
 )
-from ..lib.sandbox.runtime import get_container_state
 from .clipboard import copy_to_clipboard_detailed
 from .screens import (
     AgentSelectionScreen,
@@ -696,7 +696,7 @@ class TaskActionsMixin:
         """Warn the user and return ``True`` if the shield bypass is active."""
         if not get_shield_bypass_firewall_no_protection():
             return False
-        from ..lib.sandbox.shield import SHIELD_SECURITY_HINT
+        from ..lib.domain.facade import SHIELD_SECURITY_HINT
 
         self.notify(f"Shield unavailable (bypass_firewall_no_protection). {SHIELD_SECURITY_HINT}")
         return True

@@ -21,15 +21,17 @@ ignore_type_checking_imports = true
 #   domain            Project/Task aggregates, facade, task CRUD
 #   orchestration     Container lifecycle, env/volumes, Dockerfile, ports
 #   instrumentation   Agent config, providers, instructions, wrappers
-#   sandbox           Shield, gate, SSH, container runtime isolation
 #   core              Foundation types, config, and pure utilities
+#
+# NOTE: The sandbox layer has been extracted to the external terok-sandbox
+# package. Modules that previously depended on terok.lib.sandbox.* now
+# import directly from terok_sandbox.* (external, not tach-managed).
 #
 layers = [
     "presentation",
     "domain",
     "orchestration",
     "instrumentation",
-    "sandbox",
     "core",
 ]
 
@@ -46,7 +48,6 @@ depends_on = [
     "terok.lib.instrumentation.agent_config",
     "terok.lib.instrumentation.headless_providers",
     "terok.lib.orchestration.hooks",
-    "terok.lib.sandbox.runtime",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
@@ -67,14 +68,12 @@ depends_on = [
     "terok.lib.orchestration.autopilot",
     "terok.lib.instrumentation.headless_providers",
     "terok.lib.instrumentation.instructions",
-    "terok.lib.sandbox.runtime",
     "terok.lib.core.task_display",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.domain.facade",
-    "terok.lib.sandbox.shield",
     "terok.lib.util.emoji",
     "terok.lib.util.yaml",
 ]
@@ -99,10 +98,6 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.domain.project",
     "terok.lib.instrumentation.auth",
-    "terok.lib.sandbox.gate_server",
-    "terok.lib.sandbox.git_gate",
-    "terok.lib.sandbox.shield",
-    "terok.lib.sandbox.ssh",
     "terok.lib.domain.task",
 ]
 
@@ -121,8 +116,6 @@ depends_on = [
     "terok.lib.core.config",
     "terok.lib.core.project_model",
     "terok.lib.core.projects",
-    "terok.lib.sandbox.git_gate",
-    "terok.lib.sandbox.ssh",
     "terok.lib.domain.task",
     "terok.lib.util.fs",
 ]
@@ -132,7 +125,6 @@ depends_on = [
 path = "terok.lib.domain.task"
 layer = "domain"
 depends_on = [
-    "terok.lib.sandbox.runtime",
     "terok.lib.domain.task_logs",
     "terok.lib.orchestration.task_runners",
     "terok.lib.orchestration.tasks",
@@ -151,7 +143,6 @@ path = "terok.lib.domain.task_logs"
 layer = "domain"
 depends_on = [
     "terok.lib.domain.log_format",
-    "terok.lib.sandbox.runtime",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.projects",
     "terok.lib.util.yaml",
@@ -209,12 +200,10 @@ depends_on = [
     "terok.lib.orchestration.hooks",
     "terok.lib.instrumentation.instructions",
     "terok.lib.orchestration.ports",
-    "terok.lib.sandbox.runtime",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.images",
     "terok.lib.core.projects",
-    "terok.lib.sandbox.shield",
     "terok.lib.util.ansi",
     "terok.lib.util.podman",
     "terok.lib.util.yaml",
@@ -227,12 +216,10 @@ layer = "orchestration"
 depends_on = [
     "terok.lib.orchestration.container_exec",
     "terok.lib.orchestration.hooks",
-    "terok.lib.sandbox.runtime",
     "terok.lib.core.task_display",
     "terok.lib.core.work_status",
     "terok.lib.core.config",
     "terok.lib.core.projects",
-    "terok.lib.sandbox.gate_tokens",
     "terok.lib.util.ansi",
     "terok.lib.util.emoji",
     "terok.lib.util.fs",
@@ -249,8 +236,6 @@ depends_on = [
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.instrumentation.headless_providers",
-    "terok.lib.sandbox.gate_server",
-    "terok.lib.sandbox.gate_tokens",
     "terok.lib.util.fs",
     "terok.lib.util.host_cmd",
 ]
@@ -277,7 +262,7 @@ depends_on = ["terok.lib.util.yaml"]
 [[modules]]
 path = "terok.lib.orchestration.container_exec"
 layer = "orchestration"
-depends_on = ["terok.lib.sandbox.runtime", "terok.lib.util.logging_utils"]
+depends_on = ["terok.lib.util.logging_utils"]
 
 # ── INSTRUMENTATION LAYER ─────────────────────────────────────────
 #
@@ -326,56 +311,10 @@ depends_on = [
 # ·· isolation ··  Container runtime, shield, gate, SSH
 #
 
-# All sandbox modules are thin re-export shims — real code lives in terok-sandbox package.
-# Internal deps removed; each shim only imports from the external terok_sandbox package.
-
-# Sandbox path resolution (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.paths"
-layer = "sandbox"
-depends_on = []
-
-# Sandbox configuration dataclass (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.config"
-layer = "sandbox"
-depends_on = []
-
-# Container state, GPU args, log streaming (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.runtime"
-layer = "sandbox"
-depends_on = []
-
-# Shield egress firewall adapter (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.shield"
-layer = "sandbox"
-depends_on = []
-
-# Gate server lifecycle management (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.gate_server"
-layer = "sandbox"
-depends_on = []
-
-# Gate token CRUD (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.gate_tokens"
-layer = "sandbox"
-depends_on = []
-
-# SSH key management (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.ssh"
-layer = "sandbox"
-depends_on = []
-
-# Git gate sync & validation (re-export shim)
-[[modules]]
-path = "terok.lib.sandbox.git_gate"
-layer = "sandbox"
-depends_on = []
+# ── SANDBOX LAYER (extracted) ────────────────────────────────────
+# The sandbox layer has been extracted to the external terok-sandbox package.
+# No tach-managed modules remain. Modules in orchestration/domain import
+# directly from terok_sandbox.* which tach treats as an external dependency.
 
 # ── CORE LAYER ────────────────────────────────────────────────────
 #
@@ -680,60 +619,6 @@ expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", 
 from = ["terok.lib.domain.image_cleanup"]
 
 [[interfaces]]
-expose = [
-    "GateServerStatus",
-    "check_units_outdated",
-    "get_server_status",
-    "get_gate_base_path",
-    "get_gate_server_port",
-    "install_systemd_units",
-    "uninstall_systemd_units",
-    "start_daemon",
-    "stop_daemon",
-    "is_daemon_running",
-    "is_systemd_available",
-    "ensure_server_reachable",
-]
-from = ["terok.lib.sandbox.gate_server"]
-
-[[interfaces]]
-expose = ["token_file_path", "create_token", "revoke_token_for_task"]
-from = ["terok.lib.sandbox.gate_tokens"]
-
-[[interfaces]]
-expose = ["SSHManager", "SSHInitResult", "effective_ssh_key_name"]
-from = ["terok.lib.sandbox.ssh"]
-
-[[interfaces]]
-expose = [
-    "EnvironmentCheck",
-    "NftNotFoundError",
-    "SHIELD_SECURITY_HINT",
-    "ShieldNeedsSetup",
-    "ShieldState",
-    "check_environment",
-    "down",
-    "make_shield",
-    "pre_start",
-    "run_setup",
-    "setup_hooks_direct",
-    "state",
-    "status",
-    "up",
-]
-from = ["terok.lib.sandbox.shield"]
-
-[[interfaces]]
-expose = [
-    "GateStalenessInfo",
-    "GateSyncResult",
-    "BranchSyncResult",
-    "CommitInfo",
-    "GitGate",
-]
-from = ["terok.lib.sandbox.git_gate"]
-
-[[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
 from = ["terok.lib.domain.project_state"]
 
@@ -770,6 +655,7 @@ expose = [
     "get_global_hooks",
     "get_shield_bypass_firewall_no_protection",
     "get_public_host",
+    "SHIELD_SECURITY_HINT",
 ]
 from = ["terok.lib.core.config"]
 
@@ -792,18 +678,6 @@ expose = [
     "build_task_env_and_volumes",
 ]
 from = ["terok.lib.orchestration.environment"]
-
-[[interfaces]]
-expose = [
-    "get_container_state",
-    "gpu_run_args",
-    "is_container_running",
-    "stop_task_containers",
-    "stream_initial_logs",
-    "wait_for_exit",
-    "get_project_container_states",
-]
-from = ["terok.lib.sandbox.runtime"]
 
 [[interfaces]]
 expose = ["auto_detect_formatter", "ClaudeStreamJsonFormatter", "PlainTextFormatter"]
@@ -883,9 +757,18 @@ expose = [
     "shield_down",
     "shield_run_setup",
     "shield_setup_hooks_direct",
+    "shield_pre_start",
     "shield_up",
     "shield_state",
     "shield_status",
+    "SHIELD_SECURITY_HINT",
+    "get_container_state",
+    "get_project_container_states",
+    "gpu_run_args",
+    "is_container_running",
+    "stop_task_containers",
+    "stream_initial_logs",
+    "wait_for_exit",
 ]
 from = ["terok.lib.domain.facade"]
 

@@ -48,6 +48,9 @@ import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from terok_sandbox.git_gate import GitGate
+from terok_sandbox.ssh import SSHManager
+
 from ..core.config import (
     build_root,
     config_root,
@@ -70,8 +73,6 @@ from ..orchestration.tasks import (
     task_delete,
     task_new,
 )
-from ..sandbox.git_gate import GitGate
-from ..sandbox.ssh import SSHManager
 from ..util.fs import archive_timestamp, create_archive_file
 from .project_state import get_project_state, is_task_image_old
 from .task import Task

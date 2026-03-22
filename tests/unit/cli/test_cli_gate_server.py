@@ -9,6 +9,7 @@ from collections.abc import Callable
 from unittest.mock import patch
 
 import pytest
+from terok_sandbox.gate_server import GateServerStatus
 
 from terok.cli.commands.gate_server import (
     _cmd_install,
@@ -17,7 +18,6 @@ from terok.cli.commands.gate_server import (
     _cmd_stop,
     _cmd_uninstall,
 )
-from terok.lib.sandbox.gate_server import GateServerStatus
 from tests.testgate import OUTDATED_UNITS_MESSAGE, make_gate_server_status
 
 

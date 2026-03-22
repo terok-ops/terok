@@ -29,6 +29,50 @@ used by CLI commands that operate on ``project_id`` strings directly.
 
 from __future__ import annotations
 
+from terok_sandbox.gate_server import (  # noqa: F401 — re-exported public API
+    GateServerStatus,
+    check_units_outdated,
+    get_gate_base_path,
+    get_gate_server_port,
+    get_server_status,
+    install_systemd_units,
+    is_daemon_running,
+    is_systemd_available,
+    start_daemon,
+    stop_daemon,
+    uninstall_systemd_units,
+)
+from terok_sandbox.git_gate import (  # noqa: F401 — re-exported public API
+    GateStalenessInfo,
+    GitGate,
+)
+from terok_sandbox.runtime import (  # noqa: F401 — re-exported public API
+    get_container_state,
+    get_project_container_states,
+    gpu_run_args,
+    is_container_running,
+    stop_task_containers,
+    stream_initial_logs,
+    wait_for_exit,
+)
+from terok_sandbox.shield import (  # noqa: F401 — re-exported public API
+    EnvironmentCheck,
+    NftNotFoundError,
+    ShieldNeedsSetup,
+    ShieldState,
+    check_environment as shield_check_environment,
+    down as shield_down,
+    make_shield,
+    pre_start as shield_pre_start,
+    run_setup as shield_run_setup,
+    setup_hooks_direct as shield_setup_hooks_direct,
+    state as shield_state,
+    status as shield_status,
+    up as shield_up,
+)
+from terok_sandbox.ssh import SSHManager  # noqa: F401 — re-exported public API
+
+from ..core.config import SHIELD_SECURITY_HINT  # noqa: F401 — re-exported for presentation layer
 from ..core.projects import load_project
 from ..instrumentation.auth import AUTH_PROVIDERS, AuthProvider, authenticate
 from ..orchestration.docker import build_images, generate_dockerfiles
@@ -52,38 +96,6 @@ from ..orchestration.tasks import (  # noqa: F401 — re-exported public API
     task_status,
     task_stop,
 )
-from ..sandbox.gate_server import (  # noqa: F401 — re-exported public API
-    GateServerStatus,
-    check_units_outdated,
-    get_gate_base_path,
-    get_gate_server_port,
-    get_server_status,
-    install_systemd_units,
-    is_daemon_running,
-    is_systemd_available,
-    start_daemon,
-    stop_daemon,
-    uninstall_systemd_units,
-)
-from ..sandbox.git_gate import (
-    GateStalenessInfo,
-    GitGate,
-)
-from ..sandbox.shield import (  # noqa: F401 — re-exported public API
-    EnvironmentCheck,
-    NftNotFoundError,
-    ShieldNeedsSetup,
-    ShieldState,
-    check_environment as shield_check_environment,
-    down as shield_down,
-    make_shield,
-    run_setup as shield_run_setup,
-    setup_hooks_direct as shield_setup_hooks_direct,
-    state as shield_state,
-    status as shield_status,
-    up as shield_up,
-)
-from ..sandbox.ssh import SSHManager
 from .image_cleanup import (  # noqa: F401 — re-exported public API
     cleanup_images,
     find_orphaned_images,
@@ -215,13 +227,24 @@ __all__ = [
     # Project state
     "get_project_state",
     "is_task_image_old",
-    # Shield
+    # Container runtime (from terok_sandbox)
+    "get_container_state",
+    "get_project_container_states",
+    "gpu_run_args",
+    "is_container_running",
+    "stop_task_containers",
+    "stream_initial_logs",
+    "wait_for_exit",
+    # Shield (from terok_sandbox)
+    "SHIELD_SECURITY_HINT",
     "EnvironmentCheck",
+    "NftNotFoundError",
     "ShieldNeedsSetup",
     "ShieldState",
     "make_shield",
     "shield_check_environment",
     "shield_down",
+    "shield_pre_start",
     "shield_run_setup",
     "shield_setup_hooks_direct",
     "shield_up",

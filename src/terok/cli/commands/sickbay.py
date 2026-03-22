@@ -25,10 +25,14 @@ from pathlib import Path
 
 from ...lib.core.project_model import ProjectConfig
 from ...lib.core.projects import list_projects, load_project
-from ...lib.domain.facade import check_units_outdated, get_server_status, is_systemd_available
+from ...lib.domain.facade import (
+    check_units_outdated,
+    get_container_state,
+    get_server_status,
+    is_systemd_available,
+)
 from ...lib.orchestration.hooks import run_hook
 from ...lib.orchestration.tasks import container_name, tasks_meta_dir
-from ...lib.sandbox.runtime import get_container_state
 from ...lib.util.yaml import load as _yaml_load
 
 # Type alias for check results: (severity, label, detail)

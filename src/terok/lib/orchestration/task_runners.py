@@ -13,7 +13,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from terok_sandbox.runtime import (
+    get_container_state,
+    gpu_run_args,
+    is_container_running,
+    stream_initial_logs,
+    wait_for_exit,
+)
+from terok_sandbox.shield import (
+    down as _shield_down_impl,
+    pre_start as _shield_pre_start_impl,
+)
+
 from ..core.config import (
+    SHIELD_SECURITY_HINT,
     get_gate_server_port,
     get_public_host,
     get_shield_bypass_firewall_no_protection,
@@ -23,18 +36,6 @@ from ..core.projects import load_project
 from ..instrumentation.agent_config import resolve_agent_config, resolve_provider_value
 from ..instrumentation.agents import AgentConfigSpec, prepare_agent_config_dir
 from ..instrumentation.instructions import resolve_instructions
-from ..sandbox.runtime import (
-    get_container_state,
-    gpu_run_args,
-    is_container_running,
-    stream_initial_logs,
-    wait_for_exit,
-)
-from ..sandbox.shield import (
-    SHIELD_SECURITY_HINT,
-    down as _shield_down_impl,
-    pre_start as _shield_pre_start_impl,
-)
 from ..util.ansi import (
     blue as _blue,
     green as _green,

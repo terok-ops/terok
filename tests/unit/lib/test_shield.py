@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the terok-shield adapter (``terok.lib.sandbox.shield``)."""
+"""Tests for the terok-shield adapter (``terok_sandbox.shield``)."""
 
 from __future__ import annotations
 
@@ -10,18 +10,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from terok_shield import (
-    USER_HOOKS_DIR,
-    EnvironmentCheck,
-    NftNotFoundError,
-    Shield,
-    ShieldMode,
-    ShieldNeedsSetup,
-    ShieldState,
-)
-
-from terok.lib.sandbox.config import SandboxConfig
-from terok.lib.sandbox.shield import (
+from terok_sandbox.config import SandboxConfig
+from terok_sandbox.shield import (
     _BYPASS_WARNING,
     check_environment,
     down,
@@ -33,6 +23,16 @@ from terok.lib.sandbox.shield import (
     status,
     up,
 )
+from terok_shield import (
+    USER_HOOKS_DIR,
+    EnvironmentCheck,
+    NftNotFoundError,
+    Shield,
+    ShieldMode,
+    ShieldNeedsSetup,
+    ShieldState,
+)
+
 from tests.testfs import MOCK_BASE, MOCK_CONFIG_ROOT, MOCK_TASK_DIR
 from tests.testnet import GATE_PORT
 
@@ -100,14 +100,14 @@ def test_make_shield_maps_config_to_shield_config(
 
 def test_nft_not_found_is_reexported() -> None:
     """``NftNotFoundError`` is re-exported from the adapter module."""
-    from terok.lib.sandbox.shield import NftNotFoundError as error_type
+    from terok_sandbox.shield import NftNotFoundError as error_type
 
     assert error_type is NftNotFoundError
 
 
 def test_shield_state_is_reexported() -> None:
     """``ShieldState`` is re-exported from the adapter module."""
-    from terok.lib.sandbox.shield import ShieldState as shield_state_type
+    from terok_sandbox.shield import ShieldState as shield_state_type
 
     assert shield_state_type is ShieldState
 

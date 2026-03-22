@@ -19,6 +19,12 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from terok_sandbox.runtime import (
+    get_container_state,
+    get_project_container_states,
+    stop_task_containers,
+)
+
 from ..core.config import state_root
 from ..core.projects import ProjectConfig, load_project
 from ..core.task_display import (
@@ -28,11 +34,6 @@ from ..core.task_display import (
     mode_info,
 )
 from ..core.work_status import read_work_status
-from ..sandbox.runtime import (
-    get_container_state,
-    get_project_container_states,
-    stop_task_containers,
-)
 from ..util.ansi import (
     green as _green,
     red as _red,
@@ -699,7 +700,7 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
         _archive_task(project, task_id, meta)
 
     _log_debug("task_delete: revoking gate tokens")
-    from ..sandbox.gate_tokens import revoke_token_for_task
+    from terok_sandbox.gate_tokens import revoke_token_for_task
 
     try:
         revoke_token_for_task(project.id, task_id)
