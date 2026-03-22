@@ -122,7 +122,7 @@ run_tests() {
 
             echo ''
             echo '--- phase 2: installing global hooks ---'
-            poetry run terokctl shield setup --user 2>&1 || true
+            poetry run terokctl shield setup --user
 
             echo ''
             echo '--- phase 3: tests with hooks ---'

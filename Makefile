@@ -50,15 +50,11 @@ test-integration:
 	poetry run pytest tests/integration/ -v --junitxml=$(INTEGRATION_JUNIT_XML) -o junit_family=legacy
 
 # Run host-only integration tests (filesystem/process workflows; no podman/network)
-# Two-phase: hookless tests first, install global hooks, then hooked tests.
+# needs_hooks tests are skipped automatically when hooks are absent;
+# hook installation happens only inside disposable matrix containers (run-matrix.sh).
 test-integration-host:
 	mkdir -p $(REPORTS_DIR)
-	poetry run pytest tests/integration/ -m "needs_host_features and not needs_internet and not needs_podman and not needs_hooks" -v --junitxml=$(INTEGRATION_HOST_JUNIT_XML) -o junit_family=legacy
-	@echo "--- installing global hooks ---"
-	poetry run terokctl shield setup --user
-	@status=0; \
-	poetry run pytest tests/integration/ -m "needs_host_features and not needs_internet and not needs_podman and needs_hooks" -v --junitxml=$(REPORTS_DIR)/integration-host-hooks.junit.xml -o junit_family=legacy || status=$$?; \
-	test $$status -eq 0 -o $$status -eq 5
+	poetry run pytest tests/integration/ -m "needs_host_features and not needs_internet and not needs_podman" -v --junitxml=$(INTEGRATION_HOST_JUNIT_XML) -o junit_family=legacy
 
 # Run network integration tests (no podman)
 test-integration-network:
