@@ -91,7 +91,7 @@ markers = [
 terokctl = "terok.cli.main:main"
 terok = "terok.tui.app:main"
 terok-web = "terok.tui.serve:main"
-terok-gate = "terok.gate.server:main"
+terok-gate = "terok_sandbox.gate.server:main"
 
 [tool.ruff]
 target-version = "py312"
