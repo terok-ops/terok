@@ -1,13 +1,8 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Podman user-namespace helpers for rootless operation."""
+"""Re-export shim — canonical code lives in ``terok_agent._util._podman``."""
 
-import os
+from terok_agent._util._podman import podman_userns_args as _podman_userns_args  # noqa: F401
 
-
-def _podman_userns_args() -> list[str]:
-    """Return user namespace args for rootless podman so UID 1000 maps correctly."""
-    if os.geteuid() == 0:
-        return []
-    return ["--userns=keep-id:uid=1000,gid=1000"]
+__all__ = ["_podman_userns_args"]

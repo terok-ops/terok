@@ -2504,6 +2504,25 @@ tomli = ">=1.2.2"
 tomli-w = ">=1.0,<2.0"
 
 [[package]]
+name = "terok-agent"
+version = "0.0.3"
+description = "Single-agent task runner for hardened Podman containers"
+optional = false
+python-versions = ">=3.12,<4.0"
+groups = ["main"]
+files = [
+    {file = "terok_agent-0.0.3-py3-none-any.whl", hash = "sha256:ece1751bc521b41f08a6e7b6ac2a3e4d1e8fef62746a8b28269dc1266894b88e"},
+]
+
+[package.dependencies]
+"ruamel.yaml" = ">=0.18"
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.5/terok_sandbox-0.0.5-py3-none-any.whl"}
+
+[package.source]
+type = "url"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.3/terok_agent-0.0.3-py3-none-any.whl"
+
+[[package]]
 name = "terok-sandbox"
 version = "0.0.5"
 description = "Hardened Podman container runner with gate server and shield integration"
@@ -3008,4 +3027,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "fcce41b2346fbf740a491113b4d2840f4b55b6dcf127d3fec293106c8594fb64"
+content-hash = "85c4a357fa64463dde2ea3926f6c697602fa58908b129b629f392bf0e0146b32"

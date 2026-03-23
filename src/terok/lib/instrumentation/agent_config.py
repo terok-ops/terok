@@ -13,8 +13,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from terok_agent.agent_config import resolve_provider_value  # noqa: F401 — re-exported
+from terok_agent.config_stack import ConfigScope, ConfigStack
+
 from terok.lib.core.config import bundled_presets_dir, get_global_agent_config, global_presets_dir
-from terok.lib.util.config_stack import ConfigScope, ConfigStack
 
 
 def _preset_scope_label(preset_path: Path) -> str:
@@ -80,39 +82,6 @@ def build_agent_config_stack(
         stack.push(ConfigScope("cli", None, cli_overrides))
 
     return stack
-
-
-def resolve_provider_value(
-    key: str,
-    config: dict[str, Any],
-    provider_name: str,
-) -> Any | None:
-    """Extract a provider-aware config value.
-
-    Supports two forms:
-
-    * **Flat value** — ``model: opus`` → same for all providers.
-    * **Per-provider dict** — ``model: {claude: opus, codex: o3, _default: fast}``
-      → looks up *provider_name*, falls back to ``_default``, then ``None``.
-
-    Returns ``None`` when the key is absent or has no match for the provider.
-
-    **Null override behaviour**: when a per-provider dict maps a provider to
-    ``null`` (Python ``None``), that ``None`` is treated as "no value" and the
-    resolver falls back to ``_default``.  This is intentional — it allows a
-    lower-priority config layer to set a provider-specific value that a
-    higher-priority layer can effectively *unset* by mapping it to ``null``,
-    letting the ``_default`` (or ``None``) bubble up instead.
-    """
-    val = config.get(key)
-    if val is None:
-        return None
-    if isinstance(val, dict):
-        provider_val = val.get(provider_name)
-        if provider_val is not None:
-            return provider_val
-        return val.get("_default")
-    return val
 
 
 def resolve_agent_config(
