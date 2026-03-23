@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 
 from ..core.config import get_envs_base_dir
 from ..core.images import project_cli_image
-from ..core.projects import load_project
 from ..util.fs import ensure_dir_writable
 from ..util.podman import _podman_userns_args
 
@@ -256,13 +255,11 @@ def _run_auth_container(project_id: str, provider: AuthProvider) -> None:
     """Run an auth container for the given provider."""
     _check_podman()
 
-    project = load_project(project_id)
-
     envs_base = get_envs_base_dir()
     host_dir = envs_base / provider.host_dir_name
     ensure_dir_writable(host_dir, f"{provider.label} config")
 
-    container_name = f"{project.id}-auth-{provider.name}"
+    container_name = f"{project_id}-auth-{provider.name}"
     _cleanup_existing_container(container_name)
 
     cmd = [
@@ -279,7 +276,7 @@ def _run_auth_container(project_id: str, provider: AuthProvider) -> None:
     cmd[3:3] = userns
     if provider.extra_run_args:
         cmd[3 + len(userns) : 3 + len(userns)] = list(provider.extra_run_args)
-    cmd.append(project_cli_image(project.id))
+    cmd.append(project_cli_image(project_id))
     cmd.extend(provider.command)
 
     # Banner

@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from terok.lib.core.config import bundled_presets_dir, get_global_agent_config, global_presets_dir
-from terok.lib.core.projects import load_project
 from terok.lib.util.config_stack import ConfigScope, ConfigStack
 
 
@@ -35,10 +34,20 @@ def _preset_scope_label(preset_path: Path) -> str:
 
 def build_agent_config_stack(
     project_id: str,
+    *,
+    agent_config: dict[str, Any] | None = None,
+    project_root: Path | None = None,
     preset: str | None = None,
     cli_overrides: dict[str, Any] | None = None,
 ) -> ConfigStack:
     """Build config stack: global → project → preset → CLI overrides.
+
+    Args:
+        project_id: Project identifier (needed for preset resolution).
+        agent_config: Project-level agent config dict (from ``project.agent_config``).
+        project_root: Project root path (for provenance display).
+        preset: Optional preset name.
+        cli_overrides: CLI-level overrides (highest priority).
 
     Returns the :class:`ConfigStack` so callers can either ``.resolve()`` it
     for the merged dict or inspect ``.scopes`` for provenance display.
@@ -50,10 +59,10 @@ def build_agent_config_stack(
     if global_cfg:
         stack.push(ConfigScope("global", None, global_cfg))
 
-    # 2. Project agent config
-    project = load_project(project_id)
-    if project.agent_config:
-        stack.push(ConfigScope("project", project.root / "project.yml", project.agent_config))
+    # 2. Project agent config (passed in by caller)
+    if agent_config:
+        source = (project_root / "project.yml") if project_root else None
+        stack.push(ConfigScope("project", source, agent_config))
 
     # 3. Preset (if requested)
     if preset:
@@ -108,6 +117,9 @@ def resolve_provider_value(
 
 def resolve_agent_config(
     project_id: str,
+    *,
+    agent_config: dict[str, Any] | None = None,
+    project_root: Path | None = None,
     preset: str | None = None,
     cli_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -117,5 +129,9 @@ def resolve_agent_config(
     that only need the final resolved dict (e.g. task runners).
     """
     return build_agent_config_stack(
-        project_id, preset=preset, cli_overrides=cli_overrides
+        project_id,
+        agent_config=agent_config,
+        project_root=project_root,
+        preset=preset,
+        cli_overrides=cli_overrides,
     ).resolve()

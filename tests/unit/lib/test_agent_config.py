@@ -141,7 +141,14 @@ def resolve_test_agent_config(
     """Resolve agent config inside the isolated test environment."""
     with _patched_env(layout, global_config=global_config):
         with mock_git_config():
-            return resolve_agent_config(project_id, preset=preset, cli_overrides=cli_overrides)
+            project = load_project(project_id)
+            return resolve_agent_config(
+                project_id,
+                agent_config=project.agent_config,
+                project_root=project.root,
+                preset=preset,
+                cli_overrides=cli_overrides,
+            )
 
 
 def list_test_presets(
@@ -186,7 +193,13 @@ def build_test_agent_stack(
     """Build an agent config stack inside the isolated test environment."""
     with _patched_env(layout, xdg_config_home=xdg_config_home):
         with mock_git_config():
-            return build_agent_config_stack(project_id, preset=preset)
+            project = load_project(project_id)
+            return build_agent_config_stack(
+                project_id,
+                agent_config=project.agent_config,
+                project_root=project.root,
+                preset=preset,
+            )
 
 
 class TestResolveAgentConfig:

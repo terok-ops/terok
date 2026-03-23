@@ -367,10 +367,12 @@ class ProjectActionsMixin:
             from ..lib.instrumentation.instructions import resolve_instructions
 
             project = load_project(pid)
-            effective = resolve_agent_config(pid)
+            effective = resolve_agent_config(
+                pid, agent_config=project.agent_config, project_root=project.root
+            )
             from ..lib.instrumentation.headless_providers import get_provider as _get_provider
 
-            provider = _get_provider(None, project)
+            provider = _get_provider(None, default_agent=project.default_agent)
             text = resolve_instructions(effective, provider.name, project_root=project.root)
             print("=== Resolved Instructions ===\n")
             print(text)

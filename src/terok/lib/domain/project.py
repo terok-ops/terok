@@ -360,7 +360,13 @@ class AgentManager:
         cli_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return the merged agent config dict."""
-        return resolve_agent_config(self._config.id, preset=preset, cli_overrides=cli_overrides)
+        return resolve_agent_config(
+            self._config.id,
+            agent_config=self._config.agent_config,
+            project_root=self._config.root,
+            preset=preset,
+            cli_overrides=cli_overrides,
+        )
 
     def resolve_instructions(self, provider_name: str, preset: str | None = None) -> str:
         """Return resolved instructions text for the given provider."""
@@ -369,7 +375,7 @@ class AgentManager:
 
     def get_provider(self, name: str | None = None) -> HeadlessProvider:
         """Resolve the active headless provider for this project."""
-        return get_provider(name, self._config)
+        return get_provider(name, default_agent=self._config.default_agent)
 
 
 class Project:

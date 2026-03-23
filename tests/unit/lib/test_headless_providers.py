@@ -8,7 +8,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from terok.lib.core.projects import ProjectConfig
 from terok.lib.instrumentation.agent_config import resolve_provider_value
 from terok.lib.instrumentation.agents import _generate_claude_wrapper
 from terok.lib.instrumentation.headless_providers import (
@@ -22,56 +21,26 @@ from terok.lib.instrumentation.headless_providers import (
     generate_all_wrappers,
     get_provider,
 )
-from tests.testfs import (
-    CONTAINER_TEROK_DIR,
-    FAKE_PROJECT_GATE_DIR,
-    FAKE_PROJECT_ROOT,
-    FAKE_PROJECT_TASKS_ROOT,
-)
-
-
-def _make_project(**kwargs: object) -> ProjectConfig:
-    """Create a minimal ProjectConfig with sensible defaults."""
-
-    defaults: dict = {
-        "id": "testproj",
-        "security_class": "online",
-        "upstream_url": None,
-        "default_branch": "main",
-        "root": FAKE_PROJECT_ROOT,
-        "tasks_root": FAKE_PROJECT_TASKS_ROOT,
-        "gate_path": FAKE_PROJECT_GATE_DIR,
-        "staging_root": None,
-        "ssh_key_name": None,
-        "ssh_host_dir": None,
-        "default_agent": None,
-        "human_name": "Test User",
-        "human_email": "test@example.com",
-    }
-    defaults.update(kwargs)
-    return ProjectConfig(**defaults)
+from tests.testfs import CONTAINER_TEROK_DIR
 
 
 def _provider_wrapper(
     name: str,
     *,
-    project: ProjectConfig | None = None,
     has_agents: bool = False,
 ) -> str:
     """Generate a wrapper for a provider under test."""
     kwargs = {"claude_wrapper_fn": _generate_claude_wrapper} if name == "claude" else {}
     return generate_agent_wrapper(
         HEADLESS_PROVIDERS[name],
-        project or _make_project(),
         has_agents=has_agents,
         **kwargs,
     )
 
 
-def _all_wrappers(*, project: ProjectConfig | None = None, has_agents: bool = False) -> str:
+def _all_wrappers(*, has_agents: bool = False) -> str:
     """Generate the combined multi-provider wrapper file."""
     return generate_all_wrappers(
-        project or _make_project(),
         has_agents=has_agents,
         claude_wrapper_fn=_generate_claude_wrapper,
     )
@@ -183,27 +152,23 @@ class TestGetProvider:
 
     def test_explicit_name(self) -> None:
         """Explicit provider name resolves correctly."""
-        project = _make_project()
-        p = get_provider("codex", project)
+        p = get_provider("codex")
         assert p.name == "codex"
 
     def test_none_falls_back_to_project_default(self) -> None:
-        """None name uses project.default_agent."""
-        project = _make_project(default_agent="copilot")
-        p = get_provider(None, project)
+        """None name uses default_agent."""
+        p = get_provider(None, default_agent="copilot")
         assert p.name == "copilot"
 
     def test_none_falls_back_to_claude(self) -> None:
-        """None name with no project default resolves to claude."""
-        project = _make_project(default_agent=None)
-        p = get_provider(None, project)
+        """None name with no default resolves to claude."""
+        p = get_provider(None, default_agent=None)
         assert p.name == "claude"
 
     def test_invalid_name_raises_system_exit(self) -> None:
         """Unknown provider name raises SystemExit."""
-        project = _make_project()
         with pytest.raises(SystemExit) as ctx:
-            get_provider("nonexistent", project)
+            get_provider("nonexistent")
         assert "nonexistent" in str(ctx.value)
 
 
@@ -278,10 +243,9 @@ class TestGenerateAgentWrapper:
 
     def test_claude_wrapper_requires_fn(self) -> None:
         """Claude provider without claude_wrapper_fn raises ValueError."""
-        project = _make_project()
         p = HEADLESS_PROVIDERS["claude"]
         with pytest.raises(ValueError):
-            generate_agent_wrapper(p, project, has_agents=False)
+            generate_agent_wrapper(p, has_agents=False)
 
     def test_codex_wrapper(self) -> None:
         """Codex wrapper defines a codex() function with git env vars."""
@@ -302,9 +266,8 @@ class TestGenerateAgentWrapper:
 
     def test_generic_wrapper_uses_authorship_helper(self) -> None:
         """All wrappers use the shared Git authorship helper."""
-        project = _make_project(human_name="Alice", human_email="alice@example.com")
         for name in HEADLESS_PROVIDERS:
-            wrapper = _provider_wrapper(name, project=project)
+            wrapper = _provider_wrapper(name)
             assert "_terok_apply_git_identity" in wrapper, f"{name} missing helper call"
 
     # Canonical sets of providers by session_file support.
@@ -630,7 +593,7 @@ class TestGenerateAllWrappers:
 
     def test_all_wrappers_use_authorship_helper(self) -> None:
         """All wrappers in the combined file use the shared helper."""
-        wrapper = _all_wrappers(project=_make_project(human_name="Bob"))
+        wrapper = _all_wrappers()
         for name, provider in HEADLESS_PROVIDERS.items():
             start = wrapper.index(f"{provider.binary}() {{")
             end = wrapper.find("\n# Generated by terok\n", start + 1)

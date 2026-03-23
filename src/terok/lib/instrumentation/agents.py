@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.config import get_envs_base_dir
-from ..core.projects import ProjectConfig
 from ..util.fs import ensure_dir, ensure_dir_writable
 from ..util.yaml import load as _yaml_load
 from .headless_providers import WrapperConfig
@@ -390,13 +389,14 @@ def _inject_opencode_instructions(config_path: Path) -> None:
 class AgentConfigSpec:
     """Groups parameters for preparing an agent-config directory."""
 
-    project: ProjectConfig
+    tasks_root: Path
     task_id: str
     subagents: tuple[dict, ...]
     selected_agents: tuple[str, ...] | None = None
     prompt: str | None = None
     provider: str = "claude"
     instructions: str | None = None
+    default_agent: str | None = None
 
     def __post_init__(self) -> None:
         """Coerce mutable sequences to tuples for true immutability."""
@@ -425,9 +425,9 @@ def prepare_agent_config_dir(spec: AgentConfigSpec) -> Path:
     """
     from .headless_providers import get_provider as _get_provider
 
-    resolved = _get_provider(spec.provider, spec.project)
+    resolved = _get_provider(spec.provider, default_agent=spec.default_agent)
 
-    task_dir = spec.project.tasks_root / str(spec.task_id)
+    task_dir = spec.tasks_root / str(spec.task_id)
     agent_config_dir = task_dir / "agent-config"
     ensure_dir(agent_config_dir)
 
@@ -479,13 +479,11 @@ def prepare_agent_config_dir(spec: AgentConfigSpec) -> Path:
         return _generate_claude_wrapper(
             WrapperConfig(
                 has_agents=cfg.has_agents,
-                project=cfg.project,
                 has_instructions=has_instructions,
             )
         )
 
     wrapper = generate_all_wrappers(
-        spec.project,
         has_agents,
         claude_wrapper_fn=_claude_wrapper_with_instructions,
     )

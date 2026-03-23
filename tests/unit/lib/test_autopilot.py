@@ -26,7 +26,6 @@ from tests.testfs import (
     CONTAINER_TEROK_MOUNT_Z,
     FAKE_PROJECT_GATE_DIR,
     FAKE_PROJECT_ROOT,
-    FAKE_PROJECT_TASKS_ROOT,
     NONEXISTENT_AGENT_PATH,
     NONEXISTENT_FILE_PATH,
 )
@@ -156,7 +155,13 @@ def prepare_agent_config(
         ),
     ):
         return prepare_agent_config_dir(
-            AgentConfigSpec(project, task_id, subagents=[], instructions=instructions)
+            AgentConfigSpec(
+                project.tasks_root,
+                task_id,
+                subagents=[],
+                instructions=instructions,
+                default_agent=project.default_agent,
+            )
         )
 
 
@@ -424,18 +429,9 @@ class TestParseMdAgent:
 class TestGenerateClaudeWrapper:
     """Tests for _generate_claude_wrapper."""
 
-    def _make_project(self) -> ProjectConfig:
-        return make_project_config(
-            project_id="testproj",
-            root=FAKE_PROJECT_ROOT,
-            tasks_root=FAKE_PROJECT_TASKS_ROOT,
-            gate_path=FAKE_PROJECT_GATE_DIR,
-        )
-
     def test_basic_wrapper(self) -> None:
         """Wrapper includes add-dir / and git env vars."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False))
         assert "claude()" in wrapper
         assert "--dangerously-skip-permissions" not in wrapper
         assert '--add-dir "/"' in wrapper
@@ -445,14 +441,12 @@ class TestGenerateClaudeWrapper:
 
     def test_wrapper_with_agents(self) -> None:
         """Wrapper includes agents.json reference when has_agents=True."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True))
         assert "agents.json" in wrapper
 
     def test_wrapper_does_not_inject_permission_flags(self) -> None:
         """Wrapper relies on managed settings, not permission CLI flags."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False))
         assert "TEROK_UNRESTRICTED" not in wrapper
         assert "--dangerously-skip-permissions" not in wrapper
         # --add-dir / is always present regardless of permission mode
@@ -460,8 +454,7 @@ class TestGenerateClaudeWrapper:
 
     def test_wrapper_no_model_or_mcp(self) -> None:
         """Wrapper does not contain --model, --mcp-config by default."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True))
         assert "--model" not in wrapper
         assert "--mcp-config" not in wrapper
         assert "--max-turns" not in wrapper
@@ -470,17 +463,13 @@ class TestGenerateClaudeWrapper:
 
     def test_wrapper_includes_append_system_prompt(self) -> None:
         """Wrapper includes --append-system-prompt when has_instructions=True."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(
-            WrapperConfig(has_agents=False, project=project, has_instructions=True)
-        )
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, has_instructions=True))
         assert "--append-system-prompt" in wrapper
         assert "instructions.md" in wrapper
 
     def test_wrapper_timeout_support(self) -> None:
         """Wrapper parses --terok-timeout and wraps claude with timeout."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False))
         # Wrapper should contain timeout flag parsing
         assert "--terok-timeout" in wrapper
         assert "_timeout" in wrapper
@@ -493,15 +482,13 @@ class TestGenerateClaudeWrapper:
 
     def test_wrapper_resume_from_session_file(self) -> None:
         """Wrapper adds --resume from claude-session.txt when it exists."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False))
         assert "claude-session.txt" in wrapper
         assert "--resume" in wrapper
 
     def test_wrapper_sets_memory_override_with_project_id(self) -> None:
         """Wrapper exports CLAUDE_COWORK_MEMORY_PATH_OVERRIDE using $PROJECT_ID."""
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
+        wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False))
         assert (
             "export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE="
             f'"{CONTAINER_CLAUDE_MEMORY_OVERRIDE}"' in wrapper

@@ -34,8 +34,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ..core.project_model import ProjectConfig
-
 
 @dataclass(frozen=True)
 class OpenCodeProviderConfig:
@@ -394,17 +392,17 @@ def collect_all_auto_approve_env() -> dict[str, str]:
     return merged
 
 
-def get_provider(name: str | None, project: ProjectConfig) -> HeadlessProvider:
+def get_provider(name: str | None, *, default_agent: str | None = None) -> HeadlessProvider:
     """Resolve a provider name to a ``HeadlessProvider``.
 
     Resolution order:
       1. Explicit *name* if given
-      2. ``project.default_agent``
+      2. *default_agent* (from project config)
       3. ``"claude"`` (ultimate fallback)
 
     Raises ``SystemExit`` if the resolved name is not in the registry.
     """
-    resolved = name or project.default_agent or "claude"
+    resolved = name or default_agent or "claude"
     provider = HEADLESS_PROVIDERS.get(resolved)
     if provider is None:
         valid = ", ".join(sorted(HEADLESS_PROVIDERS))
@@ -457,7 +455,6 @@ class WrapperConfig:
     """Groups parameters for generating the Claude shell wrapper."""
 
     has_agents: bool
-    project: ProjectConfig
     has_instructions: bool = False
 
 
@@ -648,7 +645,6 @@ def _build_generic_command(
 
 def generate_agent_wrapper(
     provider: HeadlessProvider,
-    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -675,13 +671,12 @@ def generate_agent_wrapper(
     if provider.name == "claude":
         if claude_wrapper_fn is None:
             raise ValueError("claude_wrapper_fn is required for Claude provider")
-        return claude_wrapper_fn(WrapperConfig(has_agents=has_agents, project=project))
+        return claude_wrapper_fn(WrapperConfig(has_agents=has_agents))
 
-    return _generate_generic_wrapper(provider, project)
+    return _generate_generic_wrapper(provider)
 
 
 def generate_all_wrappers(
-    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -700,7 +695,6 @@ def generate_all_wrappers(
     for provider in HEADLESS_PROVIDERS.values():
         section = generate_agent_wrapper(
             provider,
-            project,
             has_agents,
             claude_wrapper_fn=claude_wrapper_fn,
         )
@@ -708,7 +702,7 @@ def generate_all_wrappers(
     return "\n".join(sections)
 
 
-def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig) -> str:
+def _generate_generic_wrapper(provider: HeadlessProvider) -> str:
     """Generate a shell wrapper for non-Claude providers.
 
     Sets git identity env vars and wraps the binary with optional timeout

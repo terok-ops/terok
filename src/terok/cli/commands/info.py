@@ -76,11 +76,18 @@ def _cmd_config_show(project_id: str, preset: str | None) -> None:
     """Show resolved agent config with provenance annotations."""
     import json
 
+    from ...lib.core.projects import load_project
     from ...lib.instrumentation.agent_config import build_agent_config_stack
 
     color_enabled = _supports_color()
 
-    stack = build_agent_config_stack(project_id, preset=preset)
+    project = load_project(project_id)
+    stack = build_agent_config_stack(
+        project_id,
+        agent_config=project.agent_config,
+        project_root=project.root,
+        preset=preset,
+    )
     resolved = stack.resolve()
     scopes = stack.scopes
 
