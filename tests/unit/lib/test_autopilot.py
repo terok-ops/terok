@@ -33,13 +33,12 @@ from tests.testfs import (
 if TYPE_CHECKING:
     from terok.lib.core.projects import ProjectConfig
 
+from terok_agent import WrapperConfig, parse_md_agent
 from terok_agent.agents import (
     _generate_claude_wrapper,
     _subagents_to_json,
     _write_session_hook,
-    parse_md_agent,
 )
-from terok_agent.headless_providers import WrapperConfig
 
 from terok.lib.core.projects import load_project
 from terok.lib.orchestration.task_runners import (
@@ -145,7 +144,7 @@ def prepare_agent_config(
     instructions: str | None = None,
 ) -> Path:
     """Build an agent-config directory for the given task."""
-    from terok_agent.agents import AgentConfigSpec, prepare_agent_config_dir
+    from terok_agent import AgentConfigSpec, prepare_agent_config_dir
 
     (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as td:

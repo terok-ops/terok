@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from terok_sandbox.git_gate import GateStalenessInfo
+from terok_sandbox import GateStalenessInfo
 
 from tests.test_utils import make_staleness_info
 

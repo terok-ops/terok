@@ -9,7 +9,7 @@ import subprocess
 from unittest.mock import patch
 
 import pytest
-from terok_sandbox.runtime import get_project_container_states
+from terok_sandbox import get_project_container_states
 
 from terok.lib.core.task_display import (
     STATUS_DISPLAY,

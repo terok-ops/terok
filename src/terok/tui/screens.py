@@ -796,7 +796,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
         super().__init__()
         self._subagents = subagents or []
 
-        from terok_agent.headless_providers import HEADLESS_PROVIDERS
+        from terok_agent import HEADLESS_PROVIDERS
 
         if default_agent in HEADLESS_PROVIDERS:
             self._default_agent = default_agent
@@ -806,7 +806,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
     def compose(self) -> ComposeResult:
         """Build the agent list, optional sub-agent checkboxes, and buttons."""
-        from terok_agent.headless_providers import HEADLESS_PROVIDERS
+        from terok_agent import HEADLESS_PROVIDERS
 
         with Vertical(id="agent-dialog") as dialog:
             options = []
@@ -835,7 +835,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
     def on_mount(self) -> None:
         """Focus the agent list and highlight the default entry."""
         agent_list = self.query_one("#agent-list", OptionList)
-        from terok_agent.headless_providers import HEADLESS_PROVIDERS
+        from terok_agent import HEADLESS_PROVIDERS
 
         for idx, name in enumerate(HEADLESS_PROVIDERS):
             if name == self._default_agent:
@@ -875,7 +875,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
     def on_key(self, event: events.Key) -> None:
         """Handle number-key shortcuts (1-9) to select an agent."""
-        from terok_agent.headless_providers import HEADLESS_PROVIDERS
+        from terok_agent import HEADLESS_PROVIDERS
 
         if event.character and event.character.isdigit():
             idx = int(event.character) - 1
@@ -1196,7 +1196,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
 
     def compose(self) -> ComposeResult:
         """Build status, agent selector, prompt input, and action buttons."""
-        from terok_agent.headless_providers import HEADLESS_PROVIDERS
+        from terok_agent import HEADLESS_PROVIDERS
 
         with Vertical(id="launch-dialog") as dialog:
             yield Static("Status: Starting container\u2026", id="launch-status")

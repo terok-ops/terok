@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
-from terok_sandbox.runtime import get_container_state
+from terok_sandbox import get_container_state
 
 from terok.lib.orchestration.task_runners import task_restart
 from terok.lib.orchestration.tasks import get_task_container_state, task_new, task_status, task_stop

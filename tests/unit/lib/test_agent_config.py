@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from terok_agent.config_stack import ConfigStack
+from terok_agent import ConfigStack
 
 from terok.lib.core.projects import ProjectConfig, list_presets, load_preset, load_project
 from terok.lib.instrumentation.agent_config import build_agent_config_stack, resolve_agent_config

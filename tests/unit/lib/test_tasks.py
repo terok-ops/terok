@@ -338,7 +338,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_gatekeeping(self, *_mocks) -> None:
         project_id = "proj9"
         with project_env(
@@ -366,7 +366,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_gatekeeping_with_ssh(self, *_mocks) -> None:
         """Gatekeeping mode with mount_in_gatekeeping enabled should mount SSH."""
         project_id = "proj_gatekeeping_ssh"
@@ -401,7 +401,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_online(self, *_mocks) -> None:
         project_id = "proj10"
         with project_env(
@@ -884,7 +884,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_gatekeeping_expose_external_remote_enabled(self, *_mocks) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_enabled"
@@ -911,7 +911,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_gatekeeping_expose_external_remote_disabled(self, *_mocks) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_disabled"
@@ -938,7 +938,7 @@ class TestTask:
         "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
-    @unittest.mock.patch("terok_sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab")
+    @unittest.mock.patch("terok_sandbox.create_token", return_value="tok" * 10 + "ab")
     def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self, *_mocks) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_no_upstream"

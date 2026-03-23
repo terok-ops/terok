@@ -101,6 +101,24 @@ make spdx NAME="Real Human Name" FILES="src/terok/new_file.py"  # Add SPDX heade
 - **Existing Tests**: Never remove or modify unrelated tests
 - **Dependencies**: Use Poetry for dependency management; avoid adding unnecessary dependencies
 
+## External Package Dependencies
+
+terok depends on three sibling packages, each pinned to a GitHub release wheel:
+
+```text
+terok → terok-agent → terok-sandbox → terok-shield
+```
+
+Both `terok-agent` and `terok-sandbox` are listed as **explicit** dependencies in `pyproject.toml` — even though sandbox is pulled transitively via agent. This is intentional: terok imports directly from both packages, so the dependency must be declared, not just inherited.
+
+**Version sync rules:**
+
+- When bumping `terok-sandbox` in terok, the same version must be pinned in `terok-agent`. Otherwise Poetry will reject conflicting URL pins. Bump terok-agent first, release it, then bump both in terok.
+- When bumping `terok-shield` in terok-sandbox, no direct impact on terok (transitive). But if terok-sandbox re-exports shield types that terok uses, the shield version must be compatible.
+- After any version bump: run `poetry lock` and commit both `pyproject.toml` and `poetry.lock`.
+
+**Import convention:** always import from the top-level package API (`from terok_agent import X`, `from terok_sandbox import X`), never from internal submodules. This keeps the coupling surface minimal and allows internal reorganization without breaking consumers.
+
 ## Module Boundaries (tach)
 
 The project uses [tach](https://github.com/gauge-sh/tach) to enforce module boundary rules defined in `tach.toml`. Each module declares its allowed dependencies and public interface. When adding new cross-module imports:

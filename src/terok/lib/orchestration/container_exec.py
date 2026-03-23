@@ -10,7 +10,7 @@ scripts executing with host privileges.
 
 import subprocess
 
-from terok_sandbox.runtime import get_container_state
+from terok_sandbox import get_container_state
 
 from ..util.logging_utils import _log_debug
 

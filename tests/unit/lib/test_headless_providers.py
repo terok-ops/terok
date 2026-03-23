@@ -7,19 +7,18 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
-from terok_agent.agent_config import resolve_provider_value
-from terok_agent.agents import _generate_claude_wrapper
-from terok_agent.headless_providers import (
+from terok_agent import (
     HEADLESS_PROVIDERS,
     PROVIDER_NAMES,
     CLIOverrides,
     apply_provider_config,
     build_headless_command,
     collect_all_auto_approve_env,
-    generate_agent_wrapper,
-    generate_all_wrappers,
     get_provider,
+    resolve_provider_value,
 )
+from terok_agent.agents import _generate_claude_wrapper
+from terok_agent.headless_providers import generate_agent_wrapper, generate_all_wrappers
 
 from tests.testfs import CONTAINER_TEROK_DIR
 

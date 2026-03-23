@@ -10,9 +10,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from terok_sandbox.config import SandboxConfig
-from terok_sandbox.shield import (
-    _BYPASS_WARNING,
+from terok_sandbox import (
+    SandboxConfig,
     check_environment,
     down,
     make_shield,
@@ -23,6 +22,7 @@ from terok_sandbox.shield import (
     status,
     up,
 )
+from terok_sandbox.shield import _BYPASS_WARNING
 from terok_shield import (
     USER_HOOKS_DIR,
     EnvironmentCheck,
@@ -100,14 +100,14 @@ def test_make_shield_maps_config_to_shield_config(
 
 def test_nft_not_found_is_reexported() -> None:
     """``NftNotFoundError`` is re-exported from the adapter module."""
-    from terok_sandbox.shield import NftNotFoundError as error_type
+    from terok_sandbox import NftNotFoundError as error_type
 
     assert error_type is NftNotFoundError
 
 
 def test_shield_state_is_reexported() -> None:
     """``ShieldState`` is re-exported from the adapter module."""
-    from terok_sandbox.shield import ShieldState as shield_state_type
+    from terok_sandbox import ShieldState as shield_state_type
 
     assert shield_state_type is ShieldState
 

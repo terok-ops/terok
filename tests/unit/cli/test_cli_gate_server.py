@@ -9,7 +9,7 @@ from collections.abc import Callable
 from unittest.mock import patch
 
 import pytest
-from terok_sandbox.gate_server import GateServerStatus
+from terok_sandbox import GateServerStatus
 
 from terok.cli.commands.gate_server import (
     _cmd_install,

@@ -61,7 +61,7 @@ def resolve_security_env(
             "terok.lib.orchestration.environment.get_gate_base_path",
             return_value=ctx.state_dir / "gate",
         ),
-        patch("terok_sandbox.gate_tokens.create_token", return_value=token),
+        patch("terok_sandbox.create_token", return_value=token),
     ):
         project = load_project(project_id)
         env, volumes = _security_mode_env_and_volumes(project, Path(ctx.base / "ssh"), "1")

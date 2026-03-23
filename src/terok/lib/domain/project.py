@@ -49,8 +49,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from terok_agent import HeadlessProvider, get_provider, resolve_instructions
-from terok_sandbox.git_gate import GitGate
-from terok_sandbox.ssh import SSHManager
+from terok_sandbox import GitGate, SSHManager
 
 from ..core.config import (
     build_root,

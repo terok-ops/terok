@@ -14,21 +14,19 @@ from typing import TYPE_CHECKING
 
 from terok_agent import (
     AgentConfigSpec,
+    podman_userns_args as _podman_userns_args,
     prepare_agent_config_dir,
     resolve_instructions,
     resolve_provider_value,
 )
-from terok_agent._util import podman_userns_args as _podman_userns_args
-from terok_sandbox.runtime import (
+from terok_sandbox import (
+    down as _shield_down_impl,
     get_container_state,
     gpu_run_args,
     is_container_running,
+    pre_start as _shield_pre_start_impl,
     stream_initial_logs,
     wait_for_exit,
-)
-from terok_sandbox.shield import (
-    down as _shield_down_impl,
-    pre_start as _shield_pre_start_impl,
 )
 
 from ..core.config import (
@@ -136,7 +134,7 @@ def _apply_unrestricted_env(env: dict[str, str]) -> None:
     it is launched (CLI wrapper or ACP).  Setting them at the container
     level provides a single, unified permission mechanism.
     """
-    from terok_agent.headless_providers import collect_all_auto_approve_env
+    from terok_agent import collect_all_auto_approve_env
 
     env["TEROK_UNRESTRICTED"] = "1"
     env.update(collect_all_auto_approve_env())
@@ -212,7 +210,7 @@ def _prepare_agent_config(
         preset=preset,
     )
     subagents = list(effective.get("subagents") or [])
-    from terok_agent.headless_providers import get_provider as _get_provider
+    from terok_agent import get_provider as _get_provider
 
     resolved = _get_provider(provider_name, default_agent=project.default_agent)
     instr_text = resolve_instructions(effective, resolved.name, project_root=project.root)
@@ -698,7 +696,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     Returns the task_id.
     """
-    from terok_agent.headless_providers import (
+    from terok_agent import (
         CLIOverrides,
         apply_provider_config,
         build_headless_command,
@@ -898,7 +896,7 @@ def task_followup_headless(
     original ``task_run_headless`` invocation since ``podman start``
     re-executes the same container command.
     """
-    from terok_agent.headless_providers import HEADLESS_PROVIDERS
+    from terok_agent import HEADLESS_PROVIDERS
 
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id)

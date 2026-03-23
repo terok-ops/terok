@@ -9,11 +9,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from terok_agent.instructions import (
-    bundled_default_instructions,
-    has_custom_instructions,
-    resolve_instructions,
-)
+from terok_agent import bundled_default_instructions, resolve_instructions
+from terok_agent.instructions import has_custom_instructions
 
 from tests.testfs import NONEXISTENT_PROJECT_ROOT, WORKSPACE_ROOT
 

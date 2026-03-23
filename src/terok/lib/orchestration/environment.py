@@ -15,8 +15,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from terok_agent.headless_providers import collect_opencode_provider_env
-from terok_sandbox.gate_server import (
+from terok_agent import collect_opencode_provider_env
+from terok_sandbox import (
     ensure_server_reachable,
     get_gate_base_path,
     get_gate_server_port,
@@ -66,7 +66,7 @@ _STATIC_SHARED_MOUNTS: tuple[SharedMount, ...] = (
 
 def _build_shared_mounts() -> tuple[SharedMount, ...]:
     """Build complete shared mounts including dynamically generated OpenCode provider mounts."""
-    from terok_agent.headless_providers import HEADLESS_PROVIDERS
+    from terok_agent import HEADLESS_PROVIDERS
 
     dynamic = tuple(
         SharedMount(
@@ -123,7 +123,7 @@ def _security_mode_env_and_volumes(
     project: ProjectConfig, ssh_host_dir: Path, task_id: str
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
-    from terok_sandbox.gate_tokens import create_token
+    from terok_sandbox import create_token
 
     env: dict[str, str] = {}
     volumes: list[str] = []

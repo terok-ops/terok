@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from terok_agent.config_stack import (
+from terok_agent import (
     ConfigScope,
     ConfigStack,
     deep_merge,

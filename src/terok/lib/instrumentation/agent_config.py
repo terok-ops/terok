@@ -13,8 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from terok_agent.agent_config import resolve_provider_value  # noqa: F401 — re-exported
-from terok_agent.config_stack import ConfigScope, ConfigStack
+from terok_agent import ConfigScope, ConfigStack, resolve_provider_value  # noqa: F401 — re-exported
 
 from terok.lib.core.config import bundled_presets_dir, get_global_agent_config, global_presets_dir
 

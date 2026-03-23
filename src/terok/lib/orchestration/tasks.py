@@ -19,7 +19,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from terok_sandbox.runtime import (
+from terok_sandbox import (
     get_container_state,
     get_project_container_states,
     stop_task_containers,
@@ -700,7 +700,7 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
         _archive_task(project, task_id, meta)
 
     _log_debug("task_delete: revoking gate tokens")
-    from terok_sandbox.gate_tokens import revoke_token_for_task
+    from terok_sandbox import revoke_token_for_task
 
     try:
         revoke_token_for_task(project.id, task_id)

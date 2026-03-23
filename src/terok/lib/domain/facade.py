@@ -29,49 +29,47 @@ used by CLI commands that operate on ``project_id`` strings directly.
 
 from __future__ import annotations
 
-from terok_agent.auth import AUTH_PROVIDERS, AuthProvider, authenticate as _authenticate_raw
-from terok_sandbox.gate_server import (  # noqa: F401 — re-exported public API
-    GateServerStatus,
-    check_units_outdated,
-    get_gate_base_path,
-    get_gate_server_port,
-    get_server_status,
-    install_systemd_units,
-    is_daemon_running,
-    is_systemd_available,
-    start_daemon,
-    stop_daemon,
-    uninstall_systemd_units,
+from terok_agent import (
+    AUTH_PROVIDERS,
+    AuthProvider,
+    authenticate as _authenticate_raw,
 )
-from terok_sandbox.git_gate import (  # noqa: F401 — re-exported public API
+from terok_sandbox import (  # noqa: F401 — re-exported public API
+    EnvironmentCheck,
+    GateServerStatus,
     GateStalenessInfo,
     GitGate,
-)
-from terok_sandbox.runtime import (  # noqa: F401 — re-exported public API
-    get_container_state,
-    get_project_container_states,
-    gpu_run_args,
-    is_container_running,
-    stop_task_containers,
-    stream_initial_logs,
-    wait_for_exit,
-)
-from terok_sandbox.shield import (  # noqa: F401 — re-exported public API
-    EnvironmentCheck,
     NftNotFoundError,
     ShieldNeedsSetup,
     ShieldState,
+    SSHManager,
     check_environment as shield_check_environment,
+    check_units_outdated,
     down as shield_down,
+    get_container_state,
+    get_gate_base_path,
+    get_gate_server_port,
+    get_project_container_states,
+    get_server_status,
+    gpu_run_args,
+    install_systemd_units,
+    is_container_running,
+    is_daemon_running,
+    is_systemd_available,
     make_shield,
     pre_start as shield_pre_start,
     run_setup as shield_run_setup,
     setup_hooks_direct as shield_setup_hooks_direct,
+    start_daemon,
     state as shield_state,
     status as shield_status,
+    stop_daemon,
+    stop_task_containers,
+    stream_initial_logs,
+    uninstall_systemd_units,
     up as shield_up,
+    wait_for_exit,
 )
-from terok_sandbox.ssh import SSHManager  # noqa: F401 — re-exported public API
 
 from ..core.config import (
     SHIELD_SECURITY_HINT,  # noqa: F401 — re-exported for presentation layer

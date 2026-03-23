@@ -137,7 +137,7 @@ class TestBypassContainerConnectivity:
 
         # Simulate what _maybe_drop_shield does: call shield.down() on a
         # container that was started WITHOUT shield pre_start.
-        from terok_sandbox.shield import down as shield_down
+        from terok_sandbox import down as shield_down
 
         with tempfile.TemporaryDirectory() as td:
             task_dir = Path(td)

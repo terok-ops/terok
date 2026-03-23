@@ -15,7 +15,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from terok_sandbox.runtime import get_container_state
+from terok_sandbox import get_container_state
 
 from ..core.projects import load_project
 from ..orchestration.tasks import container_name, tasks_meta_dir

@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from terok_sandbox.git_gate import GateStalenessInfo
+from terok_sandbox import GateStalenessInfo
 
 
 def mock_git_config():

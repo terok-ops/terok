@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from terok_sandbox.gate_server import GateServerStatus
+from terok_sandbox import GateServerStatus
 
 from tests.testnet import GATE_PORT
 

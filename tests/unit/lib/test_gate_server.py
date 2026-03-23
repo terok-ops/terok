@@ -15,22 +15,24 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from terok_sandbox.gate_server import (
-    _UNIT_VERSION,
+from terok_sandbox import (
     GateServerStatus,
-    _installed_unit_version,
-    _is_managed_server,
     check_units_outdated,
     ensure_server_reachable,
     get_server_status,
     install_systemd_units,
     is_daemon_running,
-    is_socket_active,
-    is_socket_installed,
     is_systemd_available,
     start_daemon,
     stop_daemon,
     uninstall_systemd_units,
+)
+from terok_sandbox.gate_server import (
+    _UNIT_VERSION,
+    _installed_unit_version,
+    _is_managed_server,
+    is_socket_active,
+    is_socket_installed,
 )
 
 from tests.testfs import FAKE_GATE_DIR, FAKE_STATE_DIR, NONEXISTENT_DIR
