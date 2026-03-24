@@ -7,10 +7,9 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
-import pytest
+from terok_agent import ImageSet
 
 from terok.lib.core.config import build_root
-from terok.lib.core.images import base_dev_image
 from terok.lib.orchestration.docker import build_images, generate_dockerfiles
 from tests.test_utils import mock_git_config, project_env
 
@@ -32,6 +31,13 @@ def docker_project(project_id: str, *, security_class: str = "online") -> Iterat
         yield env
 
 
+def _mock_base_images(base_image: str = "ubuntu:24.04") -> ImageSet:
+    """Return a mock ImageSet matching the default base image."""
+    from terok_agent.build import l0_image_tag, l1_image_tag
+
+    return ImageSet(l0=l0_image_tag(base_image), l1=l1_image_tag(base_image))
+
+
 def build_commands(
     project_id: str,
     *,
@@ -39,7 +45,11 @@ def build_commands(
     image_exists_side_effect: Callable[[str], bool] | None = None,
     **build_kwargs: object,
 ) -> list[list[str]]:
-    """Run ``build_images`` with Podman mocked and return captured build commands."""
+    """Run ``build_images`` with Podman mocked and return captured L2 build commands.
+
+    L0+L1 builds are mocked via ``build_base_images`` — only L2 podman
+    commands are captured.
+    """
     commands: list[list[str]] = []
 
     def mock_run(cmd: list[str], **_kwargs: object) -> Mock:
@@ -55,6 +65,10 @@ def build_commands(
     with (
         patch("subprocess.run", side_effect=mock_run),
         patch("terok.lib.orchestration.docker._check_podman_available"),
+        patch(
+            "terok.lib.orchestration.docker.build_base_images",
+            return_value=_mock_base_images(),
+        ),
         image_exists_patch,
         mock_git_config(),
     ):
@@ -102,6 +116,58 @@ def test_generate_dockerfiles_uses_gatekeeping_code_repo() -> None:
         assert f'CODE_REPO="{UPSTREAM_URL}"' not in content
 
 
+def test_l2_includes_user_snippet_inline() -> None:
+    """L2 renders inline user docker snippet into the Dockerfile."""
+    yaml = (
+        "project:\n  id: proj_snippet\n"
+        "git:\n  upstream_url: https://example.com/repo.git\n"
+        "docker:\n  user_snippet_inline: RUN apt-get install -y fortran-compiler\n"
+    )
+    with project_env(yaml, project_id="proj_snippet"):
+        generate_dockerfiles("proj_snippet")
+        content = (build_root() / "proj_snippet" / "L2.Dockerfile").read_text(encoding="utf-8")
+        assert "RUN apt-get install -y fortran-compiler" in content
+
+
+def test_l2_includes_user_snippet_from_file() -> None:
+    """L2 renders user docker snippet from a file reference."""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".dockerfile", delete=False) as f:
+        f.write("RUN pip install numpy\n")
+        snippet_path = f.name
+
+    try:
+        yaml = (
+            "project:\n  id: proj_snippet_file\n"
+            "git:\n  upstream_url: https://example.com/repo.git\n"
+            f"docker:\n  user_snippet_file: {snippet_path}\n"
+        )
+        with project_env(yaml, project_id="proj_snippet_file"):
+            generate_dockerfiles("proj_snippet_file")
+            content = (build_root() / "proj_snippet_file" / "L2.Dockerfile").read_text(
+                encoding="utf-8"
+            )
+            assert "RUN pip install numpy" in content
+    finally:
+        Path(snippet_path).unlink(missing_ok=True)
+
+
+def test_l2_missing_snippet_file_exits() -> None:
+    """Missing user_snippet_file raises SystemExit."""
+    import pytest
+
+    yaml = (
+        "project:\n  id: proj_bad_snippet\n"
+        "git:\n  upstream_url: https://example.com/repo.git\n"
+        "docker:\n  user_snippet_file: /nonexistent/snippet.dockerfile\n"
+    )
+    with project_env(yaml, project_id="proj_bad_snippet"):
+        with pytest.raises(SystemExit, match="not found"):
+            generate_dockerfiles("proj_bad_snippet")
+
+
 def test_l1_cli_pipx_inject_has_env_vars() -> None:
     """The CLI image sets the expected pipx env vars and package installation lines."""
     with docker_project("proj_pipx_test"):
@@ -115,88 +181,35 @@ def test_l1_cli_pipx_inject_has_env_vars() -> None:
         assert "pipx inject mistral-vibe mistralai" in content
 
 
-@pytest.mark.parametrize(
-    ("project_id", "capture_kwargs", "expected_count", "expected_suffixes"),
-    [
-        pytest.param(
-            "proj_build_test",
-            {"image_exists": True},
-            1,
-            ["L2.Dockerfile"],
-            id="l2-only-when-base-exists",
-        ),
-        pytest.param(
-            "proj_build_auto",
-            {"image_exists": False},
-            3,
-            [
-                "L0.Dockerfile",
-                "L1.cli.Dockerfile",
-                "L2.Dockerfile",
-            ],
-            id="auto-detect-missing-base",
-        ),
-    ],
-)
-def test_build_images_layer_selection(
-    project_id: str,
-    capture_kwargs: dict[str, object],
-    expected_count: int,
-    expected_suffixes: list[str],
-) -> None:
-    """Image building selects the expected Dockerfile layers."""
-    with docker_project(project_id):
-        generate_dockerfiles(project_id)
-        commands = build_commands(project_id, **capture_kwargs)
+def test_build_images_builds_l2() -> None:
+    """build_images always produces an L2 podman build command."""
+    with docker_project("proj_build_l2"):
+        generate_dockerfiles("proj_build_l2")
+        commands = build_commands("proj_build_l2")
 
-    assert len(commands) == expected_count
-    dockerfile_names = [
-        next(part for part in cmd if part.endswith(".Dockerfile")).rsplit("/", 1)[-1]
-        for cmd in commands
-    ]
-    assert dockerfile_names == expected_suffixes
+    # L0+L1 are delegated to terok-agent (mocked); only L2 commands appear
+    assert len(commands) == 1
+    assert commands[0][0] == "podman"
+    l2_dockerfile = next(p for p in commands[0] if p.endswith("L2.Dockerfile"))
+    assert "L2.Dockerfile" in l2_dockerfile
 
 
-def test_build_images_rebuild_agents_builds_all_layers() -> None:
-    """``rebuild_agents=True`` rebuilds the full stack and busts the agent cache."""
-    with docker_project("proj_build_agents"):
-        generate_dockerfiles("proj_build_agents")
-        commands = build_commands("proj_build_agents", image_exists=True, rebuild_agents=True)
+def test_build_images_include_dev_adds_second_l2() -> None:
+    """include_dev produces two L2 commands: cli + dev."""
+    with docker_project("proj_build_dev"):
+        generate_dockerfiles("proj_build_dev")
+        commands = build_commands("proj_build_dev", include_dev=True)
 
-    assert len(commands) == 3
-    assert "AGENT_CACHE_BUST" in " ".join(commands[1])
-
-
-@pytest.mark.parametrize(
-    ("build_kwargs", "required_tokens"),
-    [
-        pytest.param({"full_rebuild": True}, ["--no-cache", "--pull=always"], id="full-rebuild"),
-        pytest.param({"include_dev": True}, [":l2-dev"], id="include-dev"),
-    ],
-)
-def test_build_images_applies_expected_flags(
-    build_kwargs: dict[str, object],
-    required_tokens: list[str],
-) -> None:
-    """Build flags are passed through to the rendered Podman build commands."""
-    with docker_project("proj_build_flags"):
-        generate_dockerfiles("proj_build_flags")
-        commands = build_commands("proj_build_flags", image_exists=True, **build_kwargs)
-
-    rendered = [" ".join(cmd) for cmd in commands]
-    assert any(all(token in cmd for token in required_tokens) for cmd in rendered)
+    assert len(commands) == 2
+    targets = [" ".join(cmd) for cmd in commands]
+    assert any(":l2-cli" in t for t in targets)
+    assert any(":l2-dev" in t for t in targets)
 
 
-def test_build_images_auto_detects_missing_l1() -> None:
-    """Missing L1 layers trigger a rebuild of the whole stack."""
-    project_id = "proj_build_l1miss"
-    l0_image = base_dev_image("ubuntu:24.04")
+def test_build_images_full_rebuild_passes_no_cache() -> None:
+    """full_rebuild passes --no-cache to L2 build."""
+    with docker_project("proj_build_full"):
+        generate_dockerfiles("proj_build_full")
+        commands = build_commands("proj_build_full", full_rebuild=True)
 
-    def l0_exists_only(image: str) -> bool:
-        return image == l0_image
-
-    with docker_project(project_id):
-        generate_dockerfiles(project_id)
-        commands = build_commands(project_id, image_exists_side_effect=l0_exists_only)
-
-    assert len(commands) == 3
+    assert any("--no-cache" in cmd for cmd in commands[0])

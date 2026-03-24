@@ -1,24 +1,33 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dockerfile generation, image building, and build-context hashing."""
+"""Dockerfile generation, image building, and build-context hashing.
+
+L0 (base dev) and L1 (agent CLI) image builds are delegated to
+``terok_agent.build``.  This module owns L2 (project customisation)
+rendering and the project-level build orchestration that ties all
+three layers together.
+"""
 
 import hashlib
+import shlex
 import shutil
 import subprocess
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
-from terok_agent import stage_scripts, stage_tmux_config, stage_toad_agents
+from terok_agent import (
+    BuildError,
+    build_base_images,
+    l0_image_tag,
+    stage_scripts,
+    stage_tmux_config,
+    stage_toad_agents,
+)
 
 from ..core.config import build_root
-from ..core.images import (
-    agent_cli_image,
-    base_dev_image,
-    project_cli_image,
-    project_dev_image,
-)
+from ..core.images import project_cli_image, project_dev_image
 from ..core.project_model import ProjectConfig
 from ..core.projects import effective_ssh_key_name, load_project
 from ..util.fs import ensure_dir
@@ -33,15 +42,15 @@ def _check_podman_available() -> None:
 
 
 def _image_exists(image: str) -> bool:
-    """Check if a container image exists locally.
-
-    Assumes podman is available (call ``_check_podman_available`` first).
-    """
+    """Check if a container image exists locally."""
     result = subprocess.run(
         ["podman", "image", "exists", image],
         capture_output=True,
     )
     return result.returncode == 0
+
+
+# ---------- Hashing ----------
 
 
 def _hash_traversable_tree(root) -> str:
@@ -78,6 +87,9 @@ def _tmux_config_hash() -> str:
     return _hash_traversable_tree(tmux_root)
 
 
+# ---------- L2 (project) Dockerfile ----------
+
+
 def _resolve_user_snippet(project: ProjectConfig) -> str:
     """Resolve the docker user snippet from project config (inline or file).
 
@@ -102,14 +114,16 @@ def _resolve_user_snippet(project: ProjectConfig) -> str:
     return ""
 
 
-def _render_dockerfiles(project) -> dict[str, str]:
-    """Render all Dockerfile templates for *project* and return name->content mapping."""
+def _render_l2(project: ProjectConfig) -> str:
+    """Render the L2 (project customisation) Dockerfile.
+
+    L2 only contains the user docker snippet wrapped in USER root/dev.
+    The three env vars previously baked here (CODE_REPO, SSH_KEY_NAME,
+    GIT_BRANCH) are now runtime-only — set by environment.py at container
+    launch time.
+    """
     tmpl_pkg = resources.files("terok") / "resources" / "templates"
-    templates = {
-        "L0.Dockerfile": (tmpl_pkg / "l0.dev.Dockerfile.template").read_text(),
-        "L1.cli.Dockerfile": (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text(),
-        "L2.Dockerfile": (tmpl_pkg / "l2.project.Dockerfile.template").read_text(),
-    }
+    template = (tmpl_pkg / "l2.project.Dockerfile.template").read_text()
 
     ssh_key_name = effective_ssh_key_name(project, key_type="ed25519")
 
@@ -128,18 +142,33 @@ def _render_dockerfiles(project) -> dict[str, str]:
         "USER_SNIPPET": _resolve_user_snippet(project),
     }
 
-    rendered = {}
-    for name, content in templates.items():
-        for k, v in variables.items():
-            content = content.replace(f"{{{{{k}}}}}", str(v))
-        rendered[name] = content
-    return rendered
+    for k, v in variables.items():
+        template = template.replace(f"{{{{{k}}}}}", str(v))
+    return template
+
+
+def _render_all_dockerfiles(project: ProjectConfig) -> dict[str, str]:
+    """Render all Dockerfile templates for *project*.
+
+    L0 and L1 are rendered by terok-agent; L2 is rendered locally.
+    Returns name→content mapping for the build context.
+    """
+    from terok_agent.build import render_l0, render_l1
+
+    return {
+        "L0.Dockerfile": render_l0(project.docker_base_image),
+        "L1.cli.Dockerfile": render_l1(l0_image_tag(project.docker_base_image)),
+        "L2.Dockerfile": _render_l2(project),
+    }
+
+
+# ---------- Build context hash ----------
 
 
 def build_context_hash(project_id: str) -> str:
     """Compute a SHA-256 digest of the full build context for *project_id*."""
     project = load_project(project_id)
-    rendered = _render_dockerfiles(project)
+    rendered = _render_all_dockerfiles(project)
 
     hasher = hashlib.sha256()
     hasher.update(f"base_image={project.docker_base_image}".encode())
@@ -159,7 +188,7 @@ def dockerfiles_match_templates(project_id: str) -> bool:
     """Return True if generated Dockerfiles match current templates."""
     project = load_project(project_id)
     out_dir = build_root() / project.id
-    rendered = _render_dockerfiles(project)
+    rendered = _render_all_dockerfiles(project)
     for name, expected in rendered.items():
         path = out_dir / name
         if not path.is_file():
@@ -169,13 +198,16 @@ def dockerfiles_match_templates(project_id: str) -> bool:
     return True
 
 
+# ---------- Dockerfile generation ----------
+
+
 def generate_dockerfiles(project_id: str) -> None:
     """Render and write Dockerfiles and auxiliary scripts for *project_id*."""
     project = load_project(project_id)
     out_dir = build_root() / project.id
     ensure_dir(out_dir)
 
-    rendered = _render_dockerfiles(project)
+    rendered = _render_all_dockerfiles(project)
     for name, content in rendered.items():
         (out_dir / name).write_text(content)
 
@@ -198,6 +230,9 @@ def generate_dockerfiles(project_id: str) -> None:
     print(f"Generated Dockerfiles in {out_dir}")
 
 
+# ---------- Image building ----------
+
+
 def build_images(
     project_id: str,
     include_dev: bool = False,
@@ -206,99 +241,64 @@ def build_images(
 ) -> None:
     """Build container images for a project.
 
-    Args:
-        project_id: The project to build images for
-        include_dev: Also build a dev image from L0 (tagged as <project>:l2-dev)
-        rebuild_agents: Rebuild from L0 with fresh agents (L1 cache bust)
-        full_rebuild: Rebuild from L0 with --no-cache and --pull=always
-    """
-    import time
+    L0+L1 builds are delegated to ``terok_agent.build_base_images()``.
+    This function handles L2 (project customisation) and ties the layers
+    together.
 
+    Args:
+        project_id: The project to build images for.
+        include_dev: Also build a dev image from L0 (tagged as <project>:l2-dev).
+        rebuild_agents: Rebuild L0+L1 with fresh agents (cache bust).
+        full_rebuild: Rebuild everything with ``--no-cache --pull=always``.
+    """
     _check_podman_available()
 
     project = load_project(project_id)
     base_image = project.docker_base_image
     stage_dir = build_root() / project.id
-    context_hash = build_context_hash(project_id)
 
-    l0 = stage_dir / "L0.Dockerfile"
-    l1_cli = stage_dir / "L1.cli.Dockerfile"
-    l2 = stage_dir / "L2.Dockerfile"
+    # Delegate L0+L1 to terok-agent (uses its own temp dir for build context)
+    try:
+        base_images = build_base_images(
+            base_image,
+            rebuild=rebuild_agents,
+            full_rebuild=full_rebuild,
+        )
+    except BuildError as e:
+        raise SystemExit(str(e)) from e
 
-    required = [l0, l1_cli, l2]
-    if not all(f.is_file() for f in required):
-        raise SystemExit("Dockerfiles are missing. Run 'terokctl generate <project>' first.")
-
-    context_dir = str(stage_dir)
-
-    l0_image = base_dev_image(base_image)
-    l1_cli_image = agent_cli_image(base_image)
+    l1_cli_image = base_images.l1
+    l0_image = base_images.l0
     l2_cli_image = project_cli_image(project.id)
     l2_dev_image = project_dev_image(project.id)
 
-    # Cache bust timestamp for agent installs
-    cache_bust = str(int(time.time()))
+    # Generate L2 build context (Dockerfile + staged resources)
+    generate_dockerfiles(project_id)
+    l2_path = stage_dir / "L2.Dockerfile"
 
-    def _build_cmd(
-        dockerfile: Path,
-        base_image_arg: str,
-        target_image: str,
-        *,
-        build_args: dict[str, str] | None = None,
-        labels: dict[str, str] | None = None,
-        pull: bool = False,
-    ) -> list[str]:
-        """Assemble the podman build command list for a single image stage."""
-        cmd = ["podman", "build", "-f", str(dockerfile)]
-        cmd += ["--build-arg", f"BASE_IMAGE={base_image_arg}"]
-        for k, v in (build_args or {}).items():
-            cmd += ["--build-arg", f"{k}={v}"]
-        for k, v in (labels or {}).items():
-            cmd += ["--label", f"{k}={v}"]
-        cmd += ["-t", target_image]
+    context_hash = build_context_hash(project_id)
+    context_dir = str(stage_dir)
+
+    def _build_l2(base_arg: str, target: str) -> None:
+        """Build one L2 image variant."""
+        cmd = ["podman", "build", "-f", str(l2_path)]
+        cmd += ["--build-arg", f"BASE_IMAGE={base_arg}"]
+        cmd += ["--label", f"terok.build_context_hash={context_hash}"]
+        cmd += ["-t", target]
         if full_rebuild:
             cmd.append("--no-cache")
-        if pull:
-            cmd.append("--pull=always")
         cmd.append(context_dir)
-        return cmd
-
-    cmds = []
-
-    # Auto-detect missing base layers and build them if needed
-    need_base_layers = rebuild_agents or full_rebuild
-    if not need_base_layers:
-        if not _image_exists(l0_image):
-            print(f"L0 image {l0_image} not found locally, will build all layers (L0+L1+L2).")
-            need_base_layers = True
-        elif not _image_exists(l1_cli_image):
-            print("L1 image not found locally, will build all layers (L0+L1+L2).")
-            need_base_layers = True
-
-    # Build L0 and L1 layers when needed
-    if need_base_layers:
-        cmds.append(_build_cmd(l0, base_image, l0_image, pull=full_rebuild))
-        cmds.append(
-            _build_cmd(
-                l1_cli,
-                l0_image,
-                l1_cli_image,
-                build_args={"AGENT_CACHE_BUST": cache_bust},
-            )
-        )
-
-    # Always build L2 project image
-    hash_label = {"terok.build_context_hash": context_hash}
-    cmds.append(_build_cmd(l2, l1_cli_image, l2_cli_image, labels=hash_label))
-
-    if include_dev:
-        cmds.append(_build_cmd(l2, l0_image, l2_dev_image, labels=hash_label))
-
-    for cmd in cmds:
-        print("$", " ".join(cmd))
+        print("$", shlex.join(cmd))
         try:
             subprocess.run(cmd, check=True)
         except FileNotFoundError:
             raise SystemExit("podman not found; please install podman")
         except subprocess.CalledProcessError as e:
             raise SystemExit(f"Build failed: {e}")
+
+    # Always build L2 CLI image (project layer on top of L1)
+    _build_l2(l1_cli_image, l2_cli_image)
+
+    # Optionally build L2 dev image (project layer on top of L0)
+    if include_dev:
+        _build_l2(l0_image, l2_dev_image)
