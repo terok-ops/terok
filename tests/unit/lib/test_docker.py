@@ -116,6 +116,58 @@ def test_generate_dockerfiles_uses_gatekeeping_code_repo() -> None:
         assert f'CODE_REPO="{UPSTREAM_URL}"' not in content
 
 
+def test_l2_includes_user_snippet_inline() -> None:
+    """L2 renders inline user docker snippet into the Dockerfile."""
+    yaml = (
+        "project:\n  id: proj_snippet\n"
+        "git:\n  upstream_url: https://example.com/repo.git\n"
+        "docker:\n  user_snippet_inline: RUN apt-get install -y fortran-compiler\n"
+    )
+    with project_env(yaml, project_id="proj_snippet"):
+        generate_dockerfiles("proj_snippet")
+        content = (build_root() / "proj_snippet" / "L2.Dockerfile").read_text(encoding="utf-8")
+        assert "RUN apt-get install -y fortran-compiler" in content
+
+
+def test_l2_includes_user_snippet_from_file() -> None:
+    """L2 renders user docker snippet from a file reference."""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".dockerfile", delete=False) as f:
+        f.write("RUN pip install numpy\n")
+        snippet_path = f.name
+
+    try:
+        yaml = (
+            "project:\n  id: proj_snippet_file\n"
+            "git:\n  upstream_url: https://example.com/repo.git\n"
+            f"docker:\n  user_snippet_file: {snippet_path}\n"
+        )
+        with project_env(yaml, project_id="proj_snippet_file"):
+            generate_dockerfiles("proj_snippet_file")
+            content = (build_root() / "proj_snippet_file" / "L2.Dockerfile").read_text(
+                encoding="utf-8"
+            )
+            assert "RUN pip install numpy" in content
+    finally:
+        Path(snippet_path).unlink(missing_ok=True)
+
+
+def test_l2_missing_snippet_file_exits() -> None:
+    """Missing user_snippet_file raises SystemExit."""
+    import pytest
+
+    yaml = (
+        "project:\n  id: proj_bad_snippet\n"
+        "git:\n  upstream_url: https://example.com/repo.git\n"
+        "docker:\n  user_snippet_file: /nonexistent/snippet.dockerfile\n"
+    )
+    with project_env(yaml, project_id="proj_bad_snippet"):
+        with pytest.raises(SystemExit, match="not found"):
+            generate_dockerfiles("proj_bad_snippet")
+
+
 def test_l1_cli_pipx_inject_has_env_vars() -> None:
     """The CLI image sets the expected pipx env vars and package installation lines."""
     with docker_project("proj_pipx_test"):

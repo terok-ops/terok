@@ -114,11 +114,6 @@ def _resolve_user_snippet(project: ProjectConfig) -> str:
     return ""
 
 
-def _has_user_snippet(project: ProjectConfig) -> bool:
-    """Return whether the project has a non-empty docker snippet."""
-    return bool(_resolve_user_snippet(project).strip())
-
-
 def _render_l2(project: ProjectConfig) -> str:
     """Render the L2 (project customisation) Dockerfile.
 
