@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING
 
 from terok_agent import (
     AgentConfigSpec,
-    podman_userns_args as _podman_userns_args,
     prepare_agent_config_dir,
     resolve_instructions,
     resolve_provider_value,
 )
+from terok_agent._util import podman_userns_args as _podman_userns_args
 from terok_sandbox import (
     down as _shield_down_impl,
     get_container_state,

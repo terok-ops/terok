@@ -10,6 +10,8 @@ from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
+from terok_agent import stage_scripts, stage_tmux_config, stage_toad_agents
+
 from ..core.config import build_root
 from ..core.images import (
     agent_cli_image,
@@ -42,65 +44,6 @@ def _image_exists(image: str) -> bool:
     return result.returncode == 0
 
 
-# ---------- Dockerfile gen & build ----------
-
-
-def _copy_package_tree(package: str, rel_path: str, dest: Path) -> None:
-    """Copy a directory tree from package resources to a filesystem path.
-
-    Uses importlib.resources Traversable API so it works from wheels/zip installs.
-    """
-    root = resources.files(package) / rel_path
-
-    def _recurse(src, dst: Path) -> None:
-        """Recursively copy a Traversable tree to a filesystem directory."""
-        dst.mkdir(parents=True, exist_ok=True)
-        for child in src.iterdir():
-            out = dst / child.name
-            if child.is_dir():
-                _recurse(child, out)
-            else:
-                out.parent.mkdir(parents=True, exist_ok=True)
-                out.write_bytes(child.read_bytes())
-
-    _recurse(root, dest)
-
-
-def _stage_scripts_into(dest: Path) -> None:
-    """Stage helper scripts from package resources into dest/scripts.
-
-    Single source of truth: terok/resources/scripts bundled in the wheel.
-    """
-    pkg_rel = "resources/scripts"
-    # Replace destination directory atomically-ish
-    if dest.exists():
-        shutil.rmtree(dest)
-    _copy_package_tree("terok", pkg_rel, dest)
-
-
-def _stage_toad_agents_into(dest: Path) -> None:
-    """Stage Toad agent TOML files from package resources into dest/toad-agents.
-
-    These describe custom ACP agents (Blablador, KISSKI, etc.) that are injected
-    into Toad's bundled agent directory at container startup.
-    """
-    pkg_rel = "resources/toad-agents"
-    if dest.exists():
-        shutil.rmtree(dest)
-    _copy_package_tree("terok", pkg_rel, dest)
-
-
-def _stage_tmux_config_into(dest: Path) -> None:
-    """Stage tmux config from package resources into dest/tmux.
-
-    Single source of truth: terok/resources/tmux bundled in the wheel.
-    """
-    pkg_rel = "resources/tmux"
-    if dest.exists():
-        shutil.rmtree(dest)
-    _copy_package_tree("terok", pkg_rel, dest)
-
-
 def _hash_traversable_tree(root) -> str:
     """Compute a SHA-256 digest over all files in a Traversable tree."""
     hasher = hashlib.sha256()
@@ -124,14 +67,14 @@ def _hash_traversable_tree(root) -> str:
 @lru_cache(maxsize=1)
 def _scripts_hash() -> str:
     """Return a cached SHA-256 hash of the bundled helper scripts."""
-    scripts_root = resources.files("terok") / "resources" / "scripts"
+    scripts_root = resources.files("terok_agent") / "resources" / "scripts"
     return _hash_traversable_tree(scripts_root)
 
 
 @lru_cache(maxsize=1)
 def _tmux_config_hash() -> str:
     """Return a cached SHA-256 hash of the bundled tmux configuration."""
-    tmux_root = resources.files("terok") / "resources" / "tmux"
+    tmux_root = resources.files("terok_agent") / "resources" / "tmux"
     return _hash_traversable_tree(tmux_root)
 
 
@@ -236,21 +179,19 @@ def generate_dockerfiles(project_id: str) -> None:
     for name, content in rendered.items():
         (out_dir / name).write_text(content)
 
-    # Stage auxiliary scripts into build context so Dockerfile COPY works.
+    # Stage auxiliary resources from terok-agent into build context.
     try:
-        _stage_scripts_into(out_dir / "scripts")
+        stage_scripts(out_dir / "scripts")
     except OSError as e:
         print(f"Warning: could not stage build scripts: {e}")
 
-    # Stage Toad agent TOML files for custom ACP agents.
     try:
-        _stage_toad_agents_into(out_dir / "toad-agents")
+        stage_toad_agents(out_dir / "toad-agents")
     except OSError as e:
         print(f"Warning: could not stage toad agent definitions: {e}")
 
-    # Stage tmux config for container login sessions.
     try:
-        _stage_tmux_config_into(out_dir / "tmux")
+        stage_tmux_config(out_dir / "tmux")
     except OSError as e:
         print(f"Warning: could not stage tmux config: {e}")
 
