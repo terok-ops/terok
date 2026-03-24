@@ -106,8 +106,8 @@ def shell_test_image(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     (build_dir / "L0.Dockerfile").write_text(l0_content)
 
     # Stage scripts and tmux config into the build context.
-    _copy_resource_tree("terok", "resources/scripts", build_dir / "scripts")
-    _copy_resource_tree("terok", "resources/tmux", build_dir / "tmux")
+    _copy_resource_tree("terok_agent", "resources/scripts", build_dir / "scripts")
+    _copy_resource_tree("terok_agent", "resources/tmux", build_dir / "tmux")
 
     # Build L0 from the real template.
     _podman_build(build_dir / "L0.Dockerfile", ITEST_L0_IMAGE, build_dir)

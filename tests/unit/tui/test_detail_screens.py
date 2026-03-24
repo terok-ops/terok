@@ -492,10 +492,10 @@ class TestScreenConstruction:
         # Stub query_one to return a mock OptionList
         mock_option_list = mock.Mock()
         screen.query_one = mock.Mock(return_value=mock_option_list)
-        event = make_key_event("2")
-        event.character = "2"
+        # Press "1" — selects the first agent (alphabetically), which is not "claude"
+        event = make_key_event("1")
+        event.character = "1"
         screen.on_key(event)
-        # Agent should have changed from default
         assert screen._selected_agent != "claude"
         event.stop.assert_called_once()
 
