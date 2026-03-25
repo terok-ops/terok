@@ -15,3 +15,5 @@ docs/ci_map.md
 
 /.idea
 .coverage
+plans.md
+.claude/settings.local.json
