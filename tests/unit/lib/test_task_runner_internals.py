@@ -384,9 +384,13 @@ class TestApplyUnrestrictedEnv:
 
     def test_sets_flag_and_auto_approve(self) -> None:
         """Injects TEROK_UNRESTRICTED and all agent auto-approve vars."""
+        from terok_agent import collect_all_auto_approve_env
+
         env: dict[str, str] = {}
         _apply_unrestricted_env(env)
 
         assert env["TEROK_UNRESTRICTED"] == "1"
-        # Should contain at least one auto-approve key from the agent registry
-        assert len(env) > 1
+        # Every canonical auto-approve key from the registry must be present
+        expected = collect_all_auto_approve_env()
+        for key, value in expected.items():
+            assert env[key] == value, f"missing or wrong auto-approve key {key}"
