@@ -72,8 +72,8 @@ def _check_gate_server() -> _CheckResult:
     if status.mode == "systemd":
         return ("error", label, "socket installed but not active")
     if is_systemd_available():
-        return ("warn", label, "not running — run 'terokctl gate-server install'")
-    return ("warn", label, "not running — run 'terokctl gate-server start'")
+        return ("warn", label, "not running — run 'terokctl gate start'")
+    return ("warn", label, "not running — run 'terokctl gate start'")
 
 
 def _check_task_hook(

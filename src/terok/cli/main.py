@@ -14,7 +14,8 @@ import argparse
 
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
-from .commands import completions, gate_server, image, info, project, setup, shield, sickbay, task
+from .commands import completions, image, info, project, setup, shield, sickbay, task
+from .wiring import wire_dispatch, wire_group
 
 # Optional: bash completion via argcomplete
 try:
@@ -23,12 +24,13 @@ except ImportError:  # pragma: no cover - optional dep
     argcomplete = None  # type: ignore
 
 # Dispatch chain — tried in order; first True wins.
+# wire_dispatch handles commands mounted via wire_group (agent, gate).
 _DISPATCHERS = [
     task.dispatch,
     project.dispatch,
     setup.dispatch,
     image.dispatch,
-    gate_server.dispatch,
+    wire_dispatch,
     shield.dispatch,
     sickbay.dispatch,
     info.dispatch,
@@ -51,6 +53,10 @@ def main() -> None:
             "  1. Setup:  terokctl project-init <project_id>\n"
             "  2. Work:   terokctl task start <project_id>         (new CLI task)\n"
             "  3. Login:  terokctl login <project_id> <task_id>\n"
+            "\n"
+            "Standalone agent (no project):\n"
+            "  terokctl agent run claude .          (headless against cwd)\n"
+            "  terokctl agent run claude . -p 'fix' (with prompt)\n"
             "\n"
             "Step-by-step (order of operations):\n"
             "  Online (HTTPS): generate → build → gate-sync (optional)"
@@ -87,11 +93,17 @@ def main() -> None:
     project.register(sub)
     setup.register(sub)
     image.register(sub)
-    gate_server.register(sub)
     shield.register(sub)
     sickbay.register(sub)
     info.register(sub)
     completions.register(sub)
+
+    # Mount sub-package command registries under scoped prefixes
+    from terok_agent import AGENT_COMMANDS
+    from terok_sandbox import GATE_COMMANDS
+
+    wire_group(sub, "agent", AGENT_COMMANDS, help="Agent container commands")
+    wire_group(sub, "gate", GATE_COMMANDS, help="Gate server commands")
 
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration

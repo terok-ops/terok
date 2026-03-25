@@ -38,7 +38,7 @@ from tests.testgate import OUTDATED_UNITS_MESSAGE, make_gate_server_status
             None,
             True,
             1,
-            ["WARN", "gate-server install"],
+            ["WARN", "gate start"],
             id="not-running-with-systemd",
         ),
         pytest.param(
@@ -46,7 +46,7 @@ from tests.testgate import OUTDATED_UNITS_MESSAGE, make_gate_server_status
             None,
             False,
             1,
-            ["WARN", "gate-server start"],
+            ["WARN", "gate start"],
             id="not-running-without-systemd",
         ),
         pytest.param(
