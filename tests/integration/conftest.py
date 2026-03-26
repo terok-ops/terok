@@ -194,7 +194,13 @@ def _pull_image() -> None:
         return
     subprocess.run(
         [
-            "podman", "build", "-t", PODMAN_TEST_IMAGE, "-f", "-", ".",
+            "podman",
+            "build",
+            "-t",
+            PODMAN_TEST_IMAGE,
+            "-f",
+            "-",
+            ".",
         ],
         input=f"FROM {PODMAN_BASE_IMAGE}\nRUN apk add --no-cache git\n",
         check=True,

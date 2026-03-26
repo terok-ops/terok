@@ -47,10 +47,12 @@ def _host_podman_version() -> tuple[int, ...]:
     """Return the host podman version as a tuple of ints."""
     r = subprocess.run(
         ["podman", "version", "--format", "{{.Client.Version}}"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     parts: list[int] = []
-    for seg in (r.stdout.strip().split(".") if r.returncode == 0 else []):
+    for seg in r.stdout.strip().split(".") if r.returncode == 0 else []:
         digits = "".join(c for c in seg if c.isdigit())
         if digits:
             parts.append(int(digits))
@@ -68,10 +70,15 @@ def _strip_zone_id_nameservers(container: str) -> None:
         return
     subprocess.run(
         [
-            "podman", "exec", container, "sh", "-c",
+            "podman",
+            "exec",
+            container,
+            "sh",
+            "-c",
             "grep -v '^nameserver.*%' /etc/resolv.conf > /tmp/rc && cat /tmp/rc > /etc/resolv.conf",
         ],
-        capture_output=True, timeout=10,
+        capture_output=True,
+        timeout=10,
     )
 
 
