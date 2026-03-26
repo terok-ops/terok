@@ -36,6 +36,7 @@ from tests.testfs import CONFIG_ROOT_NAME, HOME_DIR_NAME, STATE_ROOT_NAME, XDG_C
 from tests.testnet import ALLOWED_TARGET_DOMAIN, ALLOWED_TARGET_HTTP, GATE_PORT, TEST_IP
 
 from .helpers import (
+    PODMAN_BASE_IMAGE,
     PODMAN_CONTAINER_PREFIX,
     PODMAN_TEST_IMAGE,
     TerokIntegrationEnv,
@@ -182,11 +183,24 @@ class MockRunner:
 
 @pytest.fixture(scope="session")
 def _pull_image() -> None:
-    """Pull the podman integration image once per test session."""
+    """Build the podman integration test image once per session.
+
+    Extends Alpine with git so shielded-container tests can clone
+    without needing outbound access to the Alpine package repos.
+    """
     if not _has("podman"):
         pytest.skip("podman not installed")
-    if not _image_available():
-        subprocess.run(["podman", "pull", PODMAN_TEST_IMAGE], check=True, timeout=120)
+    if _image_available():
+        return
+    subprocess.run(
+        [
+            "podman", "build", "-t", PODMAN_TEST_IMAGE, "-f", "-", ".",
+        ],
+        input=f"FROM {PODMAN_BASE_IMAGE}\nRUN apk add --no-cache git\n",
+        check=True,
+        text=True,
+        timeout=120,
+    )
 
 
 @pytest.fixture(scope="session")

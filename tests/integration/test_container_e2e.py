@@ -193,18 +193,6 @@ def shielded_e2e(_pull_image: None, gate_env: dict) -> Iterator[ShieldedContaine
         # DNS tools.  Fixed upstream: https://github.com/containers/common/pull/2233
         _strip_zone_id_nameservers(name)
 
-        # Install git + DNS tools in the alpine container
-        apk_result = subprocess.run(
-            ["podman", "exec", name, "apk", "add", "--no-cache", "git", "bind-tools"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if apk_result.returncode != 0:
-            raise RuntimeError(
-                f"apk add failed (exit {apk_result.returncode}):\n"
-                f"  stderr: {apk_result.stderr.strip()}"
-            )
         yield ShieldedContainer(name=name, shield=shield)
     finally:
         try:
@@ -246,7 +234,7 @@ class TestShieldedContainerLifecycle:
 
     def test_dns_resolves(self, shielded_e2e: ShieldedContainer) -> None:
         """DNS resolution works inside a shielded container."""
-        result = exec_in_container(shielded_e2e.name, "nslookup", "example.com", timeout=10)
+        result = exec_in_container(shielded_e2e.name, "getent", "hosts", "example.com", timeout=10)
         assert result.returncode == 0, f"DNS resolution failed: {result.stderr}"
 
     def test_allowed_domain_reachable(self, shielded_e2e: ShieldedContainer) -> None:

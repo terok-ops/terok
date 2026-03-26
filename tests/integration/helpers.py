@@ -19,7 +19,8 @@ SRC_DIR = ROOT / "src"
 PROJECT_FILENAME = "project.yml"
 WORKSPACE_DIRNAME = "workspace-dangerous"
 NEW_TASK_MARKER = ".new-task-marker"
-PODMAN_TEST_IMAGE = "docker.io/library/alpine:latest"
+PODMAN_BASE_IMAGE = "docker.io/library/alpine:latest"
+PODMAN_TEST_IMAGE = "terok-itest:latest"
 PODMAN_CONTAINER_PREFIX = "terok-itest"
 PODMAN_SLEEP_COMMAND = ("sleep", "300")
 
