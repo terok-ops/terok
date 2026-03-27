@@ -61,8 +61,9 @@ class TestCredentialsDispatch:
         args = argparse.Namespace(cmd="task")
         assert dispatch(args) is False
 
+    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=False)
     @patch(f"{_MOD}.get_proxy_status")
-    def test_dispatch_status(self, mock_status, capsys) -> None:
+    def test_dispatch_status(self, mock_status, mock_sd, capsys) -> None:
         """'credentials status' prints status info."""
         mock_status.return_value = _make_status()
         parser = _make_parser()
@@ -109,9 +110,9 @@ class TestCredentialsDispatch:
         assert dispatch(args) is True
         assert "not running" in capsys.readouterr().out
 
-    @patch("terok_sandbox.install_proxy_systemd", create=True)
+    @patch(f"{_MOD}.install_proxy_systemd")
     @patch("terok_agent.ensure_proxy_routes", create=True)
-    @patch("terok_sandbox.is_proxy_systemd_available", create=True, return_value=True)
+    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=True)
     def test_dispatch_install(self, mock_sd, mock_routes, mock_install, capsys) -> None:
         """'credentials install' installs systemd units."""
         parser = _make_parser()
@@ -120,7 +121,7 @@ class TestCredentialsDispatch:
         mock_install.assert_called_once()
         assert "installed" in capsys.readouterr().out
 
-    @patch("terok_sandbox.is_proxy_systemd_available", create=True, return_value=False)
+    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=False)
     def test_dispatch_install_no_systemd(self, mock_sd) -> None:
         """'credentials install' fails without systemd."""
         parser = _make_parser()
@@ -128,8 +129,8 @@ class TestCredentialsDispatch:
         with pytest.raises(SystemExit):
             dispatch(args)
 
-    @patch("terok_sandbox.uninstall_proxy_systemd", create=True)
-    @patch("terok_sandbox.is_proxy_systemd_available", create=True, return_value=True)
+    @patch(f"{_MOD}.uninstall_proxy_systemd")
+    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=True)
     def test_dispatch_uninstall(self, mock_sd, mock_uninstall, capsys) -> None:
         """'credentials uninstall' removes systemd units."""
         parser = _make_parser()

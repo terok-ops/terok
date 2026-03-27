@@ -15,11 +15,13 @@ import sys
 from collections.abc import Callable
 
 from terok_sandbox import (
+    install_proxy_systemd,
     install_systemd_units,
     start_daemon,
     start_proxy,
     stop_daemon,
     stop_proxy,
+    uninstall_proxy_systemd,
     uninstall_systemd_units,
 )
 
@@ -570,7 +572,6 @@ class ProjectActionsMixin:
     async def _action_proxy_install(self) -> None:
         """Install systemd socket activation for the credential proxy."""
         from terok_agent import ensure_proxy_routes
-        from terok_sandbox import install_proxy_systemd
 
         def _install() -> None:
             ensure_proxy_routes()
@@ -583,8 +584,6 @@ class ProjectActionsMixin:
 
     async def _action_proxy_uninstall(self) -> None:
         """Uninstall credential proxy systemd units."""
-        from terok_sandbox import uninstall_proxy_systemd
-
         await self._run_suspended(
             uninstall_proxy_systemd,
             success_msg="Credential proxy systemd units removed",
