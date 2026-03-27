@@ -256,7 +256,7 @@ def _credential_proxy_env_and_volumes(
         db.close()
 
     env: dict[str, str] = {}
-    volumes: list[str] = [f"{cfg.proxy_socket_path}:/run/terok/credential-proxy.sock"]
+    volumes: list[str] = [f"{cfg.proxy_socket_path}:/run/terok/credential-proxy.sock:z"]
 
     registry = get_registry()
     for name, route in registry.proxy_routes.items():
