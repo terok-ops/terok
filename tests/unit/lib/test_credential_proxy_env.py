@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pytest import CaptureFixture
 
 
 @pytest.fixture()
@@ -124,7 +125,7 @@ class TestCredentialProxyEnv:
         assert "ANTHROPIC_API_KEY" not in env
 
     @pytest.mark.usefixtures("_enable_proxy")
-    def test_leaked_credentials_warning(self, tmp_path: Path, capsys) -> None:
+    def test_leaked_credentials_warning(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
         """Leaked credential files in shared mounts trigger a stderr warning."""
         from terok_sandbox import CredentialDB
 
