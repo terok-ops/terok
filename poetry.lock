@@ -2569,13 +2569,14 @@ develop = false
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "10c36c8"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "f7d8b38"}
+tomli-w = ">=1.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "4a349ee"
-resolved_reference = "4a349ee6c7d5f6a10a0693ca1174cfd3394b74d9"
+reference = "68bd216"
+resolved_reference = "68bd216dbf5a0d0009249b08279d8252bb5259dc"
 
 [[package]]
 name = "terok-sandbox"
@@ -2595,8 +2596,8 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "10c36c8"
-resolved_reference = "10c36c86d4035df43c214a3ac34f592bcde5578e"
+reference = "f7d8b38"
+resolved_reference = "f7d8b3853359bb0de38313d921f2afefb0c1c5f3"
 
 [[package]]
 name = "terok-shield"
@@ -2741,7 +2742,7 @@ version = "1.2.0"
 description = "A lil' TOML writer"
 optional = false
 python-versions = ">=3.9"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90"},
     {file = "tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021"},
@@ -3085,4 +3086,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "8fa407daadd145843cea0cf6930ec582760b5cc8b96962a3bc4da5342dc491fc"
+content-hash = "9d460f50538592f58402b6a539cf4173af4b388c0ad328c8edbc8910383af566"
