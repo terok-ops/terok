@@ -2563,19 +2563,20 @@ description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_agent-0.0.15-py3-none-any.whl", hash = "sha256:60721fea7e47c8e67c4920e1d0041da5921696c8abe84d3b68fc37fedeefea98"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.16/terok_sandbox-0.0.16-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.16/terok_sandbox-0.0.16-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.15/terok_agent-0.0.15-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-agent.git"
+reference = "381c74d0407c62726231f924798ef7163fb2dc42"
+resolved_reference = "381c74d0407c62726231f924798ef7163fb2dc42"
 
 [[package]]
 name = "terok-sandbox"
@@ -3084,4 +3085,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "87d778cdb50c0cd80c994c031e6bacebae2f10743dc159c48febff39e519665c"
+content-hash = "67d104084a1cb5b1e09a87b236d2f9923e4db3c2b690a92e63aafe51817a1b3d"
