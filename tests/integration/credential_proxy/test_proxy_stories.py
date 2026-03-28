@@ -11,8 +11,6 @@ Stories use real sqlite DBs, real aiohttp proxy servers (via TestServer),
 and real route configs generated from the YAML registry.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -62,7 +60,7 @@ class TestStoryAuthThroughProxy:
         db_path = tmp_path / "proxy" / "credentials.db"
         db = CredentialDB(db_path)
         db.store_credential("default", "vibe", {"type": "api_key", "key": "real-mistral-key"})
-        phantom = db.create_proxy_token("proj", "task-1", "default")
+        phantom = db.create_proxy_token("proj", "task-1", "default", "vibe")
         db.close()
 
         # 2. Write routes (simulates registry.generate_routes_json())
@@ -136,7 +134,7 @@ class TestStoryAuthThroughProxy:
                 "refresh_token": "rt-refresh",
             },
         )
-        phantom = db.create_proxy_token("proj", "task-1", "default")
+        phantom = db.create_proxy_token("proj", "task-1", "default", "claude")
         db.close()
 
         # 2. Routes with dynamic auth
@@ -194,7 +192,7 @@ class TestStoryTokenRevocation:
         db_path = tmp_path / "proxy" / "credentials.db"
         db = CredentialDB(db_path)
         db.store_credential("default", "vibe", {"type": "api_key", "key": "k"})
-        phantom = db.create_proxy_token("proj", "task-1", "default")
+        phantom = db.create_proxy_token("proj", "task-1", "default", "vibe")
 
         upstream = TestServer(_make_upstream())
         await upstream.start_server()
@@ -268,8 +266,7 @@ class TestStoryEnvWiring:
         # All stored providers get phantom tokens
         assert "ANTHROPIC_API_KEY" in env
         assert "ANTHROPIC_BASE_URL" in env
-        # gh doesn't have phantom_env in its YAML, so no env var for it
-        # but the proxy socket is still mounted
-        assert any("credential-proxy.sock" in v for v in volumes)
+        # TCP transport — no socket mount needed
+        assert volumes == []
         # Phantom token is a 32-char hex string
         assert len(env["ANTHROPIC_API_KEY"]) == 32

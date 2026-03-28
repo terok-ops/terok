@@ -10,8 +10,6 @@ These tests create real sqlite DBs and verify the output matches
 what a task container would receive.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -57,14 +55,14 @@ class TestProxyEnvIntegration:
         # Claude phantom token
         assert "ANTHROPIC_API_KEY" in env
         assert len(env["ANTHROPIC_API_KEY"]) == 32
-        # Claude base URL override
+        # Claude base URL override (TCP transport via host.containers.internal)
         assert "ANTHROPIC_BASE_URL" in env
-        assert "credential-proxy.sock/claude" in env["ANTHROPIC_BASE_URL"]
-        # Vibe phantom token (same token — one per task, shared across providers)
+        assert "host.containers.internal" in env["ANTHROPIC_BASE_URL"]
+        # Vibe phantom token (per-provider — distinct from Claude's)
         assert "MISTRAL_API_KEY" in env
-        assert env["MISTRAL_API_KEY"] == env["ANTHROPIC_API_KEY"]
-        # Socket mounted
-        assert any("credential-proxy.sock" in v for v in volumes)
+        assert len(env["MISTRAL_API_KEY"]) == 32
+        # TCP transport — no socket volume mounts
+        assert volumes == []
 
     def test_unstored_providers_excluded(self, tmp_path: Path) -> None:
         """Providers without stored credentials get no phantom tokens."""

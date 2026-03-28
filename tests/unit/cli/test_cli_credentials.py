@@ -1,144 +1,73 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the ``terokctl credentials`` CLI subcommand."""
-
-from __future__ import annotations
+"""Tests for the ``terokctl credential-proxy`` CLI and ``credential-proxy-serve``."""
 
 import argparse
+import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from terok.cli.commands.credentials import dispatch, register
-from tests.testfs import MOCK_BASE
-
-MOCK_PROXY_SOCKET = MOCK_BASE / "run" / "credential-proxy.sock"
-MOCK_PROXY_DB = MOCK_BASE / "proxy" / "credentials.db"
-MOCK_PROXY_ROUTES = MOCK_BASE / "proxy" / "routes.json"
-
-_MOD = "terok.cli.commands.credentials"
 
 
-def _make_parser() -> argparse.ArgumentParser:
-    """Build a minimal parser with the credentials subcommand registered."""
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="cmd")
-    register(sub)
-    return parser
+class TestCredentialProxyServeRegister:
+    """Verify credential-proxy-serve registration."""
+
+    def test_serve_registered(self) -> None:
+        """credential-proxy-serve is parseable as a top-level command."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        register(sub)
+        args = parser.parse_args(["credential-proxy-serve"])
+        assert args.cmd == "credential-proxy-serve"
 
 
-def _make_status(*, running: bool = False, mode: str = "none") -> MagicMock:
-    """Build a proxy status mock."""
-    status = MagicMock()
-    status.mode = mode
-    status.running = running
-    status.socket_path = MOCK_PROXY_SOCKET
-    status.db_path = MOCK_PROXY_DB
-    status.routes_path = MOCK_PROXY_ROUTES
-    status.routes_configured = 3
-    status.credentials_stored = ("claude", "gh")
-    return status
-
-
-class TestCredentialsRegister:
-    """Verify subcommand registration."""
-
-    def test_credentials_subcommands_registered(self) -> None:
-        """All credentials subcommands are parseable."""
-        parser = _make_parser()
-        for sub in ("install", "uninstall", "start", "stop", "status"):
-            args = parser.parse_args(["credentials", sub])
-            assert args.cmd == "credentials"
-            assert args.credentials_cmd == sub
-
-
-class TestCredentialsDispatch:
-    """Verify dispatch routing."""
+class TestCredentialProxyServeDispatch:
+    """Verify serve dispatch routing."""
 
     def test_dispatch_ignores_other_commands(self) -> None:
-        """dispatch returns False for non-credentials commands."""
+        """dispatch returns False for non-serve commands."""
         args = argparse.Namespace(cmd="task")
         assert dispatch(args) is False
 
-    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=False)
-    @patch(f"{_MOD}.get_proxy_status")
-    def test_dispatch_status(self, mock_status, mock_sd, capsys) -> None:
-        """'credentials status' prints status info."""
-        mock_status.return_value = _make_status()
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "status"])
+    @patch("terok.cli.commands.credentials._cmd_serve")
+    def test_dispatch_serve(self, mock_serve: MagicMock) -> None:
+        """credential-proxy-serve dispatches to _cmd_serve."""
+        args = argparse.Namespace(cmd="credential-proxy-serve")
         assert dispatch(args) is True
-        out = capsys.readouterr().out
-        assert "stopped" in out
-        assert "claude" in out
+        mock_serve.assert_called_once_with(args)
 
-    @patch(f"{_MOD}.start_proxy")
-    @patch("terok_agent.ensure_proxy_routes", create=True)
-    @patch(f"{_MOD}.is_proxy_running", return_value=False)
-    def test_dispatch_start(self, mock_running, mock_routes, mock_start, capsys) -> None:
-        """'credentials start' generates routes and starts the daemon."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "start"])
-        assert dispatch(args) is True
-        mock_routes.assert_called_once()
-        mock_start.assert_called_once()
-        assert "started" in capsys.readouterr().out
+    @patch("terok_sandbox.credential_proxy.server.main")
+    def test_serve_passes_through_to_server_main(self, mock_main: MagicMock) -> None:
+        """_cmd_serve strips argv prefix and delegates to server.main()."""
+        captured_argv: list[str] = []
+        mock_main.side_effect = lambda: captured_argv.extend(sys.argv)
 
-    @patch(f"{_MOD}.is_proxy_running", return_value=True)
-    def test_dispatch_start_already_running(self, mock_running) -> None:
-        """'credentials start' exits if already running."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "start"])
-        with pytest.raises(SystemExit):
+        original_argv = sys.argv[:]
+        sys.argv = ["terokctl", "credential-proxy-serve", "--log-level", "DEBUG"]
+        try:
+            args = argparse.Namespace(cmd="credential-proxy-serve")
             dispatch(args)
+        finally:
+            sys.argv = original_argv
 
-    @patch(f"{_MOD}.stop_proxy")
-    @patch(f"{_MOD}.is_proxy_running", return_value=True)
-    def test_dispatch_stop(self, mock_running, mock_stop, capsys) -> None:
-        """'credentials stop' calls stop_proxy."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "stop"])
-        assert dispatch(args) is True
-        mock_stop.assert_called_once()
+        mock_main.assert_called_once()
+        assert captured_argv == ["terokctl-credential-proxy-serve", "--log-level", "DEBUG"]
+        assert sys.argv == original_argv  # restored after call
 
-    @patch(f"{_MOD}.is_proxy_running", return_value=False)
-    def test_dispatch_stop_not_running(self, mock_running, capsys) -> None:
-        """'credentials stop' prints info when not running."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "stop"])
-        assert dispatch(args) is True
-        assert "not running" in capsys.readouterr().out
 
-    @patch(f"{_MOD}.install_proxy_systemd")
-    @patch("terok_agent.ensure_proxy_routes", create=True)
-    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=True)
-    def test_dispatch_install(self, mock_sd, mock_routes, mock_install, capsys) -> None:
-        """'credentials install' installs systemd units."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "install"])
-        assert dispatch(args) is True
-        mock_install.assert_called_once()
-        assert "installed" in capsys.readouterr().out
+class TestCredentialProxyWireGroup:
+    """Verify credential-proxy commands are mounted via wire_group."""
 
-    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=False)
-    def test_dispatch_install_no_systemd(self, mock_sd) -> None:
-        """'credentials install' fails without systemd."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "install"])
-        with pytest.raises(SystemExit):
-            dispatch(args)
+    def test_credential_proxy_group_registered(self) -> None:
+        """terokctl credential-proxy group is parseable."""
+        from terok_agent import PROXY_COMMANDS
 
-    @patch(f"{_MOD}.uninstall_proxy_systemd")
-    @patch(f"{_MOD}.is_proxy_systemd_available", return_value=True)
-    def test_dispatch_uninstall(self, mock_sd, mock_uninstall, capsys) -> None:
-        """'credentials uninstall' removes systemd units."""
-        parser = _make_parser()
-        args = parser.parse_args(["credentials", "uninstall"])
-        assert dispatch(args) is True
-        mock_uninstall.assert_called_once()
+        from terok.cli.wiring import wire_group
 
-    def test_dispatch_unknown_subcommand(self) -> None:
-        """Unknown credentials subcommand returns False."""
-        args = argparse.Namespace(cmd="credentials", credentials_cmd="bogus")
-        assert dispatch(args) is False
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "credential-proxy", PROXY_COMMANDS, help="test")
+        for cmd in ("start", "stop", "status", "install", "uninstall", "routes"):
+            args = parser.parse_args(["credential-proxy", cmd])
+            assert args.cmd == "credential-proxy"
