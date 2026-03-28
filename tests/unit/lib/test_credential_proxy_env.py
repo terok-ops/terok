@@ -122,3 +122,44 @@ class TestCredentialProxyEnv:
         assert "MISTRAL_API_KEY" in env
         # Claude NOT stored → no phantom token
         assert "ANTHROPIC_API_KEY" not in env
+
+    @pytest.mark.usefixtures("_enable_proxy")
+    def test_leaked_credentials_warning(self, tmp_path: Path, capsys) -> None:
+        """Leaked credential files in shared mounts trigger a stderr warning."""
+        from terok_sandbox import CredentialDB
+
+        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
+
+        db_path = tmp_path / "proxy" / "credentials.db"
+        db = CredentialDB(db_path)
+        db.store_credential("default", "claude", {"type": "api_key", "key": "sk-test"})
+        db.close()
+
+        # Create a leaked credential file in the shared mount
+        from terok_agent import get_registry
+
+        registry = get_registry()
+        auth = registry.auth_providers["claude"]
+        route = registry.proxy_routes["claude"]
+        cred_dir = tmp_path / "envs" / auth.host_dir_name
+        cred_dir.mkdir(parents=True)
+        (cred_dir / route.credential_file).write_text('{"leaked": true}')
+
+        project = MagicMock()
+        project.id = "test-project"
+
+        with (
+            patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+        ):
+            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg.proxy_db_path = db_path
+            mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
+            mock_cfg.proxy_port = 18731
+            mock_cfg.effective_envs_dir = tmp_path / "envs"
+
+            _credential_proxy_env_and_volumes(project, "task-1")
+
+        err = capsys.readouterr().err
+        assert "WARNING" in err
+        assert "claude" in err

@@ -297,14 +297,14 @@ def _credential_proxy_env_and_volumes(
 
     leaked = scan_leaked_credentials(cfg.effective_envs_dir)
     if leaked:
-        import sys as _sys
+        import sys
 
-        print("WARNING: Real credentials in shared mounts:", file=_sys.stderr)
+        print("WARNING: Real credentials in shared mounts:", file=sys.stderr)
         for provider, path in leaked:
-            print(f"  {provider}: {path}", file=_sys.stderr)
+            print(f"  {provider}: {path}", file=sys.stderr)
         print(
             "Remove these files — containers should only see proxy tokens.",
-            file=_sys.stderr,
+            file=sys.stderr,
         )
 
     return env, []
