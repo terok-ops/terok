@@ -4,7 +4,8 @@
 """Tests for the ``terokctl credential-proxy`` CLI and ``credential-proxy-serve``."""
 
 import argparse
-from unittest.mock import patch
+import sys
+from unittest.mock import MagicMock, patch
 
 from terok.cli.commands.credentials import dispatch, register
 
@@ -30,11 +31,26 @@ class TestCredentialProxyServeDispatch:
         assert dispatch(args) is False
 
     @patch("terok.cli.commands.credentials._cmd_serve")
-    def test_dispatch_serve(self, mock_serve) -> None:
+    def test_dispatch_serve(self, mock_serve: MagicMock) -> None:
         """credential-proxy-serve dispatches to _cmd_serve."""
         args = argparse.Namespace(cmd="credential-proxy-serve")
         assert dispatch(args) is True
         mock_serve.assert_called_once_with(args)
+
+    @patch("terok_sandbox.credential_proxy.server.main")
+    def test_serve_passes_through_to_server_main(self, mock_main: MagicMock) -> None:
+        """_cmd_serve strips argv prefix and delegates to server.main()."""
+        original_argv = sys.argv[:]
+        sys.argv = ["terokctl", "credential-proxy-serve", "--log-level", "DEBUG"]
+        try:
+            args = argparse.Namespace(cmd="credential-proxy-serve")
+            dispatch(args)
+        finally:
+            sys.argv = original_argv
+
+        mock_main.assert_called_once()
+        # server.main() should have seen stripped argv
+        assert sys.argv == original_argv  # restored after call
 
 
 class TestCredentialProxyWireGroup:
