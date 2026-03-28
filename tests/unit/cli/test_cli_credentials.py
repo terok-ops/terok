@@ -40,6 +40,9 @@ class TestCredentialProxyServeDispatch:
     @patch("terok_sandbox.credential_proxy.server.main")
     def test_serve_passes_through_to_server_main(self, mock_main: MagicMock) -> None:
         """_cmd_serve strips argv prefix and delegates to server.main()."""
+        captured_argv: list[str] = []
+        mock_main.side_effect = lambda: captured_argv.extend(sys.argv)
+
         original_argv = sys.argv[:]
         sys.argv = ["terokctl", "credential-proxy-serve", "--log-level", "DEBUG"]
         try:
@@ -49,7 +52,7 @@ class TestCredentialProxyServeDispatch:
             sys.argv = original_argv
 
         mock_main.assert_called_once()
-        # server.main() should have seen stripped argv
+        assert captured_argv == ["terokctl-credential-proxy-serve", "--log-level", "DEBUG"]
         assert sys.argv == original_argv  # restored after call
 
 
