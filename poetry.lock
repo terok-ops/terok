@@ -2569,14 +2569,14 @@ develop = false
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "8ba4e0f35513449b07367dfa08f62812dcbd013b"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "0ef65c538cda51250cfb1293cbd3b20e7052b954"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "46c6cc0bb3ae871455e4a3df11f2a8d56fcf1331"
-resolved_reference = "46c6cc0bb3ae871455e4a3df11f2a8d56fcf1331"
+reference = "1b85ade84cf4b8117f1e6d5c804ebf2a8c7f7017"
+resolved_reference = "1b85ade84cf4b8117f1e6d5c804ebf2a8c7f7017"
 
 [[package]]
 name = "terok-sandbox"
@@ -2591,13 +2591,13 @@ develop = false
 [package.dependencies]
 aiohttp = ">=3.9"
 platformdirs = ">=4.0"
-terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", rev = "18d87d4262aa9565a08438cb412dd4923f2edaff"}
+terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", rev = "85fb5d460b6a35297cfc71dc249230cceb70f727"}
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "8ba4e0f35513449b07367dfa08f62812dcbd013b"
-resolved_reference = "8ba4e0f35513449b07367dfa08f62812dcbd013b"
+reference = "0ef65c538cda51250cfb1293cbd3b20e7052b954"
+resolved_reference = "0ef65c538cda51250cfb1293cbd3b20e7052b954"
 
 [[package]]
 name = "terok-shield"
@@ -2615,8 +2615,8 @@ PyYAML = ">=6.0"
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
-reference = "18d87d4262aa9565a08438cb412dd4923f2edaff"
-resolved_reference = "18d87d4262aa9565a08438cb412dd4923f2edaff"
+reference = "85fb5d460b6a35297cfc71dc249230cceb70f727"
+resolved_reference = "85fb5d460b6a35297cfc71dc249230cceb70f727"
 
 [[package]]
 name = "textual"
@@ -3087,4 +3087,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "d9861e1c549165e7a6408483052f6369ce1950f13839ab913e92c7374ad6a4c7"
+content-hash = "d5178ec37c953cbc64de14016227ff753607b0b72734e1fa941f1fe015da66c7"
