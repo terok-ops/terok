@@ -305,6 +305,8 @@ def _credential_proxy_env_and_volumes(
             "Remove these files — containers should only see proxy tokens.",
             file=sys.stderr,
         )
+        # Surface the warning inside the container via hilfe.
+        env["TEROK_LEAKED_CREDENTIALS"] = ",".join(provider for provider, _ in leaked)
 
     return env, []
 

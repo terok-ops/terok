@@ -159,8 +159,9 @@ class TestCredentialProxyEnv:
             mock_cfg.proxy_port = 18731
             mock_cfg.effective_envs_dir = tmp_path / "envs"
 
-            _credential_proxy_env_and_volumes(project, "task-1")
+            env, _volumes = _credential_proxy_env_and_volumes(project, "task-1")
 
         err = capsys.readouterr().err
         assert "WARNING" in err
         assert "claude" in err
+        assert env.get("TEROK_LEAKED_CREDENTIALS") == "claude"
