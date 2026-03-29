@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from terok_sandbox import (
+    check_environment,
     check_units_outdated,
     get_container_state,
     get_server_status,
@@ -74,6 +75,25 @@ def _check_gate_server() -> _CheckResult:
     if is_systemd_available():
         return ("warn", label, "not running — run 'terokctl gate start'")
     return ("warn", label, "not running — run 'terokctl gate start'")
+
+
+
+def _check_shield() -> _CheckResult:
+    """Check egress firewall (terok-shield) environment."""
+    label = "Shield"
+    try:
+        ec = check_environment()
+    except Exception as exc:  # noqa: BLE001
+        return ("warn", label, f"check failed — {exc}")
+    if ec.health == "bypass":
+        return ("warn", label, "bypass_firewall_no_protection is active — egress disabled")
+    if ec.health == "stale-hooks":
+        return ("warn", label, "hooks outdated — run 'terokctl shield setup --user'")
+    if ec.health == "setup-needed":
+        hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else "run 'terokctl shield setup --user'"
+        return ("warn", label, f"{ec.issues[0] if ec.issues else 'setup needed'} — {hint}")
+    dns = getattr(ec, "dns_tier", "unknown")
+    return ("ok", label, f"active ({ec.hooks}, {dns} DNS)")
 
 
 def _check_task_hook(
@@ -163,6 +183,7 @@ def _check_unfired_hooks(
 
 _GLOBAL_CHECKS = [
     _check_gate_server,
+    _check_shield,
 ]
 
 _STATUS_MARKERS = {
