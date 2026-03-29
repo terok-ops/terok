@@ -44,8 +44,8 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-agent = {git = "https://github.com/terok-ai/terok-agent.git", branch = "feat/dnsmasq-oci-hook"}
-terok-sandbox = {git = "https://github.com/terok-ai/terok-sandbox.git", branch = "feat/dnsmasq-oci-hook"}
+terok-agent = {git = "https://github.com/terok-ai/terok-agent.git", rev = "356fb4ec5c08080d54a71262ccc00cbfd9e5cf29"}
+terok-sandbox = {git = "https://github.com/terok-ai/terok-sandbox.git", rev = "3c9641e7e4a364244ebc260613b14861d1a9a875"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.22158.220"
