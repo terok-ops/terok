@@ -2769,14 +2769,14 @@ develop = false
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "19a2573bd4a065832d61e6b58a94e8f2f5d7d5d4"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "154e754a2ada3e9a01fa04383a4f820028f4a977"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "7e3ed097f2c163eab3fdfab460fa6e4d11068186"
-resolved_reference = "7e3ed097f2c163eab3fdfab460fa6e4d11068186"
+reference = "c0edff74e9718be5c3bdd419527bcdf74bb7f4b3"
+resolved_reference = "c0edff74e9718be5c3bdd419527bcdf74bb7f4b3"
 
 [[package]]
 name = "terok-sandbox"
@@ -2797,8 +2797,8 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "19a2573bd4a065832d61e6b58a94e8f2f5d7d5d4"
-resolved_reference = "19a2573bd4a065832d61e6b58a94e8f2f5d7d5d4"
+reference = "154e754a2ada3e9a01fa04383a4f820028f4a977"
+resolved_reference = "154e754a2ada3e9a01fa04383a4f820028f4a977"
 
 [[package]]
 name = "terok-shield"
@@ -3287,4 +3287,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "4361ff25533a188cfc510057df78c3602f4dd8af2f3c65cb41d4fded1d8ac25b"
+content-hash = "989a6e1feeaa644f1211e0987a00193b9a621aa2688cb3e5dcbc723287524edb"
