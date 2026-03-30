@@ -2758,7 +2758,7 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-agent"
-version = "0.0.20"
+version = "0.0.0.post54.dev0+0dfe529"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -2769,18 +2769,18 @@ develop = false
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "154e754a2ada3e9a01fa04383a4f820028f4a977"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "89a14c6979a4d6df9f880dbe0c5caf5001491aca"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "c0edff74e9718be5c3bdd419527bcdf74bb7f4b3"
-resolved_reference = "c0edff74e9718be5c3bdd419527bcdf74bb7f4b3"
+reference = "0dfe52986a1c446baf6e8c5a49d687183b369634"
+resolved_reference = "0dfe52986a1c446baf6e8c5a49d687183b369634"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.18"
+version = "0.0.0.post58.dev0+89a14c6"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -2797,8 +2797,8 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "154e754a2ada3e9a01fa04383a4f820028f4a977"
-resolved_reference = "154e754a2ada3e9a01fa04383a4f820028f4a977"
+reference = "89a14c6979a4d6df9f880dbe0c5caf5001491aca"
+resolved_reference = "89a14c6979a4d6df9f880dbe0c5caf5001491aca"
 
 [[package]]
 name = "terok-shield"
@@ -3287,4 +3287,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "989a6e1feeaa644f1211e0987a00193b9a621aa2688cb3e5dcbc723287524edb"
+content-hash = "ce29a559e0de8e06886755e1dea14805b0be9dcca666a8f1e3548a40d872b182"
