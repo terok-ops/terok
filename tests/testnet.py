@@ -27,8 +27,15 @@ ALLOWED_TARGET_HTTP = "http://1.1.1.1/"
 SLIRP_GATEWAY = "10.0.2.2"
 """Default slirp4netns gateway address."""
 
-HOST_ALIAS_LOOPBACK = f"{CONTAINER_HOSTNAME}:{LOCALHOST}"
-"""Podman --add-host value for pasta/rootful mode."""
+PASTA_HOST_LOOPBACK_MAP = "169.254.1.2"
+"""pasta --map-host-loopback address: container traffic to this link-local
+address is translated by pasta to 127.0.0.1 on the host."""
+
+HOST_ALIAS_PASTA = f"{CONTAINER_HOSTNAME}:{PASTA_HOST_LOOPBACK_MAP}"
+"""Podman --add-host value for pasta mode (via --map-host-loopback)."""
+
+HOST_ALIAS_LOOPBACK = HOST_ALIAS_PASTA
+"""Alias for backwards compatibility — points to pasta host alias."""
 
 HOST_ALIAS_SLIRP = f"{CONTAINER_HOSTNAME}:{SLIRP_GATEWAY}"
 """Podman --add-host value for slirp4netns mode."""

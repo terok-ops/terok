@@ -19,7 +19,12 @@ Shield = terok_shield.Shield
 ShieldConfig = terok_shield.ShieldConfig
 ShieldMode = terok_shield.ShieldMode
 
-from tests.testnet import GATE_PORT, HOST_ALIAS_LOOPBACK, HOST_ALIAS_SLIRP
+from tests.testnet import (
+    GATE_PORT,
+    HOST_ALIAS_LOOPBACK,
+    HOST_ALIAS_SLIRP,
+    PASTA_HOST_LOOPBACK_MAP,
+)
 
 from .conftest import MockRunner
 from .helpers import TerokShieldIntegrationEnv
@@ -66,13 +71,14 @@ class TestPreStartIntegration:
     """Real pre_start through Shield class with mock runner."""
 
     def test_pasta_with_loopback_port(self, shield_config: ShieldConfig) -> None:
-        """Pasta mode includes port-forwarding, loopback host, annotations, and cap-drops."""
+        """Pasta mode includes --map-host-loopback, host alias, annotations, and cap-drops."""
         args = _pre_start_with_mocks("test-ctr", shield_config)
 
         assert "--network" in args
         network_val = args[args.index("--network") + 1]
         assert network_val.startswith("pasta:")
-        assert f"-T,{GATE_PORT}" in network_val
+        assert "--map-host-loopback" in network_val
+        assert PASTA_HOST_LOOPBACK_MAP in network_val
 
         assert "--add-host" in args
         host_val = args[args.index("--add-host") + 1]
@@ -100,7 +106,7 @@ class TestPreStartIntegration:
         assert host_val == HOST_ALIAS_SLIRP
 
     def test_multiple_loopback_ports(self, shield_env: TerokShieldIntegrationEnv) -> None:
-        """Multiple loopback ports each get a -T flag in pasta arg."""
+        """Multiple loopback ports use a single --map-host-loopback (not per-port)."""
         config = ShieldConfig(
             state_dir=shield_env.state_dir,
             mode=ShieldMode.HOOK,
@@ -109,8 +115,8 @@ class TestPreStartIntegration:
         )
         args = _pre_start_with_mocks("test-ctr", config)
         network_val = args[args.index("--network") + 1]
-        assert f"-T,{GATE_PORT}" in network_val
-        assert "-T,8080" in network_val
+        assert "--map-host-loopback" in network_val
+        assert PASTA_HOST_LOOPBACK_MAP in network_val
 
     def test_no_loopback_ports(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """No loopback ports yields bare 'pasta:' without -T flags."""
@@ -309,9 +315,10 @@ class TestSandboxRunShieldIntegration:
         return captured_cmd
 
     def test_bypass_uses_pasta_networking(self, shield_env: TerokShieldIntegrationEnv) -> None:
-        """Bypass on pasta: injects --network=pasta:-T,<port> and --add-host."""
+        """Bypass on pasta: injects --network=pasta:--map-host-loopback and --add-host."""
         cmd = self._run_bypass_spec(shield_env, "pasta")
-        assert any(f"pasta:-T,{GATE_PORT}" in c for c in cmd)
+        assert any("--map-host-loopback" in c for c in cmd)
+        assert any(PASTA_HOST_LOOPBACK_MAP in c for c in cmd)
         assert "--add-host" in cmd
         host_idx = cmd.index("--add-host")
         assert cmd[host_idx + 1] == HOST_ALIAS_LOOPBACK
