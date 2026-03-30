@@ -93,6 +93,8 @@ def _check_shield() -> _CheckResult:
             ec.setup_hint.splitlines()[0] if ec.setup_hint else "run 'terokctl shield setup --user'"
         )
         return ("warn", label, f"{ec.issues[0] if ec.issues else 'setup needed'} — {hint}")
+    if ec.health != "ok":
+        return ("warn", label, f"unexpected health: {ec.health}")
     dns = getattr(ec, "dns_tier", "unknown")
     return ("ok", label, f"active ({ec.hooks}, {dns} DNS)")
 

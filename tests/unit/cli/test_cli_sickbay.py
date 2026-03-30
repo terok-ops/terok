@@ -135,6 +135,15 @@ def test_cmd_sickbay_reports_health(
             "check failed",
             id="check-exception",
         ),
+        pytest.param(
+            "ok",
+            "",
+            [],
+            None,
+            "ok",
+            "active",
+            id="ok",
+        ),
     ],
 )
 def test_check_shield_states(
