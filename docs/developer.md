@@ -422,7 +422,7 @@ panel edges misalign — and **cannot be fixed by padding alone**.
 6. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
    natively 2 cells wide — adding a VS16 emoji will fail CI.  Tests also
    verify that all emoji dicts have non-empty labels for `--no-emoji` mode.
-7. Emojis are **on by default**.  Pass `--no-emoji` to `terok` (TUI) or
+7. Emojis are **on by default**.  Pass `--no-emoji` to `terok-tui` (TUI) or
    `terok` (CLI) to replace all emojis with `[label]` text badges.
 
 See `src/terok/lib/util/emoji.py` module docstring for full background,

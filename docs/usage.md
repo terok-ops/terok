@@ -977,7 +977,7 @@ When enabled, terok adds:
 ## Tips
 
 - **Show resolved paths:** `terok config`
-- **Where envs live:** `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if root, or as configured under `envs.base_dir`)
+- **Where credentials live:** `~/.local/share/terok-credentials` (or `/var/lib/terok-credentials` if root, or as configured under `credentials.dir`)
 - **Shared directories:** See [shared-dirs.md](shared-dirs.md)
 - **Security modes:** See [git-gate-and-security-modes.md](git-gate-and-security-modes.md)
 - **Copying text from the terminal:** TUI and tmux can intercept mouse

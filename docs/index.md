@@ -1,7 +1,7 @@
 # terok
 
 Orchestration and instrumentation platform for containerized AI coding agents.
-Provides both a CLI (`terok`) and a Textual TUI (`terok`).
+Provides both a CLI (`terok`) and a Textual TUI (`terok-tui`, or `terok tui`).
 
 terok manages the *what* — which agents run, how they're configured, and
 what code they work on.  The hardened container runtime

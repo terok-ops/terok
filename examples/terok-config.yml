@@ -12,30 +12,30 @@ ui:
   # from this base if the port is busy).
   base_port: 7860
 
-envs:
+credentials:
   # Shared persistent host directory for credentials/config that are mounted
   # into agent containers (CLI and UI):
-  #   - <base_dir>/_codex-config         → /home/dev/.codex  (rw)
-  #   - <base_dir>/_claude-config        → /home/dev/.claude (rw)
-  #   - <base_dir>/_ssh-config-<project> → /home/dev/.ssh    (rw)
-  # Default: ~/.local/share/terok/envs (or /var/lib/terok/envs if root)
-  # You can override per user or system by editing this file.
-  # base_dir: ~/.local/share/terok/envs
+  #   - <dir>/_codex-config         → /home/dev/.codex  (rw)
+  #   - <dir>/_claude-config        → /home/dev/.claude (rw)
+  #   - <dir>/_ssh-config-<project> → /home/dev/.ssh    (rw)
+  # Default: ~/.local/share/terok-credentials (or /var/lib/terok-credentials if root)
+  # Override with TEROK_CREDENTIALS_DIR env var or by editing this file.
+  # dir: ~/.local/share/terok-credentials
 
 paths:
-  # User projects root (per-user overlays). Each project is a subdirectory
-  # containing a project.yml, e.g. ${user_projects_root}/myproj/project.yml
+  # User projects directory (per-user overlays). Each project is a subdirectory
+  # containing a project.yml, e.g. ${user_projects_dir}/myproj/project.yml
   # Default: ${XDG_CONFIG_HOME:-~/.config}/terok/projects
-  # user_projects_root: ~/.config/terok/projects
+  # user_projects_dir: ~/.config/terok/projects
 
-  # Writable state root (tasks, caches, etc.).
+  # Writable state directory (tasks, caches, etc.).
   # System default (root): /var/lib/terok
   # User default:          ${XDG_DATA_HOME:-~/.local/share}/terok
-  # state_root: ~/.local/share/terok
+  # state_dir: ~/.local/share/terok
 
-  # Build artifacts root for generated files.
-  # If not set, defaults to: <state_root>/build
-  # build_root: ~/.local/share/terok/build
+  # Build artifacts directory for generated files.
+  # If not set, defaults to: <state_dir>/build
+  # build_dir: ~/.local/share/terok/build
 
 git:
   # Default human identity for git commits (committer).

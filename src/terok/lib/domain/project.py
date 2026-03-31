@@ -58,6 +58,7 @@ from ..core.config import (
     make_sandbox_config,
     projects_dir,
     state_dir,
+    user_projects_dir,
 )
 from ..core.project_model import ProjectConfig
 from ..core.projects import list_presets, load_project
@@ -90,7 +91,13 @@ def _is_under_terok_root(path: Path) -> bool:
     (e.g. ``~/.ssh`` set as ``ssh.host_dir``).
     """
     resolved = path.resolve()
-    managed_roots = [projects_dir(), state_dir(), credentials_dir(), build_dir()]
+    managed_roots = [
+        projects_dir(),
+        user_projects_dir(),
+        state_dir(),
+        credentials_dir(),
+        build_dir(),
+    ]
     return any(resolved == root or root in resolved.parents for root in managed_roots)
 
 

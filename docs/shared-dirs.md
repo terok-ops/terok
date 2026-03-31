@@ -20,7 +20,7 @@ When a task starts, terok mounts host directories into the container for workspa
 
 ## Shared Credential Directories
 
-All shared directories are created automatically if missing. Base dir defaults to `~/.local/share/terok/envs` (override via `envs.base_dir` in `config.yml`).
+All shared directories are created automatically if missing. Base dir defaults to `~/.local/share/terok-credentials` (or `/var/lib/terok-credentials` if root). Override via `credentials.dir` in `config.yml` or the `TEROK_CREDENTIALS_DIR` environment variable.
 
 | Host Dir | Container Mount | Purpose |
 |----------|----------------|---------|
