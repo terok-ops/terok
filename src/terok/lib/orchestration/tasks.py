@@ -52,6 +52,11 @@ from .container_exec import container_git_diff
 CONTAINER_MODES = ("cli", "web", "run", "toad")
 
 
+def _is_initialized(meta: dict) -> bool:
+    """Return True if the task has completed first-boot initialisation."""
+    return "ready_at" in meta
+
+
 def container_name(project_id: str, mode: str, task_id: str) -> str:
     """Return the canonical container name for a task."""
     return f"{project_id}-{mode}-{task_id}"
@@ -220,7 +225,7 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
         container_state=live_state,
         exit_code=raw.get("exit_code"),
         deleting=bool(raw.get("deleting")),
-        initialized=mode is not None,
+        initialized=_is_initialized(raw),
         preset=raw.get("preset"),
         name=raw["name"],
         provider=raw.get("provider"),
@@ -458,7 +463,7 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     backend=meta.get("backend"),
                     exit_code=meta.get("exit_code"),
                     deleting=bool(meta.get("deleting")),
-                    initialized=mode is not None,
+                    initialized=_is_initialized(meta),
                     preset=meta.get("preset"),
                     name=meta["name"],
                     provider=meta.get("provider"),
@@ -918,7 +923,7 @@ def task_status(project_id: str, task_id: str) -> None:
         backend=meta.get("backend"),
         exit_code=exit_code,
         deleting=bool(meta.get("deleting")),
-        initialized=mode is not None,
+        initialized=_is_initialized(meta),
         container_state=cs,
         name=meta["name"],
         provider=meta.get("provider"),

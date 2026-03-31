@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Task container runners: CLI, headless, toad, and restart."""
@@ -7,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -318,6 +320,7 @@ def task_run_cli(
             meta_path=meta_path,
         )
         meta["mode"] = "cli"
+        meta["ready_at"] = datetime.now(UTC).isoformat()
         meta_path.write_text(_yaml_dump(meta))
         print("Container started.")
         _print_login_instructions(project.id, task_id, cname, color_enabled)
@@ -402,6 +405,7 @@ def task_run_cli(
     )
 
     meta["mode"] = "cli"
+    meta["ready_at"] = datetime.now(UTC).isoformat()
     meta["unrestricted"] = unrestricted
     if preset:
         meta["preset"] = preset
@@ -560,6 +564,9 @@ def task_run_toad(
         task_dir=task_dir,
         meta_path=meta_path,
     )
+
+    meta["ready_at"] = datetime.now(UTC).isoformat()
+    meta_path.write_text(_yaml_dump(meta))
 
     color_enabled = _supports_color()
     url = f"http://{pub_host}:{port}/"
@@ -742,6 +749,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     # Update task metadata
     meta["mode"] = "run"
+    meta["ready_at"] = datetime.now(UTC).isoformat()
     meta["provider"] = resolved.name
     meta["unrestricted"] = unrestricted
     if request.preset:
