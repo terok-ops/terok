@@ -128,6 +128,9 @@ class TestTask:
         meta_path = meta_dir / f"{tid}.yml"
         meta = yaml_load(meta_path.read_text())
         meta.update(updates)
+        # Setting mode implies the task reached readiness (ready_at marker).
+        if "mode" in updates and updates["mode"] is not None and "ready_at" not in updates:
+            meta.setdefault("ready_at", "2025-01-01T00:00:00+00:00")
         meta_path.write_text(yaml_dump(meta))
 
     @staticmethod

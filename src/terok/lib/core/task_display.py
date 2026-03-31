@@ -125,7 +125,7 @@ def effective_status(task: TaskState) -> str:
     - ``container_state`` (str | None): live podman state, or None
     - ``exit_code`` (int | None): process exit code, or None
     - ``deleting`` (bool): persisted to YAML before deletion starts
-    - ``initialized`` (bool): True once the runner has written mode to YAML
+    - ``initialized`` (bool): True once ``ready_at`` is persisted to YAML
 
     Returns one of: ``"deleting"``, ``"running"``, ``"init"``,
     ``"stopped"``, ``"completed"``, ``"failed"``, ``"created"``,
