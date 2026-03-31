@@ -243,6 +243,20 @@ class TestApplyShieldPolicy:
         ):
             _apply_shield_policy(project, "ctr", MOCK_TASK_DIR, is_restart=False)
 
+    def test_restart_unknown_policy_raises(self, tmp_path: Path) -> None:
+        """Unknown on_task_restart value raises ValueError."""
+        from terok.lib.orchestration.task_runners import _apply_shield_policy
+
+        project = self._make_project(on_restart="bogus")
+        with (
+            patch(
+                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
+                return_value=False,
+            ),
+            pytest.raises(ValueError, match="Unknown shield.on_task_restart"),
+        ):
+            _apply_shield_policy(project, "ctr", tmp_path, is_restart=True)
+
 
 # ── _run_container ────────────────────────────────────────
 

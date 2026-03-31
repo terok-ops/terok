@@ -237,7 +237,8 @@ def _apply_shield_policy(
         return
 
     if is_restart:
-        if project.shield_on_task_restart == "retain":
+        policy = project.shield_on_task_restart
+        if policy == "retain":
             desired = _read_desired_shield_state(task_dir)
             if desired and desired.startswith("down"):
                 try:
@@ -246,7 +247,12 @@ def _apply_shield_policy(
                     import warnings
 
                     warnings.warn(f"shield restore: {exc}", stacklevel=2)
-        # "up" → already UP from OCI hook, nothing to do
+        elif policy == "up":
+            pass  # already UP from OCI hook
+        else:
+            raise ValueError(
+                f"Unknown shield.on_task_restart value: {policy!r} (expected 'retain' or 'up')"
+            )
         return
 
     # Fresh creation
@@ -492,6 +498,7 @@ def task_run_toad(
             print(f"Toad: {_blue(url, color_enabled)}")
             return
         print(f"Starting existing container {_green(cname, color_enabled)}...")
+        task_dir = project.tasks_root / str(task_id)
         _podman_start(cname)
         _assert_running(cname)
         run_hook(
@@ -502,9 +509,10 @@ def task_run_toad(
             mode="toad",
             cname=cname,
             web_port=port,
-            task_dir=project.tasks_root / str(task_id),
+            task_dir=task_dir,
             meta_path=meta_path,
         )
+        _apply_shield_policy(project, cname, task_dir, is_restart=True)
         print("Container started.")
         print(f"Toad: {_blue(url, color_enabled)}")
         return
@@ -914,6 +922,7 @@ def task_followup_headless(
         task_dir=task_dir,
         meta_path=meta_path,
     )
+    _apply_shield_policy(project, cname, task_dir, is_restart=True)
 
     # Clear previous exit_code so effective_status shows "running" until new exit
     meta["exit_code"] = None

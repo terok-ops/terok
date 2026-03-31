@@ -322,6 +322,14 @@ class TestPersistDesiredState:
         _persist_desired_state("rules", tmp_path, {})
         assert not (tmp_path / "shield_desired_state").exists()
 
+    def test_oserror_swallowed(self, tmp_path: Path) -> None:
+        """OSError during write is logged to stderr but does not raise."""
+        from terok.cli.commands.shield import _persist_desired_state
+
+        bad_dir = tmp_path / "no" / "such" / "dir"
+        # Should not raise — the error is printed to stderr
+        _persist_desired_state("up", bad_dir, {})
+
     @patch("terok.cli.commands.shield._resolve_task")
     @patch("terok.cli.commands.shield.make_shield")
     def test_dispatch_up_persists_state(

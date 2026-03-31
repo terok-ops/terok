@@ -69,6 +69,11 @@ class RawProjectYamlTests(unittest.TestCase):
         self.assertEqual(raw.docker.base_image, "nvidia/cuda:12.0")
         self.assertEqual(raw.default_agent, "claude")
 
+    def test_shield_legacy_alias_drop_on_task_start(self) -> None:
+        """The legacy ``drop_on_task_start`` key is accepted as alias for ``drop_on_task_run``."""
+        raw = RawProjectYaml.model_validate({"shield": {"drop_on_task_start": False}})
+        self.assertFalse(raw.shield.drop_on_task_run)
+
     def test_unknown_key_rejected(self) -> None:
         """Unknown top-level key raises ValidationError (typo detection)."""
         with self.assertRaises(ValidationError) as ctx:
@@ -222,6 +227,11 @@ class RawGlobalConfigTests(unittest.TestCase):
         self.assertEqual(cfg.gate_server.port, 1234)
         self.assertTrue(cfg.gate_server.suppress_systemd_warning)
         self.assertEqual(cfg.default_agent, "codex")
+
+    def test_shield_legacy_alias_global(self) -> None:
+        """Global config accepts ``drop_on_task_start`` as alias for ``drop_on_task_run``."""
+        cfg = RawGlobalConfig.model_validate({"shield": {"drop_on_task_start": False}})
+        self.assertFalse(cfg.shield.drop_on_task_run)
 
     def test_unknown_key_rejected(self) -> None:
         """Unknown top-level key raises ValidationError."""

@@ -214,12 +214,22 @@ class RawShieldProjectSection(BaseModel):
     """The ``shield:`` section of project.yml.
 
     Both fields default to ``None`` (inherit from global ``config.yml``).
+    Accepts the legacy key ``drop_on_task_start`` as an alias for
+    ``drop_on_task_run``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     drop_on_task_run: bool | None = None
     on_task_restart: Literal["retain", "up"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rename_legacy_keys(cls, data: Any) -> Any:
+        """Accept ``drop_on_task_start`` as alias for ``drop_on_task_run``."""
+        if isinstance(data, dict) and "drop_on_task_start" in data:
+            data.setdefault("drop_on_task_run", data.pop("drop_on_task_start"))
+        return data
 
 
 class RawDockerSection(BaseModel):
@@ -326,7 +336,11 @@ class RawLogsSection(BaseModel):
 
 
 class RawShieldGlobalSection(BaseModel):
-    """Global ``shield:`` section."""
+    """Global ``shield:`` section.
+
+    Accepts the legacy key ``drop_on_task_start`` as an alias for
+    ``drop_on_task_run``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -335,6 +349,14 @@ class RawShieldGlobalSection(BaseModel):
     audit: bool = True
     drop_on_task_run: bool = True
     on_task_restart: Literal["retain", "up"] = "retain"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rename_legacy_keys(cls, data: Any) -> Any:
+        """Accept ``drop_on_task_start`` as alias for ``drop_on_task_run``."""
+        if isinstance(data, dict) and "drop_on_task_start" in data:
+            data.setdefault("drop_on_task_run", data.pop("drop_on_task_start"))
+        return data
 
 
 class RawCredentialProxySection(BaseModel):
