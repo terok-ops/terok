@@ -93,9 +93,7 @@ tach:
 	poetry run tach check
 
 # Run SAST scan on the terok source tree
-security:
-	mkdir -p $(REPORTS_DIR)
-	poetry run bandit -r src/terok/ --exit-zero -f json -o $(BANDIT_REPORT)
+security: bandit-report
 	poetry run bandit -r src/terok/ -ll
 
 # Check docstring coverage (minimum 95%)
