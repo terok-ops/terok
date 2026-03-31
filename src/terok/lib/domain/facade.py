@@ -33,7 +33,7 @@ from terok_agent import (
     authenticate as _authenticate_raw,
 )
 
-from ..core.config import get_envs_base_dir
+from ..core.config import credentials_dir
 from ..core.images import project_cli_image
 from ..core.projects import load_project
 from ..orchestration.docker import build_images, generate_dockerfiles
@@ -129,7 +129,7 @@ def authenticate(project_id: str, provider: str) -> None:
     _authenticate_raw(
         project_id,
         provider,
-        envs_base_dir=get_envs_base_dir(),
+        envs_base_dir=credentials_dir(),
         image=project_cli_image(project_id),
     )
 

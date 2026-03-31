@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.core.config import build_root, deleted_projects_dir, state_root
+from terok.lib.core.config import archive_dir, build_dir, state_dir
 from terok.lib.core.projects import load_project
 from terok.lib.domain.facade import delete_project
 from terok.lib.domain.project import _archive_project
@@ -41,16 +41,16 @@ def archive_member_names(path: str) -> list[str]:
 
 def create_task_state(project_id: str) -> None:
     """Create a sample task metadata file for an archived project."""
-    meta_dir = state_root() / "projects" / project_id / "tasks"
+    meta_dir = state_dir() / "projects" / project_id / "tasks"
     meta_dir.mkdir(parents=True, exist_ok=True)
     (meta_dir / "1.yml").write_text("task_id: '1'\nname: test\n")
 
 
 def create_build_dir(project_id: str) -> None:
     """Create a sample build artifact for an archived project."""
-    build_dir = build_root() / project_id
-    build_dir.mkdir(parents=True, exist_ok=True)
-    (build_dir / "L2.Dockerfile").write_text("FROM scratch")
+    staging = build_dir() / project_id
+    staging.mkdir(parents=True, exist_ok=True)
+    (staging / "L2.Dockerfile").write_text("FROM scratch")
 
 
 class TestArchiveTimestamp:
@@ -165,11 +165,11 @@ class TestArchiveProject:
             assert archive_path is not None
             assert Path(archive_path).is_file()
 
-    def test_archive_stored_in_deleted_projects_dir(self) -> None:
+    def test_archive_stored_in_archive_dir(self) -> None:
         with project_env(project_yaml("arch-loc"), project_id="arch-loc"):
             archive_path = _archive_project("arch-loc")
             assert archive_path is not None
-            assert Path(archive_path).parent == deleted_projects_dir()
+            assert Path(archive_path).parent == archive_dir()
 
 
 class TestDeleteProjectArchive:

@@ -593,7 +593,7 @@ class OpenCodeConfigScreen(screen.ModalScreen[str | None]):
         import shutil
         from pathlib import Path
 
-        from ..lib.core.config import get_envs_base_dir
+        from ..lib.core.config import credentials_dir
 
         inp = self.query_one("#opencode-config-input", Input)
         raw = inp.value.strip()
@@ -616,7 +616,7 @@ class OpenCodeConfigScreen(screen.ModalScreen[str | None]):
             return
 
         try:
-            dest_dir = get_envs_base_dir() / "_opencode-config"
+            dest_dir = credentials_dir() / "_opencode-config"
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest = dest_dir / "opencode.json"
             shutil.copy2(str(src), str(dest))

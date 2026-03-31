@@ -90,10 +90,10 @@ def _build_runner_env(
 
     project = load_project(project_id)
 
-    envs_base = terok_env.state_root / "envs"
-    envs_base.mkdir(parents=True, exist_ok=True)
+    creds_dir = terok_env.credentials_dir
+    creds_dir.mkdir(parents=True, exist_ok=True)
     with unittest.mock.patch(
-        "terok.lib.orchestration.environment.get_envs_base_dir", return_value=envs_base
+        "terok.lib.orchestration.environment.credentials_dir", return_value=creds_dir
     ):
         env, _volumes = build_task_env_and_volumes(project, "1")
     return env

@@ -63,7 +63,7 @@ def make_layout(base: Path) -> AgentConfigLayout:
 def write_test_project(layout: AgentConfigLayout, project_id: str, body: str | None = None) -> None:
     """Write a test project config, defaulting to a minimal project definition."""
     write_project(
-        layout.config_root,
+        layout.config_root / "projects",
         project_id,
         body or f"project:\n  id: {project_id}\n",
     )
@@ -71,7 +71,7 @@ def write_test_project(layout: AgentConfigLayout, project_id: str, body: str | N
 
 def project_presets_dir(layout: AgentConfigLayout, project_id: str) -> Path:
     """Return the per-project presets directory."""
-    presets_dir = layout.config_root / project_id / "presets"
+    presets_dir = layout.config_root / "projects" / project_id / "presets"
     presets_dir.mkdir(parents=True, exist_ok=True)
     return presets_dir
 
@@ -90,7 +90,7 @@ def write_project_preset(
     return preset_path
 
 
-def global_presets_dir(layout: AgentConfigLayout) -> Path:
+def user_presets_dir(layout: AgentConfigLayout) -> Path:
     """Return the global XDG presets directory."""
     presets_dir = layout.xdg_config_home / "terok" / "presets"
     presets_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ def write_global_preset(
     suffix: str = ".yml",
 ) -> Path:
     """Create a global XDG preset file."""
-    preset_path = global_presets_dir(layout) / f"{name}{suffix}"
+    preset_path = user_presets_dir(layout) / f"{name}{suffix}"
     preset_path.write_text(content, encoding="utf-8")
     return preset_path
 
@@ -457,7 +457,7 @@ class TestPresetFileRef:
             layout = make_layout(Path(td))
             write_test_project(layout, "proj")
 
-            global_presets = global_presets_dir(layout)
+            global_presets = user_presets_dir(layout)
             write_global_preset(
                 layout,
                 "with-file",
@@ -502,14 +502,14 @@ class TestGlobalPresetProvenance:
     """Tests for global preset provenance in config stack."""
 
     def test_global_preset_scope_label(self) -> None:
-        """Config stack labels global presets as 'preset (global)'."""
+        """Config stack labels user-wide presets as 'preset (user)'."""
         with tempfile.TemporaryDirectory() as td:
             layout = make_layout(Path(td))
             write_test_project(layout, "proj")
             write_global_preset(layout, "shared", "model: haiku\n")
             stack = build_test_agent_stack(layout, "proj", preset="shared")
             levels = [s.level for s in stack.scopes]
-            assert "preset (global)" in levels
+            assert "preset (user)" in levels
 
     def test_project_preset_scope_label(self) -> None:
         """Config stack labels project presets as 'preset (project)'."""

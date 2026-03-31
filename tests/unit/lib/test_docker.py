@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from terok_agent import ImageSet
 
-from terok.lib.core.config import build_root
+from terok.lib.core.config import build_dir
 from terok.lib.orchestration.docker import build_images, generate_dockerfiles
 from tests.test_utils import mock_git_config, project_env
 
@@ -81,7 +81,7 @@ def test_generate_dockerfiles_outputs_expected_files_and_content() -> None:
     project_id = "proj4"
     with docker_project(project_id):
         generate_dockerfiles(project_id)
-        out_dir = build_root() / project_id
+        out_dir = build_dir() / project_id
 
         assert all(
             (out_dir / name).is_file()
@@ -111,7 +111,7 @@ def test_generate_dockerfiles_uses_gatekeeping_code_repo() -> None:
     """Gatekeeping projects clone from the local git gate instead of upstream."""
     with docker_project("proj_gated", security_class="gatekeeping"):
         generate_dockerfiles("proj_gated")
-        content = (build_root() / "proj_gated" / "L2.Dockerfile").read_text(encoding="utf-8")
+        content = (build_dir() / "proj_gated" / "L2.Dockerfile").read_text(encoding="utf-8")
         assert 'CODE_REPO="file:///git-gate/gate.git"' in content
         assert f'CODE_REPO="{UPSTREAM_URL}"' not in content
 
@@ -125,7 +125,7 @@ def test_l2_includes_user_snippet_inline() -> None:
     )
     with project_env(yaml, project_id="proj_snippet"):
         generate_dockerfiles("proj_snippet")
-        content = (build_root() / "proj_snippet" / "L2.Dockerfile").read_text(encoding="utf-8")
+        content = (build_dir() / "proj_snippet" / "L2.Dockerfile").read_text(encoding="utf-8")
         assert "RUN apt-get install -y fortran-compiler" in content
 
 
@@ -146,7 +146,7 @@ def test_l2_includes_user_snippet_from_file() -> None:
         )
         with project_env(yaml, project_id="proj_snippet_file"):
             generate_dockerfiles("proj_snippet_file")
-            content = (build_root() / "proj_snippet_file" / "L2.Dockerfile").read_text(
+            content = (build_dir() / "proj_snippet_file" / "L2.Dockerfile").read_text(
                 encoding="utf-8"
             )
             assert "RUN pip install numpy" in content
@@ -172,9 +172,7 @@ def test_l1_cli_pipx_inject_has_env_vars() -> None:
     """The CLI image sets the expected pipx env vars and package installation lines."""
     with docker_project("proj_pipx_test"):
         generate_dockerfiles("proj_pipx_test")
-        content = (build_root() / "proj_pipx_test" / "L1.cli.Dockerfile").read_text(
-            encoding="utf-8"
-        )
+        content = (build_dir() / "proj_pipx_test" / "L1.cli.Dockerfile").read_text(encoding="utf-8")
         assert "PIPX_HOME=/opt/pipx" in content
         assert "PIPX_BIN_DIR=/usr/local/bin" in content
         assert "pipx install mistral-vibe" in content

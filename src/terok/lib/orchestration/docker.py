@@ -26,7 +26,7 @@ from terok_agent import (
     stage_toad_agents,
 )
 
-from ..core.config import build_root
+from ..core.config import build_dir
 from ..core.images import project_cli_image, project_dev_image
 from ..core.project_model import ProjectConfig
 from ..core.projects import load_project
@@ -183,7 +183,7 @@ def build_context_hash(project_id: str) -> str:
 def dockerfiles_match_templates(project_id: str) -> bool:
     """Return True if generated Dockerfiles match current templates."""
     project = load_project(project_id)
-    out_dir = build_root() / project.id
+    out_dir = build_dir() / project.id
     rendered = _render_all_dockerfiles(project)
     for name, expected in rendered.items():
         path = out_dir / name
@@ -200,7 +200,7 @@ def dockerfiles_match_templates(project_id: str) -> bool:
 def generate_dockerfiles(project_id: str) -> None:
     """Render and write Dockerfiles and auxiliary scripts for *project_id*."""
     project = load_project(project_id)
-    out_dir = build_root() / project.id
+    out_dir = build_dir() / project.id
     ensure_dir(out_dir)
 
     rendered = _render_all_dockerfiles(project)
@@ -251,7 +251,7 @@ def build_images(
 
     project = load_project(project_id)
     base_image = project.docker_base_image
-    stage_dir = build_root() / project.id
+    stage_dir = build_dir() / project.id
 
     # Delegate L0+L1 to terok-agent (uses its own temp dir for build context)
     try:

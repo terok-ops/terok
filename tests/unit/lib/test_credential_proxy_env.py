@@ -75,6 +75,7 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
         ):
             mock_cfg = mock_cfg_cls.return_value
@@ -114,6 +115,7 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
         ):
             mock_cfg = mock_cfg_cls.return_value
@@ -156,6 +158,7 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
         ):
             mock_cfg = mock_cfg_cls.return_value
@@ -195,6 +198,7 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
         ):
             mock_cfg = mock_cfg_cls.return_value
@@ -227,6 +231,7 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
         ):
             mock_cfg = mock_cfg_cls.return_value

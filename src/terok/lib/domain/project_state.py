@@ -16,7 +16,7 @@ from typing import Any
 
 from terok_sandbox import SandboxConfig
 
-from ..core.config import build_root
+from ..core.config import build_dir
 from ..core.images import project_cli_image
 from ..core.projects import load_project
 
@@ -42,7 +42,7 @@ def get_project_state(
     project = load_project(project_id)
 
     # Dockerfiles: look in the same location generate_dockerfiles writes to.
-    stage_dir = build_root() / project.id
+    stage_dir = build_dir() / project.id
     dockerfiles = [
         stage_dir / "L0.Dockerfile",
         stage_dir / "L1.cli.Dockerfile",

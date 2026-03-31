@@ -548,15 +548,15 @@ from = ["terok.lib.domain.project_state"]
 
 [[interfaces]]
 expose = [
-    "config_root",
-    "state_root",
-    "gate_base_dir",
-    "build_root",
-    "deleted_projects_dir",
-    "user_projects_root",
-    "global_presets_dir",
+    "projects_dir",
+    "state_dir",
+    "gate_repos_dir",
+    "build_dir",
+    "archive_dir",
+    "user_projects_dir",
+    "user_presets_dir",
     "bundled_presets_dir",
-    "get_envs_base_dir",
+    "credentials_dir",
     "get_logs_partial_streaming",
     "get_ui_base_port",
     "get_tui_default_tmux",
@@ -696,7 +696,7 @@ expose = ["assign_web_port"]
 from = ["terok.lib.orchestration.ports"]
 
 [[interfaces]]
-expose = ["config_root", "state_root", "runtime_root"]
+expose = ["config_root", "credentials_root", "state_root", "runtime_root"]
 from = ["terok.lib.core.paths"]
 
 [[interfaces]]

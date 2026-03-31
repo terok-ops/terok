@@ -59,7 +59,7 @@ if _HAS_TEXTUAL:
     from ..lib.core.config import (
         get_tui_default_tmux,
         set_experimental,
-        state_root,
+        state_dir,
     )
     from ..lib.core.projects import ProjectConfig, list_projects, load_project
 
@@ -357,7 +357,7 @@ if _HAS_TEXTUAL:
             not be visible even though the widgets exist.
             """
             try:
-                log_path = state_root() / "terok.log"
+                log_path = state_dir() / "terok.log"
                 log_path.parent.mkdir(parents=True, exist_ok=True)
 
                 left_pane = self.query_one("#left-pane")
@@ -395,7 +395,7 @@ if _HAS_TEXTUAL:
             try:
                 from datetime import datetime as _dt
 
-                log_path = state_root() / "terok.log"
+                log_path = state_dir() / "terok.log"
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 ts = _dt.now().isoformat(timespec="seconds")
                 with log_path.open("a", encoding="utf-8") as _f:
@@ -409,7 +409,7 @@ if _HAS_TEXTUAL:
             try:
                 import json
 
-                state_path = state_root() / "terok-state.json"
+                state_path = state_dir() / "terok-state.json"
                 if state_path.exists():
                     with state_path.open("r", encoding="utf-8") as f:
                         state = json.load(f)
@@ -425,7 +425,7 @@ if _HAS_TEXTUAL:
             try:
                 import json
 
-                state_path = state_root() / "terok-state.json"
+                state_path = state_dir() / "terok-state.json"
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state = {
                     "last_project": self.current_project_id,

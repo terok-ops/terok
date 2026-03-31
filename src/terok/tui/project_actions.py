@@ -480,12 +480,12 @@ class ProjectActionsMixin:
             names = ", ".join(p for p, _ in sharing)
             lines.append(f"\nNote: gate is shared with: {names} (will NOT be deleted)")
 
-        from ..lib.core.config import deleted_projects_dir
+        from ..lib.core.config import archive_dir as _archive_dir
 
-        archive_dir = deleted_projects_dir()
+        archive_path = _archive_dir()
         lines.append("\nAll project data will be permanently deleted.")
         lines.append("Project config, task data, and build artifacts will be archived at:")
-        lines.append(f"{archive_dir}")
+        lines.append(f"{archive_path}")
 
         from .screens import ConfirmDeleteScreen
 

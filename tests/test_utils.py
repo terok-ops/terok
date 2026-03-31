@@ -46,26 +46,29 @@ def project_env(
 ) -> Iterator[types.SimpleNamespace]:
     """Create a temp project directory, write project config, and patch env vars.
 
-    Yields a namespace with: base, config_root, state_dir, envs_dir, config_file, gate_dir.
+    Yields a namespace with: base, config_root, state_dir, credentials_dir, config_file, gate_dir.
     """
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
-        config_root = base / "config"
+        config_base = base / "config"
+        config_root = config_base / "projects"
         state_dir = base / "state"
-        envs_dir = base / "envs"
+        credentials_dir = base / "credentials"
         config_root.mkdir(parents=True, exist_ok=True)
 
         write_project(config_root, project_id, yaml_text)
 
         env_vars: dict[str, str] = {
-            "TEROK_CONFIG_DIR": str(config_root),
+            "TEROK_CONFIG_DIR": str(config_base),
             "TEROK_STATE_DIR": str(state_dir),
+            "TEROK_SANDBOX_STATE_DIR": str(state_dir),
+            "TEROK_CREDENTIALS_DIR": str(credentials_dir),
         }
 
         config_file = None
         if with_config_file:
             config_file = base / "config.yml"
-            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+            config_file.write_text(f"credentials:\n  dir: {credentials_dir}\n", encoding="utf-8")
             env_vars["TEROK_CONFIG_FILE"] = str(config_file)
 
         gate_dir = None
@@ -81,7 +84,7 @@ def project_env(
                 base=base,
                 config_root=config_root,
                 state_dir=state_dir,
-                envs_dir=envs_dir,
+                credentials_dir=credentials_dir,
                 config_file=config_file,
                 gate_dir=gate_dir,
             )

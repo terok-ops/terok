@@ -478,7 +478,7 @@ class TestTask:
                 task_run_cli(project_id, "1")
 
             assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
-            assert (ctx.envs_dir / "_claude-config" / "settings.json").is_file()
+            assert (ctx.credentials_dir / "_claude-config" / "settings.json").is_file()
 
     def test_task_run_toad_passes_public_url(self) -> None:
         """task_run_toad must pass --public-url with the host port to toad serve."""
@@ -937,9 +937,9 @@ class TestTaskLogs:
         """Create a task and set its mode in metadata."""
         task_id = task_new(project_id)
         # Manually update metadata to set mode (normally done by task runners)
-        from terok.lib.core.config import state_root
+        from terok.lib.core.config import state_dir
 
-        meta_dir = state_root() / "projects" / project_id / "tasks"
+        meta_dir = state_dir() / "projects" / project_id / "tasks"
         meta_path = meta_dir / f"{task_id}.yml"
         meta = yaml_load(meta_path.read_text()) or {}
         meta["mode"] = mode
@@ -1134,9 +1134,9 @@ class TestTaskLogs:
                 task_id = self._setup_task_with_mode("proj_logs_persist", "run")
 
                 # Create persisted log file
-                from terok.lib.core.config import state_root
+                from terok.lib.core.config import state_dir
 
-                task_dir = Path(state_root()) / "tasks" / "proj_logs_persist" / task_id
+                task_dir = Path(state_dir()) / "tasks" / "proj_logs_persist" / task_id
                 logs_dir = task_dir / "logs"
                 logs_dir.mkdir(parents=True, exist_ok=True)
                 log_file = logs_dir / "container.log"
@@ -1171,9 +1171,9 @@ class TestTaskLogs:
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs_tail", "run")
 
-                from terok.lib.core.config import state_root
+                from terok.lib.core.config import state_dir
 
-                task_dir = Path(state_root()) / "tasks" / "proj_logs_tail" / task_id
+                task_dir = Path(state_dir()) / "tasks" / "proj_logs_tail" / task_id
                 logs_dir = task_dir / "logs"
                 logs_dir.mkdir(parents=True, exist_ok=True)
                 log_file = logs_dir / "container.log"
@@ -1219,9 +1219,9 @@ class TestTaskLogs:
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs_negtail", "run")
 
-                from terok.lib.core.config import state_root
+                from terok.lib.core.config import state_dir
 
-                task_dir = Path(state_root()) / "tasks" / "proj_logs_negtail" / task_id
+                task_dir = Path(state_dir()) / "tasks" / "proj_logs_negtail" / task_id
                 logs_dir = task_dir / "logs"
                 logs_dir.mkdir(parents=True, exist_ok=True)
                 (logs_dir / "container.log").write_text("a\nb\n")

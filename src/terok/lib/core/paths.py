@@ -17,6 +17,7 @@ except ImportError:  # optional dependency
 
 
 APP_NAME = "terok"
+CREDENTIALS_APP_NAME = "terok-credentials"
 
 
 def _is_root() -> bool:
@@ -91,3 +92,22 @@ def runtime_root() -> Path:
         return Path("/run") / APP_NAME
 
     return Path.home() / ".cache" / APP_NAME
+
+
+def credentials_root() -> Path:
+    """Shared credentials directory used by all terok ecosystem packages.
+
+    Priority: ``TEROK_CREDENTIALS_DIR`` → ``/var/lib/terok-credentials`` (root)
+    → XDG data dir.
+    """
+    env = os.getenv("TEROK_CREDENTIALS_DIR")
+    if env:
+        return Path(env).expanduser()
+    if _is_root():
+        return Path("/var/lib") / CREDENTIALS_APP_NAME
+    if _user_data_dir is not None:
+        return Path(_user_data_dir(CREDENTIALS_APP_NAME))
+    xdg = os.getenv("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / CREDENTIALS_APP_NAME
+    return Path.home() / ".local" / "share" / CREDENTIALS_APP_NAME

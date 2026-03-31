@@ -22,7 +22,7 @@ from terok_sandbox import (
     get_gate_server_port,
 )
 
-from ..core.config import get_envs_base_dir
+from ..core.config import credentials_dir
 from ..core.projects import ProjectConfig
 from ..util.fs import ensure_dir_writable
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
@@ -38,7 +38,7 @@ class SharedMount:
     """Lookup key (e.g. ``"codex"``)."""
 
     host_dir_suffix: str
-    """Directory name under ``get_envs_base_dir()`` (e.g. ``"_codex-config"``)."""
+    """Directory name under ``credentials_dir()`` (e.g. ``"_codex-config"``)."""
 
     label: str
     """Human-readable label for writable-check messages (e.g. ``"Codex config"``)."""
@@ -349,8 +349,8 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
     repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
     repo_dir.mkdir(parents=True, exist_ok=True)
 
-    envs_base = get_envs_base_dir()
-    config_dirs = _ensure_shared_dirs(envs_base)
+    credentials_base = credentials_dir()
+    config_dirs = _ensure_shared_dirs(credentials_base)
 
     env = {
         "PROJECT_ID": project.id,

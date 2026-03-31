@@ -25,7 +25,7 @@ from terok_sandbox import (
     stop_task_containers,
 )
 
-from ..core.config import state_root
+from ..core.config import state_dir
 from ..core.projects import ProjectConfig, load_project
 from ..core.task_display import (
     STATUS_DISPLAY,
@@ -273,12 +273,12 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
-    return state_root() / "projects" / project_id / "tasks"
+    return state_dir() / "projects" / project_id / "tasks"
 
 
 def tasks_archive_dir(project_id: str) -> Path:
     """Return the directory containing archived task data for *project_id*."""
-    return state_root() / "projects" / project_id / "archive"
+    return state_dir() / "projects" / project_id / "archive"
 
 
 def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:

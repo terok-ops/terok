@@ -53,22 +53,22 @@ def test_global_config_path_prefers_xdg(
 @pytest.mark.parametrize(
     ("env_var", "config_text", "resolver", "expected_name"),
     [
-        ("TEROK_STATE_DIR", None, cfg.state_root, "state"),
-        ("TEROK_CONFIG_FILE", "paths:\n  state_root: {path}\n", cfg.state_root, "state"),
+        ("TEROK_STATE_DIR", None, cfg.state_dir, "state"),
+        ("TEROK_CONFIG_FILE", "paths:\n  state_dir: {path}\n", cfg.state_dir, "state"),
         (
             "TEROK_CONFIG_FILE",
-            "paths:\n  user_projects_root: {path}\n",
-            cfg.user_projects_root,
+            "paths:\n  user_projects_dir: {path}\n",
+            cfg.user_projects_dir,
             "projects",
         ),
         (
             "TEROK_CONFIG_FILE",
-            "ui:\n  base_port: 8123\nenvs:\n  base_dir: {path}\n",
-            cfg.get_envs_base_dir,
+            "ui:\n  base_port: 8123\ncredentials:\n  dir: {path}\n",
+            cfg.credentials_dir,
             "envs",
         ),
     ],
-    ids=["state-env", "state-config", "projects-config", "envs-config"],
+    ids=["state-env", "state-config", "projects-config", "credentials-config"],
 )
 def test_path_resolution(
     monkeypatch: pytest.MonkeyPatch,
@@ -176,3 +176,228 @@ def test_get_shield_policy_accessors(
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, config_yaml)))
     assert cfg.get_shield_drop_on_task_run() is expected_drop
     assert cfg.get_shield_on_task_restart() == expected_restart
+
+
+# ---------- Renamed / new path functions ----------
+
+
+def test_projects_dir_appends_subdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``projects_dir()`` always returns ``<config_root>/projects``."""
+    monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path))
+    assert cfg.projects_dir() == (tmp_path / "projects").resolve()
+
+
+def test_state_dir_via_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``state_dir()`` reads TEROK_STATE_DIR."""
+    target = tmp_path / "my-state"
+    monkeypatch.setenv("TEROK_STATE_DIR", str(target))
+    assert cfg.state_dir() == target.resolve()
+
+
+def test_state_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``state_dir()`` reads ``paths.state_dir`` from global config."""
+    target = tmp_path / "custom-state"
+    monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"paths:\n  state_dir: {target}\n")),
+    )
+    assert cfg.state_dir() == target.resolve()
+
+
+def test_build_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``build_dir()`` reads ``paths.build_dir`` from global config."""
+    target = tmp_path / "builds"
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"paths:\n  build_dir: {target}\n")),
+    )
+    assert cfg.build_dir() == target.resolve()
+
+
+def test_build_dir_defaults_under_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``build_dir()`` falls back to ``state_dir()/build``."""
+    monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.build_dir() == (tmp_path / "build").resolve()
+
+
+def test_archive_dir_under_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``archive_dir()`` returns ``state_dir()/deleted-projects``."""
+    monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path))
+    assert cfg.archive_dir() == (tmp_path / "deleted-projects").resolve()
+
+
+def test_credentials_dir_env_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``credentials_dir()`` prioritizes TEROK_CREDENTIALS_DIR env var."""
+    target = tmp_path / "creds"
+    monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(target))
+    assert cfg.credentials_dir() == target.resolve()
+
+
+def test_credentials_dir_config_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``credentials_dir()`` reads ``credentials.dir`` from config when no env var."""
+    target = tmp_path / "config-creds"
+    monkeypatch.delenv("TEROK_CREDENTIALS_DIR", raising=False)
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"credentials:\n  dir: {target}\n")),
+    )
+    assert cfg.credentials_dir() == target.resolve()
+
+
+def test_credentials_dir_env_beats_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Env var wins over config file for ``credentials_dir()``."""
+    env_target = tmp_path / "env-creds"
+    cfg_target = tmp_path / "cfg-creds"
+    monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(env_target))
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"credentials:\n  dir: {cfg_target}\n")),
+    )
+    assert cfg.credentials_dir() == env_target.resolve()
+
+
+def test_gate_repos_dir_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``gate_repos_dir()`` falls back to ``state_dir()/gate``."""
+    monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.gate_repos_dir() == (tmp_path / "gate").resolve()
+
+
+def test_gate_repos_dir_custom(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``gate_repos_dir()`` reads ``gate_server.repos_dir`` from config."""
+    target = tmp_path / "custom-gate"
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"gate_server:\n  repos_dir: {target}\n")),
+    )
+    assert cfg.gate_repos_dir() == target.resolve()
+
+
+def test_user_presets_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``user_presets_dir()`` reads ``paths.user_presets_dir`` from config."""
+    target = tmp_path / "presets"
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"paths:\n  user_presets_dir: {target}\n")),
+    )
+    assert cfg.user_presets_dir() == target.resolve()
+
+
+def test_user_projects_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``user_projects_dir()`` reads ``paths.user_projects_dir`` from config."""
+    target = tmp_path / "projects"
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"paths:\n  user_projects_dir: {target}\n")),
+    )
+    assert cfg.user_projects_dir() == target.resolve()
+
+
+def test_get_prefix_default() -> None:
+    """``get_prefix()`` returns sys.prefix when TEROK_PREFIX is not set."""
+    import sys
+
+    result = cfg.get_prefix()
+    assert result == Path(sys.prefix).resolve()
+
+
+def test_get_prefix_env_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_prefix()`` reads TEROK_PREFIX when set."""
+    monkeypatch.setenv("TEROK_PREFIX", str(tmp_path))
+    assert cfg.get_prefix() == tmp_path.resolve()
+
+
+# ---------- Validated config accessor coverage ----------
+
+
+def test_get_global_human_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_global_human_name()`` reads from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "git:\n  human_name: Jean-Luc Picard\n")),
+    )
+    assert cfg.get_global_human_name() == "Jean-Luc Picard"
+
+
+def test_get_global_human_name_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_global_human_name()`` returns None when unset."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_global_human_name() is None
+
+
+def test_get_global_human_email(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_global_human_email()`` reads from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "git:\n  human_email: picard@enterprise.fed\n")),
+    )
+    assert cfg.get_global_human_email() == "picard@enterprise.fed"
+
+
+def test_get_logs_partial_streaming_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_logs_partial_streaming()`` defaults to True."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_logs_partial_streaming() is True
+
+
+def test_get_logs_partial_streaming_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_logs_partial_streaming()`` reads config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "logs:\n  partial_streaming: false\n")),
+    )
+    assert cfg.get_logs_partial_streaming() is False
+
+
+def test_get_credential_proxy_bypass(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_credential_proxy_bypass()`` reads from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "credential_proxy:\n  bypass_no_secret_protection: true\n")),
+    )
+    assert cfg.get_credential_proxy_bypass() is True
+
+
+def test_get_gate_server_port_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_gate_server_port()`` defaults to 9418."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_gate_server_port() == 9418
+
+
+def test_get_gate_server_suppress_warning(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_gate_server_suppress_warning()`` reads from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "gate_server:\n  suppress_systemd_warning: true\n")),
+    )
+    assert cfg.get_gate_server_suppress_warning() is True
+
+
+# ---------- Validated config error paths ----------
+
+
+def test_load_validated_returns_defaults_on_malformed_yaml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_load_validated()`` returns defaults when config is unreadable."""
+    bad_file = tmp_path / "config.yml"
+    bad_file.write_text("not: {valid: yaml: broken", encoding="utf-8")
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(bad_file))
+    # Should not raise — falls back to defaults
+    assert cfg.get_ui_base_port() == 7860
+
+
+def test_load_validated_returns_defaults_on_invalid_schema(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_load_validated()`` returns defaults when config has invalid schema."""
+    bad_file = tmp_path / "config.yml"
+    bad_file.write_text("ui:\n  base_port: not-a-number\n", encoding="utf-8")
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(bad_file))
+    assert cfg.get_ui_base_port() == 7860
