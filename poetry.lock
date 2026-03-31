@@ -2763,20 +2763,19 @@ description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "terok_agent-0.0.24-py3-none-any.whl", hash = "sha256:3d3773637da3ccfe53983b856993124fc9e34fdcb684041817cf1fe689efd153"},
+]
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "a4bb5f6"}
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.22/terok_sandbox-0.0.22-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
-type = "git"
-url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "2ae30ea"
-resolved_reference = "2ae30ea4c7be52484d401c3cfbc39efe8a846cf2"
+type = "url"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.24/terok_agent-0.0.24-py3-none-any.whl"
 
 [[package]]
 name = "terok-sandbox"
@@ -2785,20 +2784,19 @@ description = "Hardened Podman container runner with gate server and shield inte
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "terok_sandbox-0.0.22-py3-none-any.whl", hash = "sha256:7712ea22a0cea65a43d051073a5aee7d8cdcc1f765c5e2e72e9e18b69de4d62d"},
+]
 
 [package.dependencies]
 aiohttp = ">=3.9"
 cryptography = ">=43.0"
 platformdirs = ">=4.0"
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.5.2/terok_shield-0.5.2-py3-none-any.whl"}
+terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.5.2/terok_shield-0.5.2-py3-none-any.whl"}
 
 [package.source]
-type = "git"
-url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "a4bb5f6"
-resolved_reference = "a4bb5f608f89a8b570e049bafa8155ad48b43414"
+type = "url"
+url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.22/terok_sandbox-0.0.22-py3-none-any.whl"
 
 [[package]]
 name = "terok-shield"
@@ -3287,4 +3285,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "de28ec929af545416be7e90cb2d2ae1cbebea6b091af41db131139ba41e5e1ac"
+content-hash = "6b8b77dd9b67e1ce8e000c9bfb2b7b4b2cd2322350a12f90533c807b1ba008d7"
