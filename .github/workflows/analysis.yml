@@ -154,7 +154,7 @@ jobs:
   # artifacts uploaded above, because GitHub does not expose secrets to fork PR runs.
   sonar:
     name: SonarQube Cloud
-    if: github.repository == 'terok-ai/terok' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.repository == 'terok-ai/terok' && (github.event_name == 'push' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository))
     needs: [unit-tests, ruff, bandit]
     runs-on: ubuntu-latest
     steps:
