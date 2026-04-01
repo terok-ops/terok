@@ -34,11 +34,11 @@ pipx install ./terok-*.whl
 pip install ./terok-*.whl
 ```
 
-After install, you should have console scripts: `terok` (TUI), `terokctl` (CLI).
+After install, you should have console scripts: `terok` (TUI), `terok` (CLI).
 
 ### Global Flags
 
-Both `terok` and `terokctl` support:
+Both `terok` and `terok` support:
 
 | Flag | Description |
 |------|-------------|
@@ -52,29 +52,29 @@ Tab completion is powered by [argcomplete](https://github.com/kislyuk/argcomplet
 
 ```bash
 # Auto-detect shell from $SHELL and install
-terokctl completions install
+terok completions install
 
 # Or specify the shell explicitly
-terokctl completions install --shell bash
+terok completions install --shell bash
 ```
 
 Install locations (auto-loaded, no RC file edits needed):
 
 | Shell | Path |
 |-------|------|
-| bash  | `~/.local/share/bash-completion/completions/terokctl` |
-| zsh   | `~/.local/share/zsh/site-functions/_terokctl` |
-| fish  | `~/.config/fish/completions/terokctl.fish` |
+| bash  | `~/.local/share/bash-completion/completions/terok` |
+| zsh   | `~/.local/share/zsh/site-functions/_terok` |
+| fish  | `~/.config/fish/completions/terok.fish` |
 
 **Alternative: print raw completion script**
 
 ```bash
-terokctl completions bash   # Print bash completion script to stdout
-terokctl completions zsh    # Print zsh completion script to stdout
-terokctl completions fish   # Print fish completion script to stdout
+terok completions bash   # Print bash completion script to stdout
+terok completions zsh    # Print zsh completion script to stdout
+terok completions fish   # Print fish completion script to stdout
 ```
 
-Run `terokctl config` to check whether completions are detected as installed.
+Run `terok config` to check whether completions are detected as installed.
 
 ---
 
@@ -160,7 +160,7 @@ install.  The steps below show the equivalent CLI workflow.
 
 - Podman installed and working
 - OpenSSH client tools (ssh, ssh-keygen) for private Git over SSH
-- tmux (optional, for `terokctl --tmux` and persistent container sessions)
+- tmux (optional, for `terok --tmux` and persistent container sessions)
 
 ### Step 1: Create Project Directory
 
@@ -198,24 +198,24 @@ This text is pasted near the end of your project image (L2) Dockerfile.
 ### Step 4: Generate Dockerfiles
 
 ```bash
-terokctl generate myproj
+terok generate myproj
 ```
 
 ### Step 5: Build Images
 
 ```bash
 # Build only L2 project images (fast, reuses existing L0/L1 layers)
-terokctl build myproj
+terok build myproj
 
 # Rebuild from L0 with fresh agents (codex, claude, opencode, vibe)
-terokctl build --agents myproj
+terok build --agents myproj
 
 # Rebuild from L0 (no cache) (includes base image pull and apt packages)
-terokctl build --full-rebuild myproj
+terok build --full-rebuild myproj
 
 # Optional: build a dev image from L0 as well
-terokctl build myproj --dev
-terokctl build --agents myproj --dev
+terok build myproj --dev
+terok build --agents myproj --dev
 ```
 
 Build modes:
@@ -226,7 +226,7 @@ Build modes:
 ### Step 6: Initialize SSH (for private repos)
 
 ```bash
-terokctl ssh-init myproj
+terok ssh-init myproj
 ```
 
 This creates:
@@ -250,55 +250,55 @@ Supported tokens: `{{IDENTITY_FILE}}`, `{{KEY_NAME}}`, `{{PROJECT_ID}}`
 
 ```bash
 # Create a new task
-terokctl task new myproj
+terok task new myproj
 # Output: Created task 1 for project myproj
 
 # List tasks
-terokctl task list myproj
+terok task list myproj
 
 # Run in CLI mode (headless agent)
-terokctl task run-cli myproj 1
+terok task run-cli myproj 1
 ```
 
 #### Additional Task Operations
 
 ```bash
 # Create and immediately run a task in one step
-terokctl task start myproj
+terok task start myproj
 
 # Rename a task
-terokctl task rename myproj 1 fix-auth-bug
+terok task rename myproj 1 fix-auth-bug
 
 # Follow up on a completed/failed headless task with a new prompt
-terokctl task followup myproj 1 -p "Now add tests for the fix"
+terok task followup myproj 1 -p "Now add tests for the fix"
 
 # View formatted container logs
-terokctl task logs myproj 1              # Latest logs
-terokctl task logs myproj 1 -f           # Follow live output
-terokctl task logs myproj 1 --tail 50    # Last 50 lines
-terokctl task logs myproj 1 --raw        # Raw podman output
+terok task logs myproj 1              # Latest logs
+terok task logs myproj 1 -f           # Follow live output
+terok task logs myproj 1 --tail 50    # Last 50 lines
+terok task logs myproj 1 --raw        # Raw podman output
 
 # Stop or restart a task
-terokctl task stop myproj 1
-terokctl task restart myproj 1
+terok task stop myproj 1
+terok task restart myproj 1
 
 # Delete a task
-terokctl task delete myproj 1
+terok task delete myproj 1
 
 # View archived (deleted) tasks and their logs
-terokctl task archive list myproj
-terokctl task archive logs myproj 20260305T143000Z
+terok task archive list myproj
+terok task archive logs myproj 20260305T143000Z
 ```
 
 ### Step 8: Log into a Running Container
 
 ```bash
 # Open a shell in a running task container (persistent tmux session)
-terokctl login myproj 1
+terok login myproj 1
 ```
 
 This opens a tmux session inside the container. The session persists across
-disconnects — re-running `terokctl login` reattaches to the same session.
+disconnects — re-running `terok login` reattaches to the same session.
 Interactive shells show `hilfe --kurz` on entry; run `hilfe` inside the
 container for the fuller in-container help.
 
@@ -317,7 +317,7 @@ method automatically:
 #### Running the TUI under tmux (recommended)
 
 ```bash
-terokctl --tmux
+terok --tmux
 ```
 
 This wraps the TUI in a managed tmux session with a blue status bar showing
@@ -347,17 +347,17 @@ Supported providers: `claude`, `codex`, `copilot`, `vibe`, `blablador`, `opencod
 
 ```bash
 # Run with a prompt (uses default provider — claude unless configured otherwise)
-terokctl run myproj "Fix the authentication bug in login.py"
+terok run myproj "Fix the authentication bug in login.py"
 
 # Override model and set a timeout
-terokctl run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
+terok run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
 
 # Detach immediately (don't stream output)
-terokctl run myproj "Refactor the database layer" --no-follow
+terok run myproj "Refactor the database layer" --no-follow
 
 # Use a specific provider
-terokctl run myproj "Fix the auth bug" --provider codex
-terokctl run myproj "Add tests" --provider copilot
+terok run myproj "Fix the auth bug" --provider codex
+terok run myproj "Add tests" --provider copilot
 ```
 
 The command creates a new task, starts a container, runs the agent with the given
@@ -438,10 +438,10 @@ file writes or shell commands).
 
 ```bash
 # Run restricted (agent uses vendor defaults — asks before dangerous ops)
-terokctl run myproj "Fix the bug" --restricted
+terok run myproj "Fix the bug" --restricted
 
 # Explicitly unrestricted (default behavior)
-terokctl run myproj "Fix the bug" --unrestricted
+terok run myproj "Fix the bug" --unrestricted
 ```
 
 The flags are mutually exclusive.  When neither is given, the value comes from
@@ -487,7 +487,7 @@ unrestricted (`true`).
 #### Checking the current mode
 
 ```bash
-terokctl task status myproj 1
+terok task status myproj 1
 # Output includes: Permissions: unrestricted
 ```
 
@@ -538,17 +538,17 @@ agent:
 
 ```bash
 # Include the debugger agent for this run (sub-agents require --provider claude)
-terokctl run myproj "Find and fix the memory leak" --provider claude --agent debugger
+terok run myproj "Find and fix the memory leak" --provider claude --agent debugger
 
 # Include multiple non-default agents
-terokctl run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
+terok run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
 ```
 
 The `--agent` flag also works with interactive modes:
 
 ```bash
-terokctl task run-cli myproj 1 --agent debugger
-terokctl task start myproj --agent debugger
+terok task run-cli myproj 1 --agent debugger
+terok task start myproj --agent debugger
 ```
 
 #### Agent .md File Format
@@ -573,7 +573,7 @@ Reference them in `project.yml` with `file:` (paths relative to project root).
 Pass an additional YAML file with `--config` to add more sub-agents at runtime:
 
 ```bash
-terokctl run myproj "Review the PR" --config /path/to/extra-agents.yml
+terok run myproj "Review the PR" --config /path/to/extra-agents.yml
 ```
 
 The file should contain a `subagents:` list in the same format as `project.yml`.
@@ -593,7 +593,7 @@ interfere with them:
 Per-sub-agent MCPs can be defined inline using the `mcpServers` field in the
 agent definition (same format as Claude's native agent JSON).
 
-Run `terokctl config` to see the actual paths on your system.
+Run `terok config` to see the actual paths on your system.
 
 ---
 
@@ -610,8 +610,8 @@ Every task container receives instructions explaining the workspace layout, avai
 
 - **Claude**: injected via `--append-system-prompt` (system-level context)
 - **Codex**: loaded from `/home/dev/.terok/instructions.md` via `-c model_instructions_file=...`
-  in the wrapper (applies to both `terokctl run` and `terokctl task run-cli`)
-- **Other providers**: prepended to the task prompt (headless `terokctl run`)
+  in the wrapper (applies to both `terok run` and `terok task run-cli`)
+- **Other providers**: prepended to the task prompt (headless `terok run`)
 
 ### Scenarios
 
@@ -687,7 +687,7 @@ agent:
 Override all config-stack instructions with a file:
 
 ```bash
-terokctl run myproj "Fix the bug" --instructions path/to/instructions.md
+terok run myproj "Fix the bug" --instructions path/to/instructions.md
 ```
 
 ### TUI
@@ -722,7 +722,7 @@ Three are bundled and work immediately — no setup needed.
 
 ### Bundled Presets
 
-The current bundled set is a starting point — run `terokctl presets list <project>`
+The current bundled set is a starting point — run `terok presets list <project>`
 to see what's available. The names and contents may change in future versions;
 global presets you create will shadow them automatically.
 
@@ -734,33 +734,33 @@ global presets you create will shadow them automatically.
 
 ```bash
 # Quick fix — single fast agent
-terokctl run myproj "Fix the typo in login.py" --preset solo
+terok run myproj "Fix the typo in login.py" --preset solo
 
 # Code review — read-only analysis
-terokctl run myproj "Review the auth module for security issues" --preset review
+terok run myproj "Review the auth module for security issues" --preset review
 
 # Full dev team — architect plans, engineers implement, testers verify
-terokctl run myproj "Add pagination to the /users endpoint" --preset team
+terok run myproj "Add pagination to the /users endpoint" --preset team
 
 # Team preset with an on-demand agent enabled
-terokctl run myproj "Update the CLI help text" --preset team --agent cli-engineer
+terok run myproj "Update the CLI help text" --preset team --agent cli-engineer
 ```
 
 Presets work with all task modes:
 
 ```bash
-terokctl task start myproj --preset review
-terokctl task run-cli myproj 1 --preset team
+terok task start myproj --preset review
+terok task run-cli myproj 1 --preset team
 ```
 
 ### See What's Available
 
 ```bash
 # List all presets (bundled + global + project)
-terokctl presets list myproj
+terok presets list myproj
 
 # Show what a preset resolves to
-terokctl config-show myproj --preset team
+terok config-show myproj --preset team
 ```
 
 ### Customize: Global Presets
@@ -773,7 +773,7 @@ global presets directory. It's shared across all projects.
 mkdir -p ~/.config/terok/presets
 
 # Copy a bundled preset and customize it
-terokctl config | grep "Bundled presets"   # find the path
+terok config | grep "Bundled presets"   # find the path
 cp <bundled-path>/solo.yml ~/.config/terok/presets/solo.yml
 # Edit to taste — your version now shadows the bundled one
 ```
@@ -795,7 +795,7 @@ subagents:
 EOF
 ```
 
-Now use it anywhere: `terokctl run anyproject "Review PR #42" --preset quick-review`
+Now use it anywhere: `terok run anyproject "Review PR #42" --preset quick-review`
 
 ### Preset Search Order
 
@@ -814,14 +814,14 @@ Run multiple tasks in the same project, each with a different preset:
 
 ```bash
 # Task 1: architect reviews the codebase
-terokctl task start myproj --preset review
+terok task start myproj --preset review
 # Task 2: team implements the feature
-terokctl task start myproj --preset team
+terok task start myproj --preset team
 # Task 3: solo agent writes docs
-terokctl task start myproj --preset solo
+terok task start myproj --preset solo
 ```
 
-Each task remembers its preset — `terokctl task restart` reuses it automatically.
+Each task remembers its preset — `terok task restart` reuses it automatically.
 
 ---
 
@@ -876,13 +876,13 @@ Hook commands receive task context via environment variables:
 
 Hooks are tracked in task metadata (`hooks_fired` list).  If a task stops
 without its `post_stop` hook running (e.g. after a crash or host reboot),
-`terokctl sickbay` detects the inconsistency:
+`terok sickbay` detects the inconsistency:
 
 ```bash
-terokctl sickbay                    # check all projects
-terokctl sickbay myproject          # check one project
-terokctl sickbay myproject 3        # check one task
-terokctl sickbay --fix              # auto-reconcile (run missed hooks)
+terok sickbay                    # check all projects
+terok sickbay myproject          # check one project
+terok sickbay myproject 3        # check one task
+terok sickbay --fix              # auto-reconcile (run missed hooks)
 ```
 
 ### Example: task lifecycle logging
@@ -898,16 +898,16 @@ Manage terok container images (L0/L1/L2 layers) with the `image` subcommand.
 
 ```bash
 # List all terok images with sizes
-terokctl image list
+terok image list
 
 # List images for a specific project
-terokctl image list myproj
+terok image list myproj
 
 # Remove orphaned and dangling terok images
-terokctl image cleanup
+terok image cleanup
 
 # Preview what would be removed without actually deleting
-terokctl image cleanup --dry-run
+terok image cleanup --dry-run
 ```
 
 ---
@@ -920,10 +920,10 @@ Remove a project and all its associated data (tasks, containers, images):
 
 ```bash
 # Delete with confirmation prompt
-terokctl project-delete myproj
+terok project-delete myproj
 
 # Skip confirmation
-terokctl project-delete myproj --force
+terok project-delete myproj --force
 ```
 
 ### Deriving a Project
@@ -931,7 +931,7 @@ terokctl project-delete myproj --force
 Create a new project from an existing one (shared infrastructure, fresh agent config):
 
 ```bash
-terokctl project-derive myproj myproj-v2
+terok project-derive myproj myproj-v2
 ```
 
 ### OpenCode Config Import
@@ -939,7 +939,7 @@ terokctl project-derive myproj myproj-v2
 Import an OpenCode config file into the shared mount:
 
 ```bash
-terokctl config import-opencode /path/to/opencode.json
+terok config import-opencode /path/to/opencode.json
 ```
 
 ---
@@ -976,8 +976,8 @@ When enabled, terok adds:
 
 ## Tips
 
-- **Show resolved paths:** `terokctl config`
-- **Where envs live:** `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if root, or as configured under `envs.base_dir`)
+- **Show resolved paths:** `terok config`
+- **Where credentials live:** `~/.local/share/terok-credentials` (or `/var/lib/terok-credentials` if root, or as configured under `credentials.dir`)
 - **Shared directories:** See [shared-dirs.md](shared-dirs.md)
 - **Security modes:** See [git-gate-and-security-modes.md](git-gate-and-security-modes.md)
 - **Copying text from the terminal:** TUI and tmux can intercept mouse

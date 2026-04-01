@@ -1,6 +1,6 @@
 # Gate integration tests
 
-Host-side git-gate workflows exercised through the real `terokctl` CLI:
+Host-side git-gate workflows exercised through the real `terok` CLI:
 
 - initial `gate-sync`
 - incremental mirror updates from a local upstream

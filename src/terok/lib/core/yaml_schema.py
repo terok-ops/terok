@@ -290,12 +290,12 @@ class RawUISection(BaseModel):
     base_port: int = 7860
 
 
-class RawEnvsSection(BaseModel):
-    """Global ``envs:`` section."""
+class RawCredentialsSection(BaseModel):
+    """Global ``credentials:`` section."""
 
     model_config = ConfigDict(extra="forbid")
 
-    base_dir: str | None = None
+    dir: str | None = None
 
 
 class RawPathsSection(BaseModel):
@@ -303,10 +303,10 @@ class RawPathsSection(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    state_root: str | None = None
-    build_root: str | None = None
-    user_projects_root: str | None = None
-    global_presets_dir: str | None = None
+    state_dir: str | None = None
+    build_dir: str | None = None
+    user_projects_dir: str | None = None
+    user_presets_dir: str | None = None
 
 
 class RawTUISection(BaseModel):
@@ -351,7 +351,7 @@ class RawGateServerSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     port: int = 9418
-    base_path: str | None = None
+    repos_dir: str | None = None
     suppress_systemd_warning: bool = False
 
 
@@ -374,7 +374,7 @@ class RawGlobalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ui: RawUISection = Field(default_factory=RawUISection)
-    envs: RawEnvsSection = Field(default_factory=RawEnvsSection)
+    credentials: RawCredentialsSection = Field(default_factory=RawCredentialsSection)
     paths: RawPathsSection = Field(default_factory=RawPathsSection)
     tui: RawTUISection = Field(default_factory=RawTUISection)
     logs: RawLogsSection = Field(default_factory=RawLogsSection)
@@ -391,7 +391,7 @@ class RawGlobalConfig(BaseModel):
     _SECTION_KEYS: ClassVar[frozenset[str]] = frozenset(
         {
             "ui",
-            "envs",
+            "credentials",
             "paths",
             "tui",
             "logs",

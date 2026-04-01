@@ -33,7 +33,6 @@ from terok_agent import (
     authenticate as _authenticate_raw,
 )
 
-from ..core.config import get_envs_base_dir
 from ..core.images import project_cli_image
 from ..core.projects import load_project
 from ..orchestration.docker import build_images, generate_dockerfiles
@@ -124,12 +123,14 @@ def authenticate(project_id: str, provider: str) -> None:
     """Run the auth flow for *provider*, injecting terok-specific config.
 
     Thin wrapper around the instrumentation-layer ``authenticate()`` that
-    supplies ``envs_base_dir`` and ``image`` from terok's config/image system.
+    supplies ``mounts_dir`` and ``image`` from terok's config/image system.
     """
+    from terok_agent import mounts_dir
+
     _authenticate_raw(
         project_id,
         provider,
-        envs_base_dir=get_envs_base_dir(),
+        mounts_dir=mounts_dir(),
         image=project_cli_image(project_id),
     )
 

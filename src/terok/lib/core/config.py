@@ -14,7 +14,11 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..util.yaml import YAMLError, load as _yaml_load
-from .paths import config_root as _config_root_base, state_root as _state_root_base
+from .paths import (
+    config_root as _config_root_base,
+    credentials_root as _credentials_root_base,
+    state_root as _state_root_base,
+)
 from .yaml_schema import RawGlobalConfig
 
 logger = logging.getLogger(__name__)
@@ -39,20 +43,13 @@ def get_prefix() -> Path:
     return Path(sys.prefix).resolve()
 
 
-def config_root() -> Path:
+def projects_dir() -> Path:
     """
     System projects directory. Uses FHS/XDG via terok.lib.paths.
 
-    Behavior:
-    - If the base config directory contains a 'projects' subdirectory, use it.
-    - Otherwise, treat the base config directory itself as the projects root.
-
-    This makes development convenient when TEROK_CONFIG_DIR points directly
-    to a folder that already contains per-project subdirectories (like ./examples).
+    Returns the ``projects`` subdirectory under the base config root.
     """
-    base = _config_root_base().resolve()
-    proj_dir = base / "projects"
-    return proj_dir if proj_dir.is_dir() else base
+    return _config_root_base().resolve() / "projects"
 
 
 def global_config_search_paths() -> list[Path]:
@@ -149,7 +146,7 @@ def _resolve_path(
     """Resolve a path: env var → global config → computed default.
 
     This replaces the repeated try/except + load_global_config() pattern
-    that was duplicated across ``state_root``, ``build_root``, etc.
+    that was duplicated across ``state_dir``, ``build_dir``, etc.
     """
     if env_var:
         env = os.environ.get(env_var)
@@ -168,28 +165,28 @@ def _resolve_path(
     return default().resolve()
 
 
-def state_root() -> Path:
+def state_dir() -> Path:
     """Writable state directory for tasks/cache/build.
 
     Precedence:
     - Environment variable TEROK_STATE_DIR (handled first)
-    - If set in global config (paths.state_root), use it.
+    - If set in global config (paths.state_dir), use it.
     - Otherwise, use terok.lib.paths.state_root() (FHS/XDG handling).
     """
-    return _resolve_path("TEROK_STATE_DIR", ("paths", "state_root"), _state_root_base)
+    return _resolve_path("TEROK_STATE_DIR", ("paths", "state_dir"), _state_root_base)
 
 
-def gate_base_dir() -> Path:
+def gate_repos_dir() -> Path:
     """Directory that holds per-project bare gate repos.
 
     Precedence:
-    - ``gate_server.base_path`` in global config (explicit override).
-    - ``state_root() / "gate"`` (default).
+    - ``gate_server.repos_dir`` in global config (explicit override).
+    - ``state_dir() / "gate"`` (default).
     """
-    custom = _load_validated().gate_server.base_path
+    custom = _load_validated().gate_server.repos_dir
     if custom:
         return Path(custom).expanduser().resolve()
-    return state_root() / "gate"
+    return state_dir() / "gate"
 
 
 def _xdg_config_subdir(subdir: str) -> Path:
@@ -198,30 +195,28 @@ def _xdg_config_subdir(subdir: str) -> Path:
     return (Path(xdg) if xdg else Path.home() / ".config") / "terok" / subdir
 
 
-def user_projects_root() -> Path:
+def user_projects_dir() -> Path:
     """User projects directory.
 
     Precedence:
-    - Global config: paths.user_projects_root
+    - Global config: paths.user_projects_dir
     - XDG_CONFIG_HOME/terok/projects
     - ~/.config/terok/projects
     """
     return _resolve_path(
-        None, ("paths", "user_projects_root"), lambda: _xdg_config_subdir("projects")
+        None, ("paths", "user_projects_dir"), lambda: _xdg_config_subdir("projects")
     )
 
 
-def global_presets_dir() -> Path:
-    """Global presets directory (shared across all projects).
+def user_presets_dir() -> Path:
+    """User presets directory (shared across all projects).
 
     Precedence:
-    - Global config: paths.global_presets_dir
+    - Global config: paths.user_presets_dir
     - XDG_CONFIG_HOME/terok/presets
     - ~/.config/terok/presets
     """
-    return _resolve_path(
-        None, ("paths", "global_presets_dir"), lambda: _xdg_config_subdir("presets")
-    )
+    return _resolve_path(None, ("paths", "user_presets_dir"), lambda: _xdg_config_subdir("presets"))
 
 
 def bundled_presets_dir() -> Path:
@@ -234,20 +229,20 @@ def bundled_presets_dir() -> Path:
     return Path(str(_pkg_resources.files("terok") / "resources" / "presets"))
 
 
-def build_root() -> Path:
+def build_dir() -> Path:
     """
     Directory for build artifacts (generated Dockerfiles, etc.).
 
     Resolution order:
-    - Global config: paths.build_root
-    - Otherwise: state_root()/build
+    - Global config: paths.build_dir
+    - Otherwise: state_dir()/build
     """
-    return _resolve_path(None, ("paths", "build_root"), lambda: state_root() / "build")
+    return _resolve_path(None, ("paths", "build_dir"), lambda: state_dir() / "build")
 
 
-def deleted_projects_dir() -> Path:
-    """Return the directory for archived deleted projects (``state_root() / "deleted-projects"``)."""
-    return state_root() / "deleted-projects"
+def archive_dir() -> Path:
+    """Return the directory for archived deleted projects (``state_dir() / "deleted-projects"``)."""
+    return state_dir() / "deleted-projects"
 
 
 def get_ui_base_port() -> int:
@@ -255,16 +250,32 @@ def get_ui_base_port() -> int:
     return _load_validated().ui.base_port
 
 
-def get_envs_base_dir() -> Path:
-    """Return the base directory for shared env mounts (codex/ssh).
+def credentials_dir() -> Path:
+    """Return the base directory for shared credentials.
 
     Global config (terok-config.yml):
-      envs:
-        base_dir: ~/.local/share/terok/envs  # or /var/lib/terok/envs for root
+      credentials:
+        dir: ~/.local/share/terok-credentials  # or /var/lib/terok-credentials for root
 
-    Default: ~/.local/share/terok/envs (or /var/lib/terok/envs if root)
+    Default: ``credentials_root()`` from ``terok.lib.paths``.
     """
-    return _resolve_path(None, ("envs", "base_dir"), lambda: _state_root_base() / "envs")
+    return _resolve_path("TEROK_CREDENTIALS_DIR", ("credentials", "dir"), _credentials_root_base)
+
+
+def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
+    """Construct a :class:`SandboxConfig` aligned with terok's path resolution.
+
+    Bridges terok's config layer (env vars → config.yml → XDG defaults) to
+    sandbox's plain dataclass so that all sandbox operations use terok's
+    directory namespace rather than sandbox's own standalone defaults.
+    """
+    from terok_sandbox import SandboxConfig
+
+    return SandboxConfig(
+        state_dir=state_dir(),
+        credentials_dir=credentials_dir(),
+        gate_port=get_gate_server_port(),
+    )
 
 
 def get_global_human_name() -> str | None:

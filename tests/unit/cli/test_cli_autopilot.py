@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot CLI commands: ``terokctl run``."""
+"""Tests for autopilot CLI commands: ``terok run``."""
 
 from __future__ import annotations
 

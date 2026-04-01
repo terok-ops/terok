@@ -57,9 +57,9 @@ class TerokIntegrationEnv:
         return self.xdg_config_home / "terok" / "presets"
 
     @property
-    def envs_base_dir(self) -> Path:
-        """Return the isolated shared env mount base directory."""
-        return self.state_root / "envs"
+    def credentials_dir(self) -> Path:
+        """Return the isolated credentials directory."""
+        return self.base_dir / "credentials"
 
     @property
     def system_projects_root(self) -> Path:
@@ -82,6 +82,7 @@ class TerokIntegrationEnv:
                 "XDG_CONFIG_HOME": str(self.xdg_config_home),
                 "TEROK_CONFIG_DIR": str(self.system_config_root),
                 "TEROK_STATE_DIR": str(self.state_root),
+                "TEROK_CREDENTIALS_DIR": str(self.credentials_dir),
             }
         )
         return env
@@ -110,7 +111,7 @@ class TerokIntegrationEnv:
         if check and result.returncode != 0:
             raise AssertionError(
                 "CLI command failed:\n"
-                f"  command: terokctl {' '.join(args)}\n"
+                f"  command: terok {' '.join(args)}\n"
                 f"  exit: {result.returncode}\n"
                 f"  stdout:\n{result.stdout}\n"
                 f"  stderr:\n{result.stderr}"

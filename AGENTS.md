@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`terok` orchestrates and instruments containerized AI coding agents using Podman. It ships both a CLI (`terokctl`) and a Textual TUI (`terok`). The hardened container runtime (shield, gate, SSH, podman lifecycle) is provided by the `terok-sandbox` package.
+`terok` orchestrates and instruments containerized AI coding agents using Podman. It ships both a CLI (`terok`) and a Textual TUI (`terok-tui`). The hardened container runtime (shield, gate, SSH, podman lifecycle) is provided by the `terok-sandbox` package.
 
 ## Technology Stack
 

@@ -5,7 +5,7 @@
 
 Mounts ``CommandDef`` tuples (from terok-sandbox and terok-agent) under
 argparse subparser groups.  Each package exports its commands as frozen
-tuples; this module wires them into terokctl's namespace without
+tuples; this module wires them into terok's namespace without
 duplicating argument definitions or handler logic.
 
 The wiring layer uses structural typing (protocols) so it works with
@@ -100,7 +100,7 @@ def wire_group(
 def wire_dispatch(args: argparse.Namespace) -> bool:
     """Dispatch a wired command.  Returns ``True`` if handled.
 
-    Integrates with terokctl's existing dispatch chain: each dispatcher
+    Integrates with terok's existing dispatch chain: each dispatcher
     returns ``True`` if it handled the command, ``False`` to pass.
     """
     # Show group help when a group is invoked without a subcommand

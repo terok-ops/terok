@@ -17,9 +17,9 @@ _XDG_DATA_HOME = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local"
 _XDG_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
 
 _INSTALL_TARGETS: dict[str, Path] = {
-    "bash": _XDG_DATA_HOME / "bash-completion" / "completions" / "terokctl",
-    "zsh": _XDG_DATA_HOME / "zsh" / "site-functions" / "_terokctl",
-    "fish": _XDG_CONFIG_HOME / "fish" / "completions" / "terokctl.fish",
+    "bash": _XDG_DATA_HOME / "bash-completion" / "completions" / "terok",
+    "zsh": _XDG_DATA_HOME / "zsh" / "site-functions" / "_terok",
+    "fish": _XDG_CONFIG_HOME / "fish" / "completions" / "terok.fish",
 }
 
 _BASH_COMPLETION_DIRS = (
@@ -39,8 +39,8 @@ _SHELL_RC_FILES = (
 )
 
 _RC_MARKERS = (
-    "terokctl completions",
-    "register-python-argcomplete terokctl",
+    "terok completions",
+    "register-python-argcomplete terok",
 )
 
 
@@ -66,7 +66,7 @@ def _install_completions(shell: str | None) -> None:
     target = _INSTALL_TARGETS[shell]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        shellcode(["terokctl"], shell=shell, use_defaults=True) + "\n",  # nosec B604
+        shellcode(["terok"], shell=shell, use_defaults=True) + "\n",  # nosec B604
         encoding="utf-8",
     )
     print(f"Installed {shell} completions to {target}")
@@ -79,7 +79,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "completions",
         help="Generate or install shell completion scripts",
         description=(
-            "Generate or install shell completion scripts for terokctl.\n\n"
+            "Generate or install shell completion scripts for terok.\n\n"
             "Install locations:\n"
             f"  bash: {_INSTALL_TARGETS['bash']}\n"
             f"  zsh:  {_INSTALL_TARGETS['zsh']}\n"
@@ -108,17 +108,17 @@ def dispatch(args: argparse.Namespace) -> bool:
     if args.action == "install":
         _install_completions(getattr(args, "shell", None))
     else:
-        print(shellcode(["terokctl"], shell=args.action, use_defaults=True))  # nosec B604
+        print(shellcode(["terok"], shell=args.action, use_defaults=True))  # nosec B604
     return True
 
 
 def is_completion_installed() -> bool:
-    """Check whether terokctl completions are set up (file or rc-file marker)."""
-    if any((d / "terokctl").is_file() for d in _BASH_COMPLETION_DIRS):
+    """Check whether terok completions are set up (file or rc-file marker)."""
+    if any((d / "terok").is_file() for d in _BASH_COMPLETION_DIRS):
         return True
-    if any((d / "_terokctl").is_file() for d in _ZSH_COMPLETION_DIRS):
+    if any((d / "_terok").is_file() for d in _ZSH_COMPLETION_DIRS):
         return True
-    if any((d / "terokctl.fish").is_file() for d in _FISH_COMPLETION_DIRS):
+    if any((d / "terok.fish").is_file() for d in _FISH_COMPLETION_DIRS):
         return True
     for rc in _SHELL_RC_FILES:
         try:

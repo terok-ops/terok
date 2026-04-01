@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.core.config import build_root, state_root
+from terok.lib.core.config import build_dir, state_dir
 from terok.lib.core.projects import list_projects, load_project
 from terok.lib.domain.project_state import get_project_state
 from tests.test_utils import project_env, write_project
@@ -55,9 +55,9 @@ class TestProject:
             project = load_project(project_id)
             assert project.id == project_id
             assert project.security_class == "gatekeeping"
-            assert project.tasks_root == (state_root() / "tasks" / project_id).resolve()
-            assert project.gate_path == (state_root() / "gate" / f"{project_id}.git").resolve()
-            assert project.staging_root == (build_root() / project_id).resolve()
+            assert project.tasks_root == (state_dir() / "tasks" / project_id).resolve()
+            assert project.gate_path == (state_dir() / "gate" / f"{project_id}.git").resolve()
+            assert project.staging_root == (build_dir() / project_id).resolve()
             assert project.git_authorship == "agent-human"
 
     @pytest.mark.parametrize(
@@ -106,13 +106,16 @@ class TestProject:
     def test_list_projects_prefers_user(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            system_root = base / "system"
+            system_config = base / "system"
+            system_projects = system_config / "projects"
             user_projects = base / "user" / "terok" / "projects"
-            system_root.mkdir(parents=True, exist_ok=True)
+            system_projects.mkdir(parents=True, exist_ok=True)
             user_projects.mkdir(parents=True, exist_ok=True)
 
             write_project(
-                system_root, "proj2", project_yaml("proj2").replace("example.com", "system.example")
+                system_projects,
+                "proj2",
+                project_yaml("proj2").replace("example.com", "system.example"),
             )
             write_project(
                 user_projects, "proj2", project_yaml("proj2").replace("example.com", "user.example")
@@ -121,7 +124,7 @@ class TestProject:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "TEROK_CONFIG_DIR": str(system_root),
+                    "TEROK_CONFIG_DIR": str(system_config),
                     "XDG_CONFIG_HOME": str(base / "user"),
                 },
             ):
@@ -133,16 +136,17 @@ class TestProject:
     def test_list_projects_skips_malformed_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_dir = base / "config"
+            config_base = base / "config"
+            projects_root = config_base / "projects"
             write_project(
-                config_dir,
+                projects_root,
                 "good",
                 "project:\n  id: good\ngit:\n  upstream_url: https://example.com/good.git\n",
             )
-            write_project(config_dir, "bad", "project:\n  id: bad\n  foo: [invalid\n")
+            write_project(projects_root, "bad", "project:\n  id: bad\n  foo: [invalid\n")
             with unittest.mock.patch.dict(
                 os.environ,
-                {"TEROK_CONFIG_DIR": str(config_dir), "XDG_CONFIG_HOME": str(base / "empty")},
+                {"TEROK_CONFIG_DIR": str(config_base), "XDG_CONFIG_HOME": str(base / "empty")},
             ):
                 projects = list_projects()
         assert len(projects) == 1
@@ -208,7 +212,7 @@ class TestProject:
         with project_env(
             project_yaml(project_id), project_id=project_id, with_config_file=True
         ) as env:
-            stage_dir = build_root() / project_id
+            stage_dir = build_dir() / project_id
             stage_dir.mkdir(parents=True, exist_ok=True)
             for name in ("L0.Dockerfile", "L1.cli.Dockerfile", "L1.ui.Dockerfile", "L2.Dockerfile"):
                 (stage_dir / name).write_text("", encoding="utf-8")
@@ -219,7 +223,7 @@ class TestProject:
             ssh_dir.mkdir(parents=True, exist_ok=True)
             (ssh_dir / "config").write_text("", encoding="utf-8")
 
-            gate_dir = state_root() / "gate" / f"{project_id}.git"
+            gate_dir = state_dir() / "gate" / f"{project_id}.git"
             gate_dir.mkdir(parents=True, exist_ok=True)
 
             mock_sandbox_cfg = unittest.mock.MagicMock()
@@ -231,7 +235,7 @@ class TestProject:
                     "terok.lib.core.projects._get_global_git_config", return_value=None
                 ),
                 unittest.mock.patch(
-                    "terok.lib.domain.project_state.SandboxConfig",
+                    "terok.lib.domain.project_state.make_sandbox_config",
                     return_value=mock_sandbox_cfg,
                 ),
             ):

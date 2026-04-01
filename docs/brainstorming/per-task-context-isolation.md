@@ -95,8 +95,8 @@ volumes.append(f"{claude_task_dir}:/home/dev/.claude:Z")
 
 #### CLI Commands
 
-- `terokctl task contexts <project> <task>` - List sessions created by task
-- `terokctl task import-context <project> <dest-task> --from <source-task>` - Copy sessions
+- `terok task contexts <project> <task>` - List sessions created by task
+- `terok task import-context <project> <dest-task> --from <source-task>` - Copy sessions
 - `terok auth sync [--project <project>]` - Sync auth files after credential update
 
 #### Pros/Cons
@@ -196,8 +196,8 @@ def get_task_contexts(project_id: str, task_id: str) -> list[str]:
 
 #### CLI Commands
 
-- `terokctl task contexts <project> <task>` - List sessions mapped to task
-- `terokctl task import-context <project> <dest-task> --from <source-task>` - Add source task's sessions to dest's mapping
+- `terok task contexts <project> <task>` - List sessions mapped to task
+- `terok task import-context <project> <dest-task> --from <source-task>` - Add source task's sessions to dest's mapping
 - `terok context list [--project <project>] [--task <task>]` - List all contexts with optional filtering
 
 #### Pros/Cons

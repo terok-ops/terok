@@ -60,9 +60,9 @@ class ProjectActionsMixin:
         if not (upstream.startswith("git@") or upstream.startswith("ssh://")):
             return
 
-        from terok_sandbox import SandboxConfig
+        from ..lib.core.config import make_sandbox_config
 
-        ssh_dir = project.ssh_host_dir or (SandboxConfig().ssh_keys_dir / project.id)
+        ssh_dir = project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / project.id)
         key_name = effective_ssh_key_name(project, key_type="ed25519")
         pub_key_path = ssh_dir / f"{key_name}.pub"
 
@@ -84,7 +84,7 @@ class ProjectActionsMixin:
                 print("Public key file exists but is empty.")
         else:
             print(f"Public key file not found at {pub_key_path}.")
-            print(f"Run 'terokctl ssh-init {project_id}' to generate it.")
+            print(f"Run 'terok ssh-init {project_id}' to generate it.")
 
     async def _run_suspended(
         self,
@@ -480,12 +480,12 @@ class ProjectActionsMixin:
             names = ", ".join(p for p, _ in sharing)
             lines.append(f"\nNote: gate is shared with: {names} (will NOT be deleted)")
 
-        from ..lib.core.config import deleted_projects_dir
+        from ..lib.core.config import archive_dir as _archive_dir
 
-        archive_dir = deleted_projects_dir()
+        archive_path = _archive_dir()
         lines.append("\nAll project data will be permanently deleted.")
         lines.append("Project config, task data, and build artifacts will be archived at:")
-        lines.append(f"{archive_dir}")
+        lines.append(f"{archive_path}")
 
         from .screens import ConfirmDeleteScreen
 

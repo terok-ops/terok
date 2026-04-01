@@ -13,7 +13,7 @@ docker:
 
 ssh:
   key_name: "id_ed25519_uc"
-  host_dir: "/virt/podman/envs/_ssh-config-uc"
+  host_dir: "/virt/podman/state/ssh-keys/uc"
 
 agent:
   instructions:

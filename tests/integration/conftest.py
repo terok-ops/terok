@@ -360,6 +360,11 @@ def terok_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TerokIntegrati
     env.user_projects_root.mkdir(parents=True, exist_ok=True)
     env.global_presets_root.mkdir(parents=True, exist_ok=True)
     env.system_projects_root.mkdir(parents=True, exist_ok=True)
+    env.credentials_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(env.credentials_dir))
+    agent_state = tmp_path / "agent-state"
+    agent_state.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TEROK_AGENT_STATE_DIR", str(agent_state))
     return env
 
 

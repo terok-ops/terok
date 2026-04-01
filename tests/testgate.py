@@ -11,7 +11,7 @@ from tests.testnet import GATE_PORT
 
 OUTDATED_UNITS_MESSAGE = (
     "Systemd units are outdated (installed v2, expected v3). "
-    "Run 'terokctl gate-server install' to update."
+    "Run 'terok gate-server install' to update."
 )
 
 

@@ -44,7 +44,7 @@ def _cmd_serve(_args: argparse.Namespace) -> None:
     idx = _sys.argv.index("credential-proxy-serve")
     saved = _sys.argv
     try:
-        _sys.argv = ["terokctl-credential-proxy-serve", *_sys.argv[idx + 1 :]]
+        _sys.argv = ["terok-credential-proxy-serve", *_sys.argv[idx + 1 :]]
         from terok_sandbox.credential_proxy.server import main as _serve
 
         _serve()

@@ -17,12 +17,13 @@ from pathlib import Path
 
 from terok_agent import collect_opencode_provider_env
 from terok_sandbox import (
+    create_token,
     ensure_server_reachable,
     get_gate_base_path,
     get_gate_server_port,
 )
 
-from ..core.config import get_envs_base_dir
+from ..core.config import make_sandbox_config
 from ..core.projects import ProjectConfig
 from ..util.fs import ensure_dir_writable
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
@@ -38,7 +39,7 @@ class SharedMount:
     """Lookup key (e.g. ``"codex"``)."""
 
     host_dir_suffix: str
-    """Directory name under ``get_envs_base_dir()`` (e.g. ``"_codex-config"``)."""
+    """Directory name under ``mounts_dir()`` (e.g. ``"_codex-config"``)."""
 
     label: str
     """Human-readable label for writable-check messages (e.g. ``"Codex config"``)."""
@@ -65,11 +66,11 @@ def _build_shared_mounts() -> tuple[SharedMount, ...]:
 SHARED_MOUNTS: tuple[SharedMount, ...] = _build_shared_mounts()
 
 
-def _ensure_shared_dirs(envs_base: Path) -> dict[str, Path]:
+def _ensure_shared_dirs(mounts_base: Path) -> dict[str, Path]:
     """Ensure shared config directories exist and return key→host_path mapping."""
     dirs = {}
     for m in SHARED_MOUNTS:
-        path = envs_base / m.host_dir_suffix
+        path = mounts_base / m.host_dir_suffix
         ensure_dir_writable(path, m.label)
         dirs[m.key] = path
     return dirs
@@ -80,7 +81,7 @@ def _shared_volume_mounts(host_dirs: dict[str, Path]) -> list[str]:
     return [f"{host_dirs[m.key]}:{m.container_path}:z" for m in SHARED_MOUNTS]
 
 
-def _gate_url(gate_repo: Path, port: int, token: str) -> str:
+def _gate_url(gate_repo: Path, gate_base: Path, port: int, token: str) -> str:
     """Build the ``http://`` URL for a gate repo served by ``terok-gate``.
 
     The token is embedded as the Basic Auth username in the URL so that git
@@ -90,14 +91,13 @@ def _gate_url(gate_repo: Path, port: int, token: str) -> str:
     Raises ``SystemExit`` if the repo is not a direct child of the gate base,
     since the gate server cannot serve repos from arbitrary locations.
     """
-    gate_base = get_gate_base_path().resolve()
-    if gate_repo.resolve().parent != gate_base:
+    if gate_repo.resolve().parent != gate_base.resolve():
         raise SystemExit(
             "Configured gate.path is not servable by terok-gate.\n"
             f"  Gate repo: {gate_repo}\n"
             f"  Gate base: {gate_base}\n"
             "Move the repo under the gate base directory, or adjust\n"
-            "gate_server.base_path / paths.state_root in global config."
+            "gate_server.repos_dir / paths.state_dir in global config."
         )
     return f"http://{token}@host.containers.internal:{port}/{gate_repo.name}"
 
@@ -106,24 +106,24 @@ def _security_mode_env_and_volumes(
     project: ProjectConfig, task_id: str
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
-    from terok_sandbox import create_token
-
+    cfg = make_sandbox_config()
     env: dict[str, str] = {}
     volumes: list[str] = []
 
     gate_repo = project.gate_path
+    gate_base = get_gate_base_path(cfg)
 
     if project.security_class == "gatekeeping":
         if not gate_repo.exists():
             raise SystemExit(
                 f"Git gate missing for project '{project.id}'.\n"
                 f"Expected at: {gate_repo}\n"
-                f"Run 'terokctl gate-sync {project.id}' to create/update the local mirror."
+                f"Run 'terok gate-sync {project.id}' to create/update the local mirror."
             )
-        ensure_server_reachable()
-        port = get_gate_server_port()
-        token = create_token(project.id, task_id)
-        gate_url = _gate_url(gate_repo, port, token)
+        ensure_server_reachable(cfg)
+        port = get_gate_server_port(cfg)
+        token = create_token(project.id, task_id, cfg)
+        gate_url = _gate_url(gate_repo, gate_base, port, token)
         env["CODE_REPO"] = gate_url
         if project.default_branch:
             env["GIT_BRANCH"] = project.default_branch
@@ -132,13 +132,13 @@ def _security_mode_env_and_volumes(
     else:
         if gate_repo.exists():
             try:
-                ensure_server_reachable()
+                ensure_server_reachable(cfg)
             except SystemExit:
                 pass  # gate server down; skip CLONE_FROM, fall back to upstream
             else:
-                port = get_gate_server_port()
-                token = create_token(project.id, task_id)
-                gate_url = _gate_url(gate_repo, port, token)
+                port = get_gate_server_port(cfg)
+                token = create_token(project.id, task_id, cfg)
+                gate_url = _gate_url(gate_repo, gate_base, port, token)
                 env["CLONE_FROM"] = gate_url
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
@@ -253,14 +253,13 @@ def _credential_proxy_env_and_volumes(
     from terok_agent import get_roster
     from terok_sandbox import (
         CredentialDB,
-        SandboxConfig,
         ensure_proxy_reachable,
         get_proxy_port,
         get_ssh_agent_port,
     )
 
-    cfg = SandboxConfig()
-    ensure_proxy_reachable()
+    cfg = make_sandbox_config()
+    ensure_proxy_reachable(cfg)
 
     roster = get_roster()
     proxy_routes = roster.proxy_routes
@@ -317,9 +316,9 @@ def _credential_proxy_env_and_volumes(
 
     # Warn about real credential files in shared mounts that will be visible
     # to the container alongside proxy phantom tokens.
-    from terok_agent import scan_leaked_credentials
+    from terok_agent import mounts_dir, scan_leaked_credentials
 
-    leaked = scan_leaked_credentials(cfg.effective_envs_dir)
+    leaked = scan_leaked_credentials(mounts_dir())
     if leaked:
         import sys
 
@@ -342,15 +341,16 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
     - Mount all shared config dirs from ``SHARED_MOUNTS`` (read-write).
-    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-write).
+    - Inject credential proxy and SSH agent proxy env vars.
     - Provide REPO_ROOT and git info for the init script.
     """
     task_dir = project.tasks_root / str(task_id)
     repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
     repo_dir.mkdir(parents=True, exist_ok=True)
 
-    envs_base = get_envs_base_dir()
-    config_dirs = _ensure_shared_dirs(envs_base)
+    from terok_agent import mounts_dir
+
+    config_dirs = _ensure_shared_dirs(mounts_dir())
 
     env = {
         "PROJECT_ID": project.id,

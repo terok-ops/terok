@@ -7,8 +7,8 @@
 #
 # Good for: new features, cross-cutting refactors, multi-file changes.
 # Usage:
-#   terokctl run <project> "<prompt>" --preset team
-#   terokctl run <project> "<prompt>" --preset team --provider claude --agent docs-writer
+#   terok run <project> "<prompt>" --preset team
+#   terok run <project> "<prompt>" --preset team --provider claude --agent docs-writer
 
 subagents:
 

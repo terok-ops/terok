@@ -77,7 +77,7 @@ def render_task_details(
         lines.append(
             Text.assemble(
                 "Log in:    ",
-                Text(f"terokctl login {project_id} {task.task_id}", style=accent_style),
+                Text(f"terok login {project_id} {task.task_id}", style=accent_style),
             )
         )
     if task.unrestricted is not None:
@@ -124,7 +124,7 @@ def render_task_details(
                 Text.assemble(
                     "Logs:      ",
                     Text(
-                        f"terokctl task logs {project_id} {task.task_id} -f",
+                        f"terok task logs {project_id} {task.task_id} -f",
                         style=accent_style,
                     ),
                 )

@@ -13,17 +13,17 @@ from importlib import resources
 from pathlib import Path
 
 from ...lib.core.config import (
-    build_root as _build_root,
+    build_dir as _build_dir,
     bundled_presets_dir as _bundled_presets_dir,
-    config_root as _config_root,
-    gate_base_dir as _gate_base_dir,
-    get_envs_base_dir as _get_envs_base_dir,
+    credentials_dir as _credentials_dir,
+    gate_repos_dir as _gate_repos_dir,
     get_ui_base_port as _get_ui_base_port,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
-    global_presets_dir as _global_presets_dir,
-    state_root as _state_root,
-    user_projects_root as _user_projects_root,
+    projects_dir as _projects_dir,
+    state_dir as _state_dir,
+    user_presets_dir as _user_presets_dir,
+    user_projects_dir as _user_projects_dir,
 )
 from ...lib.core.projects import list_projects
 from ...ui_utils.terminal import (
@@ -123,7 +123,7 @@ def _cmd_import_opencode(file_path: str) -> None:
     if not isinstance(data, dict):
         raise SystemExit("Invalid OpenCode config: expected a JSON object")
 
-    dest_dir = _get_envs_base_dir() / "_opencode-config"
+    dest_dir = _credentials_dir() / "_opencode-config"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / "opencode.json"
     shutil.copy2(str(src), str(dest))
@@ -151,26 +151,26 @@ def _print_config() -> None:
             print(f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})")
     print(f"- Web base port: {_get_ui_base_port()}")
 
-    # Envs base dir
+    # Credentials dir
     try:
-        print(f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}")
+        print(f"- Credentials dir: {_gray(str(_credentials_dir()), color_enabled)}")
     except OSError as e:
-        print(f"- Envs base dir (for mounts): error: {e}")
+        print(f"- Credentials dir: error: {e}")
 
-    uproj = _user_projects_root()
-    sproj = _config_root()
+    uproj = _user_projects_dir()
+    sproj = _projects_dir()
     uproj_exists = Path(uproj).is_dir()
     print(
-        f"- User projects root: {_gray(str(uproj), color_enabled)} "
+        f"- Projects (user): {_gray(str(uproj), color_enabled)} "
         f"(exists: {_yes_no(uproj_exists, color_enabled)})"
     )
     print(
-        f"- System projects root: {_gray(str(sproj), color_enabled)} "
+        f"- Projects (system): {_gray(str(sproj), color_enabled)} "
         f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
     )
-    gpresets = _global_presets_dir()
+    gpresets = _user_presets_dir()
     print(
-        f"- Global presets dir: {_gray(str(gpresets), color_enabled)} "
+        f"- Presets (user): {_gray(str(gpresets), color_enabled)} "
         f"(exists: {_yes_no(Path(gpresets).is_dir(), color_enabled)})"
     )
     bpresets = _bundled_presets_dir()
@@ -183,7 +183,7 @@ def _print_config() -> None:
         pass  # Directory may not exist in some installations
     except OSError as e:
         print(f"  Warning: could not list bundled presets: {e}")
-    print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
+    print(f"- Presets (bundled): {_gray(str(bpresets), color_enabled)}")
     if bpresets_names:
         for n in bpresets_names:
             print(f"  • {n}")
@@ -231,24 +231,24 @@ def _print_config() -> None:
 
     # WRITE PATHS
     print("Writable locations (write):")
-    sroot = _state_root()
-    sroot_exists = Path(sroot).is_dir()
+    sdir = _state_dir()
+    sdir_exists = Path(sdir).is_dir()
     print(
-        f"- State root: {_gray(str(sroot), color_enabled)} "
-        f"(exists: {_yes_no(sroot_exists, color_enabled)})"
+        f"- State dir: {_gray(str(sdir), color_enabled)} "
+        f"(exists: {_yes_no(sdir_exists, color_enabled)})"
     )
-    gbase = _gate_base_dir()
+    gbase = _gate_repos_dir()
     gbase_exists = gbase.is_dir()
     print(
-        f"- Gate base dir: {_gray(str(gbase), color_enabled)} "
+        f"- Gate repos dir: {_gray(str(gbase), color_enabled)} "
         f"(exists: {_yes_no(gbase_exists, color_enabled)})"
     )
-    build_root = _build_root()
-    print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
+    bdir = _build_dir()
+    print(f"- Build dir: {_gray(str(bdir), color_enabled)}")
     if projs:
         print("- Expected generated files per project:")
         for p in projs:
-            base = build_root / p.id
+            base = bdir / p.id
             for fname in (
                 "L0.Dockerfile",
                 "L1.cli.Dockerfile",
@@ -267,6 +267,7 @@ def _print_config() -> None:
     for var in (
         "TEROK_CONFIG_FILE",
         "TEROK_CONFIG_DIR",
+        "TEROK_CREDENTIALS_DIR",
         "TEROK_STATE_DIR",
         "TEROK_RUNTIME_DIR",
         "XDG_DATA_HOME",
@@ -280,5 +281,5 @@ def _print_config() -> None:
     comp_installed = _is_completion_installed()
     print(
         f"Shell completions: {_yes_no(comp_installed, color_enabled)}"
-        + ("" if comp_installed else "  (run: terokctl completions install)")
+        + ("" if comp_installed else "  (run: terok completions install)")
     )

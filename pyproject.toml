@@ -28,7 +28,7 @@ packages = [
 # but note that Poetry does not support installing them under /usr/share;
 # they will live under the installed distribution instead.
 include = [
-  { path = "completions/terokctl" },
+  { path = "completions/terok" },
   { path = "docs/*.md" },
   { path = "examples/**" },
 ]
@@ -44,8 +44,8 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-agent = {url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.22/terok_agent-0.0.22-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.20/terok_sandbox-0.0.20-py3-none-any.whl"}
+terok-agent = {url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.25/terok_agent-0.0.25-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.22/terok_sandbox-0.0.22-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.22158.340"
@@ -85,14 +85,14 @@ markers = [
   "needs_root: requires root for nftables",
   "needs_host_features: real host/filesystem/process integration, no network or podman required",
   "needs_internet: requires outbound network connectivity",
-  "needs_hooks: requires OCI global hooks installed via terokctl shield setup",
+  "needs_hooks: requires OCI global hooks installed via terok shield setup",
   "needs_credential_proxy: exercises real credential proxy (DB + proxy daemon)",
 ]
 asyncio_mode = "auto"
 
 [tool.poetry.scripts]
-terokctl = "terok.cli.main:main"
-terok = "terok.tui.app:main"
+terok = "terok.cli.main:main"
+terok-tui = "terok.tui.app:main"
 terok-web = "terok.tui.serve:main"
 terok-gate = "terok_sandbox.gate.server:main"
 

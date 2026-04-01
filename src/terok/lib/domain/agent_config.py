@@ -15,7 +15,7 @@ from typing import Any
 
 from terok_agent import ConfigScope, ConfigStack
 
-from terok.lib.core.config import bundled_presets_dir, get_global_agent_config, global_presets_dir
+from terok.lib.core.config import bundled_presets_dir, get_global_agent_config, user_presets_dir
 
 
 def _preset_scope_label(preset_path: Path) -> str:
@@ -23,7 +23,7 @@ def _preset_scope_label(preset_path: Path) -> str:
     resolved = preset_path.resolve()
     for directory, label in (
         (bundled_presets_dir(), "preset (bundled)"),
-        (global_presets_dir(), "preset (global)"),
+        (user_presets_dir(), "preset (user)"),
     ):
         try:
             if resolved.is_relative_to(directory.resolve()):

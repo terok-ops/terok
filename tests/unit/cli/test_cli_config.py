@@ -83,19 +83,19 @@ def patch_config_command(layout: SimpleNamespace) -> Iterator[None]:
             patch("terok.cli.commands.info._get_ui_base_port", return_value=TEST_UI_BASE_PORT)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._get_envs_base_dir", return_value=layout.envs_root)
+            patch("terok.cli.commands.info._credentials_dir", return_value=layout.envs_root)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._user_projects_root", return_value=layout.user_root)
+            patch("terok.cli.commands.info._user_projects_dir", return_value=layout.user_root)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._config_root", return_value=layout.system_root)
+            patch("terok.cli.commands.info._projects_dir", return_value=layout.system_root)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._state_root", return_value=layout.state_root)
+            patch("terok.cli.commands.info._state_dir", return_value=layout.state_root)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._build_root", return_value=layout.build_root)
+            patch("terok.cli.commands.info._build_dir", return_value=layout.build_root)
         )
         stack.enter_context(
             patch(
@@ -112,8 +112,11 @@ def patch_config_command(layout: SimpleNamespace) -> Iterator[None]:
 def run_import(file_path: Path, envs_root: Path) -> None:
     """Invoke ``terok config import-opencode`` through a temporary config file."""
     config_file = envs_root.parent / "config.yml"
-    config_file.write_text(f"envs:\n  base_dir: {envs_root}\n", encoding="utf-8")
-    with patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(config_file)}):
+    config_file.write_text(f"credentials:\n  dir: {envs_root}\n", encoding="utf-8")
+    with patch.dict(
+        os.environ,
+        {"TEROK_CONFIG_FILE": str(config_file), "TEROK_CREDENTIALS_DIR": str(envs_root)},
+    ):
         run_cli("config", "import-opencode", str(file_path))
 
 
@@ -132,7 +135,7 @@ def test_config_command_color_output(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "\x1b[90mscript.sh\x1b[0m" in output
     assert f"- TEROK_CONFIG_FILE=\x1b[90m{layout.global_cfg}\x1b[0m" in output
     assert (
-        f"- State root: \x1b[90m{layout.state_root}\x1b[0m (exists: \x1b[32myes\x1b[0m)"
+        f"- State dir: \x1b[90m{layout.state_root}\x1b[0m (exists: \x1b[32myes\x1b[0m)"
     ) in output
 
 

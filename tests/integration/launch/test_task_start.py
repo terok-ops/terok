@@ -102,7 +102,7 @@ class TestLaunchWorkflows:
 
         assert "Created task 1 (fix-login-bug)" in result.stdout
         assert "CLI container is running in the background." in result.stdout
-        assert "Login with: terokctl login demo 1" in result.stdout
+        assert "Login with: terok login demo 1" in result.stdout
         assert state["containers"][CLI_CONTAINER]["status"] == "running"
         assert state["containers"][CLI_CONTAINER]["marker"] == "__CLI_READY__"
         assert "--name" in args and args[args.index("--name") + 1] == CLI_CONTAINER
@@ -160,6 +160,6 @@ class TestLaunchWorkflows:
 
         assert "Restarting task demo/1 (cli)..." in result.stdout
         assert "Restarted task 1:" in result.stdout
-        assert "Login with: terokctl login demo 1" in result.stdout
+        assert "Login with: terok login demo 1" in result.stdout
         assert restarted["containers"][CLI_CONTAINER]["status"] == "running"
         assert any(command == ["start", CLI_CONTAINER] for command in restarted["commands"])

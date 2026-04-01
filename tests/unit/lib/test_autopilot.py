@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot (Level 1+2) features: terokctl run and agent config."""
+"""Tests for autopilot (Level 1+2) features: terok run and agent config."""
 
 from __future__ import annotations
 
@@ -84,6 +84,7 @@ def runner_env_vars(base: Path, config_file: Path) -> dict[str, str]:
     return {
         "TEROK_CONFIG_DIR": str(base / "config"),
         "TEROK_STATE_DIR": str(base / "state"),
+        "TEROK_AGENT_STATE_DIR": str(base / "agent"),
         "TEROK_CONFIG_FILE": str(config_file),
     }
 
@@ -110,12 +111,13 @@ DEFAULT_SUBAGENTS_YAML = (
 
 def write_runner_project(base: Path, project_id: str, extra_yml: str = "") -> Path:
     """Write a minimal project config and matching global config file for task runners."""
-    config_root = base / "config"
+    config_base = base / "config"
+    projects_root = config_base / "projects"
     envs_dir = base / "envs"
-    config_root.mkdir(parents=True, exist_ok=True)
+    projects_root.mkdir(parents=True, exist_ok=True)
     config_file = base / "config.yml"
-    config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
-    write_project(config_root, project_id, f"project:\n  id: {project_id}\n{extra_yml}")
+    config_file.write_text(f"credentials:\n  dir: {envs_dir}\n", encoding="utf-8")
+    write_project(projects_root, project_id, f"project:\n  id: {project_id}\n{extra_yml}")
     return config_file
 
 
@@ -147,7 +149,7 @@ def prepare_agent_config(
                 subagents=[],
                 instructions=instructions,
                 default_agent=project.default_agent,
-                envs_base_dir=Path(td),
+                mounts_base=Path(td),
             )
         )
 
@@ -234,7 +236,8 @@ class TestAgentConfigProject:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
-            write_project(config_root, "proj_noagent", "project:\n  id: proj_noagent\n")
+            projects_root = config_root / "projects"
+            write_project(projects_root, "proj_noagent", "project:\n  id: proj_noagent\n")
 
             with unittest.mock.patch.dict(
                 os.environ,
@@ -249,9 +252,10 @@ class TestAgentConfigProject:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
+            projects_root = config_root / "projects"
 
             write_project(
-                config_root,
+                projects_root,
                 "proj_agent",
                 (
                     "project:\n  id: proj_agent\nagent:\n  subagents:\n"
@@ -274,9 +278,10 @@ class TestAgentConfigProject:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
+            projects_root = config_root / "projects"
 
             write_project(
-                config_root,
+                projects_root,
                 "proj_sa",
                 ("project:\n  id: proj_sa\nagent:\n  subagents:\n    - file: agents/reviewer.md\n"),
             )
@@ -351,7 +356,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_hook", "test"),
             )
 
-            settings = base / "envs" / "_claude-config" / "settings.json"
+            settings = base / "agent" / "mounts" / "_claude-config" / "settings.json"
             assert settings.is_file()
             assert "SessionStart" in json.loads(settings.read_text())["hooks"]
 

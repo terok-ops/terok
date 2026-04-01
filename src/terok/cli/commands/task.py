@@ -346,7 +346,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         )
     elif args.task_cmd == "delete":
         task_delete(args.project_id, args.task_id)
-        print(f"Deleted task {args.task_id}. Archive: terokctl task archive list {args.project_id}")
+        print(f"Deleted task {args.task_id}. Archive: terok task archive list {args.project_id}")
     elif args.task_cmd == "stop":
         task_stop(args.project_id, args.task_id, timeout=getattr(args, "timeout", None))
     elif args.task_cmd == "restart":
@@ -409,7 +409,7 @@ def _dispatch_archive_sub(args: argparse.Namespace) -> bool:
         if log_file is None:
             raise SystemExit(
                 f"No archived logs found for prefix {args.archive_id!r}. "
-                f"Use 'terokctl task archive list {args.project_id}' to see available archives."
+                f"Use 'terok task archive list {args.project_id}' to see available archives."
             )
         with log_file.open("r", encoding="utf-8", errors="replace") as f:
             for line in f:

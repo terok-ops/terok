@@ -277,7 +277,7 @@ def test_get_version_info_branch_detection(
 
 
 def run_cli_version() -> subprocess.CompletedProcess[str]:
-    """Run ``terokctl --version`` with the current interpreter."""
+    """Run ``terok --version`` with the current interpreter."""
     return subprocess.run(
         [sys.executable, "-m", "terok.cli.main", "--version"],
         capture_output=True,
@@ -287,7 +287,7 @@ def run_cli_version() -> subprocess.CompletedProcess[str]:
 
 
 def test_cli_version_flag() -> None:
-    """``terokctl --version`` succeeds and prints version information."""
+    """``terok --version`` succeeds and prints version information."""
     result = run_cli_version()
     assert result.returncode == 0
     assert "terok" in result.stdout

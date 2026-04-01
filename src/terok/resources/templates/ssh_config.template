@@ -1,4 +1,4 @@
-# Default SSH config template used by `terokctl ssh-init` when no project-specific
+# Default SSH config template used by `terok ssh-init` when no project-specific
 # template is provided. You can copy this file and point project.yml → ssh.config_template
 # to your customized version. Supported tokens:
 #   {{KEY_NAME}}       → key filename (without .pub), expected to live in ~/.ssh

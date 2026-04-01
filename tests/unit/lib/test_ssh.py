@@ -17,16 +17,17 @@ from tests.test_utils import mock_git_config, write_project
 
 def make_ssh_project(base: Path, project_id: str) -> tuple[Path, Path]:
     """Create a project config and SSH host directory for tests."""
-    config_root = base / "config"
+    config_base = base / "config"
+    projects_root = config_base / "projects"
     ssh_dir = base / "ssh"
-    config_root.mkdir(parents=True, exist_ok=True)
+    projects_root.mkdir(parents=True, exist_ok=True)
     ssh_dir.mkdir(parents=True, exist_ok=True)
     write_project(
-        config_root,
+        projects_root,
         project_id,
         f"project:\n  id: {project_id}\nssh:\n  host_dir: {ssh_dir}\n",
     )
-    return config_root, ssh_dir
+    return config_base, ssh_dir
 
 
 def write_keypair(ssh_dir: Path, key_name: str) -> None:

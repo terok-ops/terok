@@ -1,7 +1,7 @@
 # Solo agent — single fast agent for straightforward tasks.
 #
 # Good for: quick fixes, small features, one-shot prompts.
-# Usage: terokctl run <project> "<prompt>" --preset solo
+# Usage: terok run <project> "<prompt>" --preset solo
 #
 # Per-provider model keys: each provider uses the model best suited for
 # quick tasks. A flat string (e.g. "model: sonnet") works too and applies

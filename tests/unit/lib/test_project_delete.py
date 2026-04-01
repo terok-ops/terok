@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from terok.lib.core.config import build_root, state_root
+from terok.lib.core.config import build_dir as cfg_build_dir, state_dir as cfg_state_dir
 from terok.lib.core.projects import load_project
 from terok.lib.domain.facade import delete_project
 from tests.test_utils import project_env, write_project
@@ -31,17 +31,15 @@ def project_root(_env: SimpleNamespace, project_id: str) -> Path:
 
 def build_dir(_env: SimpleNamespace, project_id: str) -> Path:
     """Create and return the project's build dir."""
-    target = build_root() / project_id
+    target = cfg_build_dir() / project_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "L2.Dockerfile").write_text("FROM scratch", encoding="utf-8")
     return target
 
 
-def ssh_dir(_env: SimpleNamespace, project_id: str) -> Path:
+def ssh_dir(env: SimpleNamespace, project_id: str) -> Path:
     """Create and return the project's SSH keys dir."""
-    from terok_sandbox import SandboxConfig
-
-    target = SandboxConfig().ssh_keys_dir / project_id
+    target = env.state_dir / "ssh-keys" / project_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "id_ed25519").write_text("# private key", encoding="utf-8")
     return target
@@ -49,7 +47,7 @@ def ssh_dir(_env: SimpleNamespace, project_id: str) -> Path:
 
 def task_state_dir(_env: SimpleNamespace, project_id: str) -> Path:
     """Create and return the project's state metadata dir."""
-    target = state_root() / "projects" / project_id
+    target = cfg_state_dir() / "projects" / project_id
     tasks_dir = target / "tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
     (tasks_dir / "1.yml").write_text("task_id: '1'\n", encoding="utf-8")
@@ -86,28 +84,29 @@ def test_delete_project_removes_managed_directories(
 
 
 def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    config_root = tmp_path / "config"
+    config_base = tmp_path / "config"
+    projects_root = config_base / "projects"
     state_dir = tmp_path / "state"
     envs_dir = tmp_path / "envs"
     gate_path = state_dir / "gate" / "shared.git"
     config_file = tmp_path / "config.yml"
     gate_path.mkdir(parents=True, exist_ok=True)
     envs_dir.mkdir(parents=True, exist_ok=True)
-    config_root.mkdir(parents=True, exist_ok=True)
+    projects_root.mkdir(parents=True, exist_ok=True)
     config_file.write_text(
-        f"paths:\n  build_root: {state_dir / 'build'}\nenvs:\n  base_dir: {envs_dir}\n",
+        f"paths:\n  build_dir: {state_dir / 'build'}\ncredentials:\n  dir: {envs_dir}\n",
         encoding="utf-8",
     )
 
     for project_id, upstream in (("proj-a", "a"), ("proj-b", "b")):
         write_project(
-            config_root,
+            projects_root,
             project_id,
             project_yaml(project_id, upstream_url=f"https://example.com/{upstream}.git")
             + f"gate:\n  path: {gate_path}\n",
         )
 
-    monkeypatch.setenv("TEROK_CONFIG_DIR", str(config_root))
+    monkeypatch.setenv("TEROK_CONFIG_DIR", str(config_base))
     monkeypatch.setenv("TEROK_STATE_DIR", str(state_dir))
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(config_file))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
@@ -126,3 +125,75 @@ def test_delete_project_returns_deleted_paths() -> None:
         assert result["archive"] is not None
         assert Path(result["archive"]).is_file()
         assert any(project_id in path for path in result["deleted"])
+
+
+# ---------- _is_under_terok_root safety guard ----------
+
+
+class TestManagedRootGuard:
+    """Verify _is_under_terok_root recognizes all managed directories."""
+
+    def test_state_dir_is_managed(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Paths under state_dir are recognized as managed."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert _is_under_terok_root(tmp_path / "state" / "ssh-keys" / "proj")
+
+    def test_credentials_dir_is_managed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Paths under credentials_dir are recognized as managed."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert _is_under_terok_root(tmp_path / "creds" / "envs" / "proj")
+
+    def test_user_projects_dir_is_managed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Paths under user_projects_dir are recognized as managed."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert _is_under_terok_root(tmp_path / "xdg" / "terok" / "projects" / "my-proj")
+
+    def test_projects_dir_is_managed(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Paths under projects_dir are recognized as managed."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert _is_under_terok_root(tmp_path / "cfg" / "projects" / "my-proj")
+
+    def test_build_dir_is_managed(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Paths under build_dir are recognized as managed."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert _is_under_terok_root(tmp_path / "state" / "build" / "some-image")
+
+    def test_external_path_rejected(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Paths outside all managed roots are rejected."""
+        from terok.lib.domain.project import _is_under_terok_root
+
+        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.setenv("TEROK_CONFIG_DIR", str(tmp_path / "cfg"))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(tmp_path / "creds"))
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(tmp_path / "empty.yml"))
+        assert not _is_under_terok_root(Path("/home/user/.ssh"))

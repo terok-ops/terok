@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the ``terokctl credential-proxy`` CLI and ``credential-proxy-serve``."""
+"""Tests for the ``terok credential-proxy`` CLI and ``credential-proxy-serve``."""
 
 import argparse
 import sys
@@ -44,7 +44,7 @@ class TestCredentialProxyServeDispatch:
         mock_main.side_effect = lambda: captured_argv.extend(sys.argv)
 
         original_argv = sys.argv[:]
-        sys.argv = ["terokctl", "credential-proxy-serve", "--log-level", "DEBUG"]
+        sys.argv = ["terok", "credential-proxy-serve", "--log-level", "DEBUG"]
         try:
             args = argparse.Namespace(cmd="credential-proxy-serve")
             dispatch(args)
@@ -52,7 +52,7 @@ class TestCredentialProxyServeDispatch:
             sys.argv = original_argv
 
         mock_main.assert_called_once()
-        assert captured_argv == ["terokctl-credential-proxy-serve", "--log-level", "DEBUG"]
+        assert captured_argv == ["terok-credential-proxy-serve", "--log-level", "DEBUG"]
         assert sys.argv == original_argv  # restored after call
 
 
@@ -60,7 +60,7 @@ class TestCredentialProxyWireGroup:
     """Verify credential-proxy commands are mounted via wire_group."""
 
     def test_credential_proxy_group_registered(self) -> None:
-        """terokctl credential-proxy group is parseable."""
+        """terok credential-proxy group is parseable."""
         from terok_agent import PROXY_COMMANDS
 
         from terok.cli.wiring import wire_group

@@ -157,10 +157,10 @@ Auth containers are ephemeral because:
 
 | Command | What it builds | When to use |
 |---------|---------------|-------------|
-| `terokctl build <project>` | L2 only | Normal use (reuses L0/L1) |
-| `terokctl build --agents <project>` | L0 + L1 + L2 | Rebuild from L0 with fresh agents |
-| `terokctl build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Rebuild from L0 (no cache) with fresh base image + apt packages |
-| `terokctl build --dev <project>` | + L2-dev image | Manual debugging container |
+| `terok build <project>` | L2 only | Normal use (reuses L0/L1) |
+| `terok build --agents <project>` | L0 + L1 + L2 | Rebuild from L0 with fresh agents |
+| `terok build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Rebuild from L0 (no cache) with fresh base image + apt packages |
+| `terok build --dev <project>` | + L2-dev image | Manual debugging container |
 
 ### Image Staleness Detection
 
@@ -173,7 +173,7 @@ Container image hash ≠ Current project build hash
   "Image: old" warning in TUI
         │
         ▼
-  User should: terokctl build <project>
+  User should: terok build <project>
                then: task delete + task run-cli
                or:   task stop + podman rm <container> + task run-cli
 ```
@@ -186,31 +186,31 @@ Container image hash ≠ Current project build hash
 
 ```bash
 # First time (creates container)
-terokctl task new myproject        # Create task metadata + workspace
-terokctl task run-cli myproject 1  # Create and start container
+terok task new myproject        # Create task metadata + workspace
+terok task run-cli myproject 1  # Create and start container
 
 # Subsequent times (reuses container)
-terokctl task run-cli myproject 1  # Starts existing container
+terok task run-cli myproject 1  # Starts existing container
 ```
 
 ### Stopping and Restarting
 
 ```bash
-terokctl task stop myproject 1     # Graceful stop (container persists)
-terokctl task restart myproject 1  # Fast restart (podman start)
+terok task stop myproject 1     # Graceful stop (container persists)
+terok task restart myproject 1  # Fast restart (podman start)
 ```
 
 ### Checking Status
 
 ```bash
-terokctl task status myproject 1   # Shows metadata vs actual container state
-terokctl task list myproject       # Lists all tasks with status
+terok task status myproject 1   # Shows metadata vs actual container state
+terok task list myproject       # Lists all tasks with status
 ```
 
 ### Cleaning Up
 
 ```bash
-terokctl task delete myproject 1   # Removes container + workspace + metadata
+terok task delete myproject 1   # Removes container + workspace + metadata
 ```
 
 ### Manual Container Management

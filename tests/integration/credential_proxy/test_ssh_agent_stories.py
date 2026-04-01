@@ -93,7 +93,7 @@ class TestStorySSHAgentSigning:
         ssh_dir.mkdir(parents=True)
         priv_path, pub_path, pub_blob = _generate_test_keypair(ssh_dir)
 
-        # 1. Register key in ssh-keys.json (simulates `terokctl ssh-init`)
+        # 1. Register key in ssh-keys.json (simulates `terok ssh-init`)
         keys_json = tmp_path / "ssh-keys.json"
         keys_json.write_text(
             json.dumps({"testproj": [{"private_key": str(priv_path), "public_key": str(pub_path)}]})

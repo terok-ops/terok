@@ -1,7 +1,7 @@
 # terok
 
 Orchestration and instrumentation platform for containerized AI coding agents.
-Provides both a CLI (`terokctl`) and a Textual TUI (`terok`).
+Provides both a CLI (`terok`) and a Textual TUI (`terok-tui`, or `terok tui`).
 
 terok manages the *what* — which agents run, how they're configured, and
 what code they work on.  The hardened container runtime
@@ -54,28 +54,28 @@ git:
 EOF
 
 # 3. Generate and build images
-terokctl generate myproj
-terokctl build myproj
+terok generate myproj
+terok build myproj
 
 # 4. (Optional) Set up SSH for private repos
-terokctl ssh-init myproj
+terok ssh-init myproj
 
 # 5. Create and run a task
-terokctl task new myproj
-terokctl task run-cli myproj 1    # CLI mode
+terok task new myproj
+terok task run-cli myproj 1    # CLI mode
 ```
 
 ### Headless Agent Runs (Autopilot)
 
 ```bash
 # Run an agent headlessly with a prompt
-terokctl run myproj "Fix the authentication bug"
+terok run myproj "Fix the authentication bug"
 
 # With model override and timeout
-terokctl run myproj "Add tests" --model opus --timeout 3600
+terok run myproj "Add tests" --model opus --timeout 3600
 
 # Use a specific provider
-terokctl run myproj "Fix the bug" --provider codex
+terok run myproj "Fix the bug" --provider codex
 ```
 
 ### Presets
@@ -83,9 +83,9 @@ terokctl run myproj "Fix the bug" --provider codex
 Three presets work out of the box — no config needed:
 
 ```bash
-terokctl run myproj "Fix the typo" --preset solo          # single fast agent
-terokctl run myproj "Review auth module" --preset review   # read-only analysis
-terokctl run myproj "Add pagination" --preset team         # multi-agent team
+terok run myproj "Fix the typo" --preset solo          # single fast agent
+terok run myproj "Review auth module" --preset review   # read-only analysis
+terok run myproj "Add pagination" --preset team         # multi-agent team
 ```
 
 Create your own in `~/.config/terok/presets/` (shared across projects) or

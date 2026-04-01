@@ -24,11 +24,10 @@ docker:
     RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 140 \
      && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 140
 
-# No SSH exposure for gatekeeping projects inside the container by default.
-# You may still generate keys on the host for mirroring/promotions.
+# SSH keys are generated on the host and served via the SSH agent proxy.
+# They are used for gate mirroring/promotions — not mounted in containers.
 ssh:
   key_name: "id_ed25519_alpaka3"
-  # mount_in_gatekeeping: true  # Enable SSH mount in gatekeeping mode
 
 # Gatekeeping mode settings
 gatekeeping:

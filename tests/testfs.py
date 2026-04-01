@@ -61,6 +61,9 @@ MOCK_STAGING_ROOT = str(MOCK_BASE / "staging-root")
 FAKE_TMUX_SOCKET = MOCK_BASE / "tmux-1000" / "default,12345,0"
 """Fake tmux socket path used by terminal-detection tests."""
 
+FAKE_CREDENTIALS_DIR = MOCK_BASE / "credentials"
+"""Fake credentials directory used by credential/envs-related tests."""
+
 FAKE_WIZARD_PROJECTS_DIR = MOCK_BASE / "wizard-projects"
 """Base directory for fake project.yml paths returned by wizard tests."""
 

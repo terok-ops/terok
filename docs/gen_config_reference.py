@@ -49,10 +49,8 @@ _FIELD_DOCS: dict[str, str] = {
     "git.authorship": "How agent/human map to git author/committer. Values: ``agent-human``, ``human-agent``, ``agent``, ``human``",
     # ssh
     "ssh.key_name": "SSH key filename (default: ``id_ed25519_<project_id>``)",
-    "ssh.host_dir": "Host directory containing SSH keys to mount",
+    "ssh.host_dir": "Host directory for SSH key storage (keys served via SSH agent proxy, not mounted)",
     "ssh.config_template": "Path to an SSH config template file (supports ``{{IDENTITY_FILE}}``, ``{{KEY_NAME}}``, ``{{PROJECT_ID}}``)",
-    "ssh.mount_in_online": "Mount SSH credentials in online mode containers",
-    "ssh.mount_in_gatekeeping": "Mount SSH credentials in gatekeeping mode containers",
     # tasks
     "tasks.root": "Override task workspace root directory",
     "tasks.name_categories": "Word categories for auto-generated task names (string or list of strings)",
@@ -80,13 +78,13 @@ _FIELD_DOCS: dict[str, str] = {
     "agent": "Agent configuration dict (model, subagents, MCP servers, etc.)",
     # global config — ui
     "ui.base_port": "Base port for web UI task containers",
-    # envs
-    "envs.base_dir": "Host directory for shared credential mounts (SSH, agent configs)",
+    # credentials
+    "credentials.dir": "Shared credentials directory (proxy DB, agent config mounts)",
     # paths
-    "paths.state_root": "Writable state directory (tasks, caches, builds)",
-    "paths.build_root": "Build artifacts directory (generated Dockerfiles)",
-    "paths.user_projects_root": "User projects directory (per-user project configs)",
-    "paths.global_presets_dir": "Global presets directory (shared across all projects)",
+    "paths.state_dir": "Writable state directory (tasks, caches, builds)",
+    "paths.build_dir": "Build artifacts directory (generated Dockerfiles)",
+    "paths.user_projects_dir": "User projects directory (per-user project configs)",
+    "paths.user_presets_dir": "User presets directory (per-user preset configs)",
     # tui
     "tui.default_tmux": "Default to tmux mode when launching the TUI",
     # logs

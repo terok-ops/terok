@@ -25,7 +25,7 @@ from terok_sandbox import (
     stop_task_containers,
 )
 
-from ..core.config import state_root
+from ..core.config import state_dir
 from ..core.projects import ProjectConfig, load_project
 from ..core.task_display import (
     STATUS_DISPLAY,
@@ -273,12 +273,12 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
-    return state_root() / "projects" / project_id / "tasks"
+    return state_dir() / "projects" / project_id / "tasks"
 
 
 def tasks_archive_dir(project_id: str) -> Path:
     """Return the directory containing archived task data for *project_id*."""
-    return state_root() / "projects" / project_id / "archive"
+    return state_dir() / "projects" / project_id / "archive"
 
 
 def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
@@ -350,7 +350,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
     marker_path = workspace_dir / ".new-task-marker"
     marker_path.write_text(
         "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
-        "# It is created by 'terokctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
+        "# It is created by 'terok task new' and removed by init-ssh-and-repo.sh after reset.\n"
         "# If you see this file in an initialized workspace, something went wrong.\n",
         encoding="utf-8",
     )
@@ -776,7 +776,7 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'terokctl task run-cli {project.id} {task_id}'."
+            f"Start it first via 'terok task run-cli {project.id} {task_id}'."
         )
 
     cname = container_name(project.id, mode, task_id)
@@ -784,12 +784,12 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     if state is None:
         raise SystemExit(
             f"Container {cname} does not exist. "
-            f"Run 'terokctl task restart {project.id} {task_id}' first."
+            f"Run 'terok task restart {project.id} {task_id}' first."
         )
     if state != "running":
         raise SystemExit(
             f"Container {cname} is not running (state: {state}). "
-            f"Run 'terokctl task restart {project.id} {task_id}' first."
+            f"Run 'terok task restart {project.id} {task_id}' first."
         )
     return cname, mode
 
@@ -869,7 +869,7 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
 
     color_enabled = _supports_color()
     print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")
-    print(f"Restart with: terokctl task restart {project.id} {task_id}")
+    print(f"Restart with: terok task restart {project.id} {task_id}")
 
 
 def get_login_command(project_id: str, task_id: str) -> list[str]:

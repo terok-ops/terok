@@ -56,7 +56,7 @@ class TestProjects:
     """Verify project workflows through the real CLI."""
 
     def test_projects_lists_user_and_system_projects(self, terok_env: TerokIntegrationEnv) -> None:
-        """``terokctl projects`` lists projects from both isolated config roots."""
+        """``terok projects`` lists projects from both isolated config roots."""
         terok_env.write_project("alpha", SOURCE_PROJECT)
         terok_env.write_project(
             "sysalpha",

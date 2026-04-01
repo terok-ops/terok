@@ -52,11 +52,13 @@ from terok_agent import HeadlessProvider, get_provider, resolve_instructions
 from terok_sandbox import GitGate, SSHManager
 
 from ..core.config import (
-    build_root,
-    config_root,
-    deleted_projects_dir,
-    get_envs_base_dir,
-    state_root,
+    archive_dir,
+    build_dir,
+    credentials_dir,
+    make_sandbox_config,
+    projects_dir,
+    state_dir,
+    user_projects_dir,
 )
 from ..core.project_model import ProjectConfig
 from ..core.projects import list_presets, load_project
@@ -89,7 +91,13 @@ def _is_under_terok_root(path: Path) -> bool:
     (e.g. ``~/.ssh`` set as ``ssh.host_dir``).
     """
     resolved = path.resolve()
-    managed_roots = [config_root(), state_root(), get_envs_base_dir(), build_root()]
+    managed_roots = [
+        projects_dir(),
+        user_projects_dir(),
+        state_dir(),
+        credentials_dir(),
+        build_dir(),
+    ]
     return any(resolved == root or root in resolved.parents for root in managed_roots)
 
 
@@ -180,9 +188,10 @@ def make_git_gate(config: ProjectConfig) -> GitGate:
 
 def make_ssh_manager(config: ProjectConfig) -> SSHManager:
     """Construct an :class:`SSHManager` from a :class:`ProjectConfig` (adapter factory)."""
+    ssh_dir = config.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / config.id)
     return SSHManager(
         project_id=config.id,
-        ssh_host_dir=config.ssh_host_dir,
+        ssh_host_dir=ssh_dir,
         ssh_key_name=config.ssh_key_name,
         ssh_config_template=config.ssh_config_template,
     )
@@ -205,7 +214,7 @@ def _archive_project(project_id: str) -> str | None:
     """Create a compressed archive of project data before deletion.
 
     Collects project config, task metadata/archives, and build artifacts
-    into a ``.tar.gz`` file under ``deleted_projects_dir()``.  SSH
+    into a ``.tar.gz`` file under ``archive_dir()``.  SSH
     credentials and git gate contents are excluded for security.
 
     Returns the archive file path as a string, or ``None`` on failure.
@@ -214,7 +223,7 @@ def _archive_project(project_id: str) -> str | None:
         project = load_project(project_id)
         pid = project.id
 
-        archive_root = deleted_projects_dir()
+        archive_root = archive_dir()
         ts = archive_timestamp()
         base_name = f"{ts}_{pid}"
         archive_path = create_archive_file(archive_root, base_name)
@@ -227,14 +236,14 @@ def _archive_project(project_id: str) -> str | None:
             sources.append(("config", project.root))
 
         # Task metadata + task archives
-        project_state = state_root() / "projects" / pid
+        project_state = state_dir() / "projects" / pid
         if project_state.is_dir():
             sources.append(("state", project_state))
 
         # Build artifacts
-        build_dir = build_root() / pid
-        if build_dir.is_dir():
-            sources.append(("build", build_dir))
+        build_path = build_dir() / pid
+        if build_path.is_dir():
+            sources.append(("build", build_path))
 
         if not sources:
             _logger.debug("_archive_project: nothing to archive for %s", pid)
@@ -299,15 +308,13 @@ def delete_project(project_id: str) -> DeleteProjectResult:
     _rmtree_managed(project.tasks_root, "Tasks root", deleted, skipped)
 
     # 3-4. Remove state dir and build artifacts (always managed paths)
-    for d in (state_root() / "projects" / pid, build_root() / pid):
+    for d in (state_dir() / "projects" / pid, build_dir() / pid):
         if d.is_dir():
             shutil.rmtree(d)
             deleted.append(str(d))
 
     # 5. SSH credentials (may be user-configured path)
-    from terok_sandbox import SandboxConfig
-
-    ssh_dir = project.ssh_host_dir or (SandboxConfig().ssh_keys_dir / pid)
+    ssh_dir = project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / pid)
     _rmtree_managed(ssh_dir, "SSH dir", deleted, skipped)
 
     # 6. Git gate (skip if shared with other projects)

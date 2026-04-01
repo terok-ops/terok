@@ -236,7 +236,7 @@ class TestRenderHelpers:
         assert isinstance(result, Text)
         text_str = str(result)
         assert "Autopilot" in text_str
-        assert "terokctl task logs" in text_str
+        assert "terok task logs" in text_str
 
     def test_render_task_details_autopilot_with_exit_code(self) -> None:
         widgets = import_widgets()

@@ -58,7 +58,7 @@ class TestCheckSshAgent:
 
     def test_missing_keys_file(self, tmp_path: Path) -> None:
         """No ssh-keys.json → warn with ssh-init hint."""
-        with unittest.mock.patch("terok.cli.commands.sickbay.SandboxConfig") as mock_cfg:
+        with unittest.mock.patch("terok.cli.commands.sickbay.make_sandbox_config") as mock_cfg:
             mock_cfg.return_value.ssh_keys_json_path = tmp_path / "no-such.json"
             sev, _, detail = _check_ssh_agent()
         assert sev == "warn"
@@ -68,7 +68,7 @@ class TestCheckSshAgent:
         """Empty mapping → warn with ssh-init hint."""
         kf = tmp_path / "ssh-keys.json"
         kf.write_text("{}")
-        with unittest.mock.patch("terok.cli.commands.sickbay.SandboxConfig") as mock_cfg:
+        with unittest.mock.patch("terok.cli.commands.sickbay.make_sandbox_config") as mock_cfg:
             mock_cfg.return_value.ssh_keys_json_path = kf
             sev, _, detail = _check_ssh_agent()
         assert sev == "warn"
@@ -84,7 +84,7 @@ class TestCheckSshAgent:
         pub.write_text("pubkey")
         kf = tmp_path / "ssh-keys.json"
         kf.write_text(json.dumps({"proj": {"private_key": str(priv), "public_key": str(pub)}}))
-        with unittest.mock.patch("terok.cli.commands.sickbay.SandboxConfig") as mock_cfg:
+        with unittest.mock.patch("terok.cli.commands.sickbay.make_sandbox_config") as mock_cfg:
             mock_cfg.return_value.ssh_keys_json_path = kf
             sev, _, detail = _check_ssh_agent()
         assert sev == "ok"
@@ -98,7 +98,7 @@ class TestCheckSshAgent:
         kf.write_text(
             json.dumps({"bad": {"private_key": "/gone/id", "public_key": "/gone/id.pub"}})
         )
-        with unittest.mock.patch("terok.cli.commands.sickbay.SandboxConfig") as mock_cfg:
+        with unittest.mock.patch("terok.cli.commands.sickbay.make_sandbox_config") as mock_cfg:
             mock_cfg.return_value.ssh_keys_json_path = kf
             sev, _, detail = _check_ssh_agent()
         assert sev == "error"
@@ -109,7 +109,7 @@ class TestCheckSshAgent:
         """Corrupt JSON → error."""
         kf = tmp_path / "ssh-keys.json"
         kf.write_text("{bad")
-        with unittest.mock.patch("terok.cli.commands.sickbay.SandboxConfig") as mock_cfg:
+        with unittest.mock.patch("terok.cli.commands.sickbay.make_sandbox_config") as mock_cfg:
             mock_cfg.return_value.ssh_keys_json_path = kf
             sev, _, _ = _check_ssh_agent()
         assert sev == "error"

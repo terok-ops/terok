@@ -1,6 +1,6 @@
 # Launch integration tests
 
-Launch and restart workflows exercised through the real `terokctl` CLI:
+Launch and restart workflows exercised through the real `terok` CLI:
 
 - `task start` in CLI mode
 - `task start --web` browser-launch workflow

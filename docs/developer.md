@@ -28,7 +28,7 @@ facade.get_project("myproj")  →  Project          (Aggregate Root)
 | `ProjectConfig` | `lib.core.project_model` | Value Object | Configuration dataclass loaded from `project.yml`. No behavior. |
 | `TaskMeta` | `lib.containers.tasks` | Value Object | Task metadata snapshot (ID, mode, status, workspace path). |
 | `GitGate` | `terok_sandbox.git_gate` | Repository + Gateway | Manages the bare git mirror; wraps git CLI. |
-| `SSHManager` | `terok_sandbox.ssh` | Service | Generates SSH keypairs and config for container mounts. |
+| `SSHManager` | `terok_sandbox.ssh` | Service | Generates SSH keypairs and config; keys served via SSH agent proxy. |
 | `AgentManager` | `lib.project` | Strategy + Config Stack | Resolves layered agent configuration and provider selection. |
 
 ### Design Principles
@@ -125,12 +125,13 @@ When a task container starts, terok mounts:
 | `/home/dev/.claude` | `<envs_base>/_claude-config` | Claude Code credentials |
 | `/home/dev/.vibe` | `<envs_base>/_vibe-config` | Mistral Vibe credentials |
 | `/home/dev/.blablador` | `<envs_base>/_blablador-config` | Blablador credentials + isolated OpenCode config (via `OPENCODE_CONFIG`) |
-| `/home/dev/.config/opencode` | `<envs_base>/_opencode-config` | Plain OpenCode config (use `terokctl config import-opencode`) |
+| `/home/dev/.config/opencode` | `<envs_base>/_opencode-config` | Plain OpenCode config (use `terok config import-opencode`) |
 | `/home/dev/.local/share/opencode` | `<envs_base>/_opencode-data` | OpenCode data (shared by Blablador and plain OpenCode) |
 | `/home/dev/.local/state` | `<envs_base>/_opencode-state` | OpenCode/Bun state (shared by both) |
 | `/home/dev/.config/gh` | `<envs_base>/_gh-config` | GitHub CLI config |
 | `/home/dev/.config/glab-cli` | `<envs_base>/_glab-config` | GitLab CLI config |
-| `/home/dev/.ssh` (optional) | `<envs_base>/_ssh-config-<project>` | SSH keys/config |
+
+SSH keys are **not** mounted — the credential proxy's SSH agent serves them over TCP.
 
 See [shared-dirs.md](shared-dirs.md) for detailed documentation.
 
@@ -422,8 +423,8 @@ panel edges misalign — and **cannot be fixed by padding alone**.
 6. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
    natively 2 cells wide — adding a VS16 emoji will fail CI.  Tests also
    verify that all emoji dicts have non-empty labels for `--no-emoji` mode.
-7. Emojis are **on by default**.  Pass `--no-emoji` to `terok` (TUI) or
-   `terokctl` (CLI) to replace all emojis with `[label]` text badges.
+7. Emojis are **on by default**.  Pass `--no-emoji` to `terok-tui` (TUI) or
+   `terok` (CLI) to replace all emojis with `[label]` text badges.
 
 See `src/terok/lib/util/emoji.py` module docstring for full background,
 references, and future terminal developments to watch (Kitty text sizing

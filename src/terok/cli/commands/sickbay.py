@@ -7,9 +7,9 @@ Runs a series of checks and reports their status.  With ``--fix``,
 auto-remediates issues like unfired post_stop hooks.
 
 Scoping:
-- ``terokctl sickbay`` — all projects
-- ``terokctl sickbay <project>`` — single project
-- ``terokctl sickbay <project> <task>`` — single task
+- ``terok sickbay`` — all projects
+- ``terok sickbay <project>`` — single project
+- ``terok sickbay <project> <task>`` — single task
 
 Exit codes:
 - 0: all checks passed
@@ -24,7 +24,6 @@ import sys
 from pathlib import Path
 
 from terok_sandbox import (
-    SandboxConfig,
     check_environment,
     check_units_outdated,
     get_container_state,
@@ -34,6 +33,7 @@ from terok_sandbox import (
     is_systemd_available,
 )
 
+from ...lib.core.config import make_sandbox_config
 from ...lib.core.project_model import ProjectConfig
 from ...lib.core.projects import list_projects, load_project
 from ...lib.orchestration.hooks import run_hook
@@ -76,8 +76,8 @@ def _check_gate_server() -> _CheckResult:
     if status.mode == "systemd":
         return ("error", label, "socket installed but not active")
     if is_systemd_available():
-        return ("warn", label, "not running — run 'terokctl gate start'")
-    return ("warn", label, "not running — run 'terokctl gate start'")
+        return ("warn", label, "not running — run 'terok gate start'")
+    return ("warn", label, "not running — run 'terok gate start'")
 
 
 def _check_shield() -> _CheckResult:
@@ -90,11 +90,9 @@ def _check_shield() -> _CheckResult:
     if ec.health == "bypass":
         return ("warn", label, "bypass_firewall_no_protection is active — egress disabled")
     if ec.health == "stale-hooks":
-        return ("warn", label, "hooks outdated — run 'terokctl shield setup --user'")
+        return ("warn", label, "hooks outdated — run 'terok shield setup --user'")
     if ec.health == "setup-needed":
-        hint = (
-            ec.setup_hint.splitlines()[0] if ec.setup_hint else "run 'terokctl shield setup --user'"
-        )
+        hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else "run 'terok shield setup --user'"
         return ("warn", label, f"{ec.issues[0] if ec.issues else 'setup needed'} — {hint}")
     if ec.health != "ok":
         return ("warn", label, f"unexpected health: {ec.health}")
@@ -116,11 +114,11 @@ def _check_credential_proxy() -> _CheckResult:
         return (
             "error",
             label,
-            "socket installed but not active — run 'terokctl credentials start'",
+            "socket installed but not active — run 'terok credentials start'",
         )
     if is_proxy_systemd_available():
-        return ("warn", label, "not running — run 'terokctl credentials install'")
-    return ("warn", label, "not running — run 'terokctl credentials start'")
+        return ("warn", label, "not running — run 'terok credentials install'")
+    return ("warn", label, "not running — run 'terok credentials start'")
 
 
 def _check_task_hook(
@@ -213,11 +211,11 @@ def _check_ssh_agent() -> _CheckResult:
     import json
 
     label = "SSH agent"
-    cfg = SandboxConfig()
+    cfg = make_sandbox_config()
     keys_path = cfg.ssh_keys_json_path
 
     if not keys_path.is_file():
-        return ("warn", label, "no ssh-keys.json — run 'terokctl ssh-init <project>'")
+        return ("warn", label, "no ssh-keys.json — run 'terok ssh-init <project>'")
 
     try:
         mapping = json.loads(keys_path.read_text(encoding="utf-8"))
@@ -228,7 +226,7 @@ def _check_ssh_agent() -> _CheckResult:
         return ("error", label, "ssh-keys.json has invalid schema (expected object)")
 
     if not mapping:
-        return ("warn", label, "no projects registered — run 'terokctl ssh-init <project>'")
+        return ("warn", label, "no projects registered — run 'terok ssh-init <project>'")
 
     missing = [
         pid
@@ -245,7 +243,7 @@ def _check_ssh_agent() -> _CheckResult:
             "error",
             label,
             f"{len(missing)}/{total} project(s) have missing key files: "
-            f"{names}{suffix} — re-run 'terokctl ssh-init'",
+            f"{names}{suffix} — re-run 'terok ssh-init'",
         )
     return ("ok", label, f"{total} project(s) registered, all keys present")
 

@@ -106,7 +106,7 @@ def test_cmd_sickbay_reports_health(
         patch("terok.cli.commands.sickbay.check_environment", return_value=mock_ec),
         patch("terok.cli.commands.sickbay.get_proxy_status", return_value=_make_proxy_status()),
         patch("terok.cli.commands.sickbay.is_proxy_systemd_available", return_value=False),
-        patch("terok.cli.commands.sickbay.SandboxConfig", mock_cfg),
+        patch("terok.cli.commands.sickbay.make_sandbox_config", mock_cfg),
     ):
         if exit_code is None:
             _cmd_sickbay()
@@ -143,7 +143,7 @@ def test_cmd_sickbay_reports_health(
         ),
         pytest.param(
             "setup-needed",
-            "run 'terokctl shield setup --user'",
+            "run 'terok shield setup --user'",
             ["nft not found"],
             None,
             "warn",

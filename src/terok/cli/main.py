@@ -11,6 +11,7 @@ argcomplete integration, and top-level dispatch loop.
 """
 
 import argparse
+import sys
 
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
@@ -56,18 +57,18 @@ def main() -> None:
     version_string = format_version_string(version, branch)
 
     parser = argparse.ArgumentParser(
-        prog="terokctl",
-        description="terokctl – generate/build images and run per-project task containers",
+        prog="terok",
+        description="terok – generate/build images and run per-project task containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start:\n"
-            "  1. Setup:  terokctl project-init <project_id>\n"
-            "  2. Work:   terokctl task start <project_id>         (new CLI task)\n"
-            "  3. Login:  terokctl login <project_id> <task_id>\n"
+            "  1. Setup:  terok project-init <project_id>\n"
+            "  2. Work:   terok task start <project_id>         (new CLI task)\n"
+            "  3. Login:  terok login <project_id> <task_id>\n"
             "\n"
             "Standalone agent (no project):\n"
-            "  terokctl agent run claude .          (headless against cwd)\n"
-            "  terokctl agent run claude . -p 'fix' (with prompt)\n"
+            "  terok agent run claude .          (headless against cwd)\n"
+            "  terok agent run claude . -p 'fix' (with prompt)\n"
             "\n"
             "Step-by-step (order of operations):\n"
             "  Online (HTTPS): generate → build → gate-sync (optional)"
@@ -77,13 +78,13 @@ def main() -> None:
             "  Gatekeeping:    generate → build → ssh-init"
             " → gate-sync (required) → task new → task run-*\n"
             "\n"
-            "Tip: enable tab completion with: terokctl completions install\n"
+            "Tip: enable tab completion with: terok completions install\n"
         ),
     )
     parser.add_argument(
         "--version",
         action="version",
-        version=f"terokctl {version_string}\nLicense: Apache-2.0\nCopyright: 2025 Jiri Vyskocil",
+        version=f"terok {version_string}\nLicense: Apache-2.0\nCopyright: 2025 Jiri Vyskocil",
     )
     parser.add_argument(
         "--experimental",
@@ -119,12 +120,23 @@ def main() -> None:
     wire_group(sub, "credential-proxy", AGENT_PROXY_COMMANDS, help="Credential proxy commands")
     wire_group(sub, "ssh", SSH_COMMANDS, help="SSH key management")
 
+    # TUI launcher — delegates to terok-tui entry point (dispatched before argparse)
+    sub.add_parser("tui", help="Launch the Textual TUI (same as terok-tui)")
+
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
             argcomplete.autocomplete(parser)  # type: ignore[attr-defined]
         except (TypeError, AttributeError):
             pass
+
+    # Fast-path: ``terok tui [args...]`` bypasses argparse and execs terok-tui.
+    # This avoids argparse rejecting TUI-specific flags like --tmux.
+    if len(sys.argv) >= 2 and sys.argv[1] == "tui":
+        import os
+
+        os.execlp("terok-tui", "terok-tui", *sys.argv[2:])
+        return  # pragma: no cover — execlp never returns
 
     args = parser.parse_args()
     set_experimental(args.experimental)
@@ -133,6 +145,14 @@ def main() -> None:
         from ..lib.util.emoji import set_emoji_enabled
 
         set_emoji_enabled(False)
+
+    # Post-parse tui handler: covers ``terok --no-emoji tui ...`` where the
+    # fast-path (argv[1] == "tui") doesn't fire because root flags come first.
+    if getattr(args, "cmd", None) == "tui":
+        import os
+
+        os.execlp("terok-tui", "terok-tui", *sys.argv[sys.argv.index("tui") + 1 :])
+        return  # pragma: no cover — execlp never returns
 
     for dispatch in _DISPATCHERS:
         if dispatch(args):

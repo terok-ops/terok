@@ -148,9 +148,11 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def _register_ssh_key(project_id: str, result: dict) -> None:
     """Register the SSH key in ssh-keys.json for the credential proxy's SSH agent."""
-    from terok_sandbox import SandboxConfig, update_ssh_keys_json
+    from terok_sandbox import update_ssh_keys_json
 
-    update_ssh_keys_json(SandboxConfig().ssh_keys_json_path, project_id, result)
+    from ...lib.core.config import make_sandbox_config
+
+    update_ssh_keys_json(make_sandbox_config().ssh_keys_json_path, project_id, result)
 
 
 def cmd_project_init(project_id: str) -> None:

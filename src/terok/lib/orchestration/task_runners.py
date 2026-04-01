@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from terok_agent import (
     AgentConfigSpec,
+    mounts_dir,
     prepare_agent_config_dir,
     resolve_instructions,
     resolve_provider_value,
@@ -32,7 +33,6 @@ from terok_sandbox import (
 
 from ..core.config import (
     SHIELD_SECURITY_HINT,
-    get_envs_base_dir,
     get_public_host,
     get_shield_bypass_firewall_no_protection,
 )
@@ -157,7 +157,7 @@ def _prepare_agent_config(
             provider=resolved.name,
             instructions=instr_text,
             default_agent=project.default_agent,
-            envs_base_dir=get_envs_base_dir(),
+            mounts_base=mounts_dir(),
         )
     )
 
@@ -191,7 +191,7 @@ def _assert_running(cname: str) -> None:
 
 def _print_login_instructions(project_id: str, task_id: str, cname: str, color: bool) -> None:
     """Print how to log into a CLI container."""
-    login_cmd = f"terokctl login {project_id} {task_id}"
+    login_cmd = f"terok login {project_id} {task_id}"
     raw_cmd = f"podman exec -it {cname} bash"
     print(f"Login with: {_blue(login_cmd, color)}")
     print(f"  (or:      {_blue(raw_cmd, color)})")
@@ -746,7 +746,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
             provider=resolved.name,
             instructions=instr_text,
             default_agent=project.default_agent,
-            envs_base_dir=get_envs_base_dir(),
+            mounts_base=mounts_dir(),
         )
     )
 
@@ -981,7 +981,7 @@ def task_restart(project_id: str, task_id: str) -> None:
         Headless (mode ``"run"``) tasks cannot be auto-restarted because they
         require the original prompt and context.  Attempting to restart a
         headless task whose container no longer exists will raise ``SystemExit``.
-        Re-run headless tasks manually via ``terokctl run`` with the original
+        Re-run headless tasks manually via ``terok run`` with the original
         prompt instead.
     """
     project = load_project(project_id)
@@ -1056,7 +1056,7 @@ def task_restart(project_id: str, task_id: str) -> None:
         elif mode == "run":
             raise SystemExit(
                 f"Headless task {task_id} cannot be auto-restarted when its container "
-                "is missing. Re-run it via 'terokctl run' with the original prompt."
+                "is missing. Re-run it via 'terok run' with the original prompt."
             )
         else:
             raise SystemExit(f"Unknown mode '{mode}' for task {task_id}")

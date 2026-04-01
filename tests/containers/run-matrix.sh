@@ -25,7 +25,7 @@ IMAGE_PREFIX="terok-test"
 SOURCE_MOUNT="/src"
 WORKSPACE_DIR="/workspace"
 PYTHON_VERSION="3.12"
-TEROK_DIAGNOSTIC_COMMAND="poetry run terokctl config"
+TEROK_DIAGNOSTIC_COMMAND="poetry run terok config"
 
 # ── Terminal colors (disabled when stdout is not a tty) ──
 if [[ -t 1 ]]; then
@@ -109,7 +109,7 @@ run_tests() {
 
     # Three-phase flow:
     #   Phase 1: tests that do NOT need hooks
-    #   Phase 2: install global hooks via terokctl shield setup --user
+    #   Phase 2: install global hooks via terok shield setup --user
     #   Phase 3: tests that need hooks
     #
     # Privileged mode gives the outer container the capabilities needed
@@ -175,7 +175,7 @@ run_tests() {
                 # ── Phase 2: install global hooks ──
                 echo \"\"
                 echo \"--- phase 2: installing shield hooks ---\"
-                poetry run terokctl shield setup --user
+                poetry run terok shield setup --user
 
                 # Verify hooks are detectable — fail fast if setup did not work
                 poetry run python3 -c \"
@@ -190,7 +190,7 @@ print(\\\"Shield hooks verified.\\\")
                 poetry run pytest tests/integration/ -v --tb=short -m \"needs_hooks\"
 
                 echo \"\"
-                echo \"--- terokctl config ---\"
+                echo \"--- terok config ---\"
                 $TEROK_DIAGNOSTIC_COMMAND 2>&1 || true
             '
         "

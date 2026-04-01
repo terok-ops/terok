@@ -30,15 +30,15 @@ Built `FROM` the L1 image.
 
 ## Build Flow
 
-`terokctl generate <project>` renders Dockerfiles into the per-project build directory:
+`terok generate <project>` renders Dockerfiles into the per-project build directory:
 `L0.Dockerfile`, `L1.cli.Dockerfile`, `L2.Dockerfile`.
 
 | Command | Layers Built | When to Use |
 |---------|-------------|-------------|
-| `terokctl build <project>` | L2 only | Project config changes |
-| `terokctl build --agents <project>` | L0 + L1 + L2 | Rebuild from L0 with fresh agents |
-| `terokctl build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Rebuild from L0 (no cache) with fresh base image + apt packages |
-| `terokctl build --dev <project>` | + L2-dev image | Manual debugging container |
+| `terok build <project>` | L2 only | Project config changes |
+| `terok build --agents <project>` | L0 + L1 + L2 | Rebuild from L0 with fresh agents |
+| `terok build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Rebuild from L0 (no cache) with fresh base image + apt packages |
+| `terok build --dev <project>` | + L2-dev image | Manual debugging container |
 
 The `--agents` flag rebuilds from L0 and passes a unique `AGENT_CACHE_BUST` build arg to L1, invalidating the cache for agent install layers while preserving cache for apt packages where possible.
 
@@ -48,7 +48,7 @@ The `--full-rebuild` flag rebuilds from L0 with `--no-cache` and `--pull=always`
 
 ## Runtime Behavior
 
-- `terokctl task run-cli` starts `<project>:l2-cli`.
+- `terok task run-cli` starts `<project>:l2-cli`.
 - Mounts a per-task workspace to `/workspace`, shared credential directories, and optionally SSH config.
 - The init script clones or syncs the project repository into `/workspace`.
 

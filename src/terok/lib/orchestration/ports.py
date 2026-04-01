@@ -9,7 +9,7 @@ free port starting from the configured UI base port.
 
 import socket
 
-from ..core.config import get_ui_base_port, state_root
+from ..core.config import get_ui_base_port, state_dir
 from ..util.yaml import load as _yaml_load
 
 _LOCALHOST = "127.0.0.1"
@@ -28,7 +28,7 @@ def _is_port_free(port: int) -> bool:
 def _collect_all_web_ports() -> set[int]:
     """Scan all task metadata files and return the set of assigned web ports."""
     # Scan all task metas for any project
-    root = state_root() / "projects"
+    root = state_dir() / "projects"
     ports: set[int] = set()
     if not root.is_dir():
         return ports

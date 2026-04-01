@@ -1,8 +1,0 @@
-# Bash completion for terokctl via argcomplete
-# This file is installed to share/bash-completion/completions/terokctl
-# so that bash (with bash-completion) auto-loads completions for the command.
-
-# If argcomplete is available, register completion for terokctl.
-if command -v register-python-argcomplete >/dev/null 2>&1; then
-    eval "$(register-python-argcomplete terokctl)"
-fi

@@ -5,7 +5,7 @@
 
 Uses the ``terok_shield`` command registry to build subcommands.
 Commands that need a container take positional ``project_id task_id``
-(same convention as ``terokctl task …``), which are resolved to a
+(same convention as ``terok task …``), which are resolved to a
 container name + task directory for the registry handler.
 """
 
@@ -105,7 +105,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         sp = sub.add_parser(cmd.name, help=cmd.help)
 
         # Commands that need a container get positional project_id + task_id,
-        # matching the ``terokctl task …`` convention.  Commands with an
+        # matching the ``terok task …`` convention.  Commands with an
         # *optional* container arg (like ``status``) get nargs="?" so they
         # work both with and without a task target.
         if cmd.needs_container:

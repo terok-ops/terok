@@ -14,19 +14,19 @@ from terok_agent import ConfigScope, ConfigStack
 
 from ..util.yaml import YAMLError, dump as _yaml_dump, load as _yaml_load
 from .config import (
-    build_root,
+    build_dir,
     bundled_presets_dir,
-    config_root,
-    gate_base_dir,
+    gate_repos_dir,
     get_global_default_agent,
     get_global_default_login,
     get_global_hooks,
     get_global_section,
     get_shield_drop_on_task_run,
     get_shield_on_task_restart,
-    global_presets_dir,
-    state_root,
-    user_projects_root,
+    projects_dir,
+    state_dir,
+    user_presets_dir,
+    user_projects_dir,
 )
 from .git_authorship import normalize_git_authorship
 from .project_model import (  # noqa: F401 — re-exported public API
@@ -147,14 +147,14 @@ def _build_project_config(
     """Transform a validated raw YAML model + resolved identity into a flat ProjectConfig."""
     pid = raw.project.id or project_id
     sec = raw.project.security_class
-    sr = state_root()
+    sr = state_dir()
 
     tasks_root = Path(raw.tasks.root or (sr / "tasks" / pid)).resolve()
-    gate_path = Path(raw.gate.path or (gate_base_dir() / f"{pid}.git")).resolve()
+    gate_path = Path(raw.gate.path or (gate_repos_dir() / f"{pid}.git")).resolve()
 
     staging_root: Path | None = None
     if sec == "gatekeeping":
-        staging_root = Path(raw.gatekeeping.staging_root or (build_root() / pid)).resolve()
+        staging_root = Path(raw.gatekeeping.staging_root or (build_dir() / pid)).resolve()
 
     ssh_host_dir = Path(raw.ssh.host_dir).expanduser().resolve() if raw.ssh.host_dir else None
 
@@ -206,7 +206,7 @@ def find_preset_path(project: ProjectConfig, preset_name: str) -> Path | None:
 
     Search order: project presets → global presets → bundled presets.
     """
-    for search_dir in (project.presets_dir, global_presets_dir(), bundled_presets_dir()):
+    for search_dir in (project.presets_dir, user_presets_dir(), bundled_presets_dir()):
         for ext in (".yml", ".yaml"):
             path = search_dir / f"{preset_name}{ext}"
             if path.is_file():
@@ -226,7 +226,7 @@ def list_presets(project_id: str) -> list[PresetInfo]:
     # Higher-priority tiers overwrite lower ones
     for source, search_dir in [
         ("bundled", bundled_presets_dir()),
-        ("global", global_presets_dir()),
+        ("global", user_presets_dir()),
         ("project", project.presets_dir),
     ]:
         if search_dir.is_dir():
@@ -269,7 +269,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     """
     validate_project_id(new_id)
     source = load_project(source_id)
-    projects_root = user_projects_root().resolve()
+    projects_root = user_projects_dir().resolve()
     target_root = (projects_root / new_id).resolve()
 
     # Guard against directory traversal (belt-and-suspenders with the regex above)
@@ -300,8 +300,8 @@ def derive_project(source_id: str, new_id: str) -> Path:
 
 def _find_project_root(project_id: str) -> Path:
     """Return the root directory for *project_id*, preferring user over system."""
-    user_root = user_projects_root() / project_id
-    sys_root = config_root() / project_id
+    user_root = user_projects_dir() / project_id
+    sys_root = projects_dir() / project_id
     if (user_root / _PROJECT_YML).is_file():
         return user_root
     if (sys_root / _PROJECT_YML).is_file():
@@ -320,7 +320,7 @@ def list_projects() -> list[ProjectConfig]:
     ids: set[str] = set()
 
     # Collect IDs from user and system project dirs
-    for root in (user_projects_root(), config_root()):
+    for root in (user_projects_dir(), projects_dir()):
         if not root.is_dir():
             continue
         for d in root.iterdir():

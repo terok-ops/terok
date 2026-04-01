@@ -11,7 +11,7 @@ directly. Without the login feature, this would require manually typing
 
 ### R1: One-command login
 
-A single command (`terokctl login <project> <task>`) should open an interactive shell.
+A single command (`terok login <project> <task>`) should open an interactive shell.
 No container name needed — terok resolves it from project/task metadata.
 
 ### R2: Persistent sessions
@@ -76,7 +76,7 @@ always knows how to switch context. Color provides instant visual identification
 
 ### CLI: top-level command (R1)
 
-`terokctl login <project> <task>` replaces the current process with
+`terok login <project> <task>` replaces the current process with
 `podman exec -it <container> tmux new-session -A -s main` via `os.execvp()`.
 Validation (task exists, has been run, container is running) happens before exec.
 
@@ -95,7 +95,7 @@ The user gets a real terminal in the new tab while the TUI remains in the origin
 
 ### `--tmux` opt-in wrapper (R3, R5)
 
-`terokctl --tmux` wraps the TUI in a managed tmux session with the host config
+`terok --tmux` wraps the TUI in a managed tmux session with the host config
 (blue status bar, usage hints). Login sessions become additional tmux windows.
 This is opt-in — without the flag, the TUI runs directly in the terminal as before.
 

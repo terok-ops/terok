@@ -157,9 +157,7 @@ def test_collect_wizard_inputs_lowercases_project_id() -> None:
 def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
     """Generate a project config into a temporary user-projects root and return path metadata."""
     with tempfile.TemporaryDirectory() as td:
-        with patch(
-            "terok.lib.domain.wizards.new_project.user_projects_root", return_value=Path(td)
-        ):
+        with patch("terok.lib.domain.wizards.new_project.user_projects_dir", return_value=Path(td)):
             config_path = generate_config(values)
             return (
                 config_path.name,

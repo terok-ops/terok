@@ -47,9 +47,9 @@ def completions_parser() -> argparse.ArgumentParser:
 def install_targets(tmp_path: Path) -> dict[str, Path]:
     """Build completion-install paths rooted in *tmp_path*."""
     return {
-        "bash": tmp_path / "bash" / "terokctl",
-        "zsh": tmp_path / "zsh" / "_terokctl",
-        "fish": tmp_path / "fish" / "terokctl.fish",
+        "bash": tmp_path / "bash" / "terok",
+        "zsh": tmp_path / "zsh" / "_terok",
+        "fish": tmp_path / "fish" / "terok.fish",
     }
 
 
@@ -131,9 +131,9 @@ def test_is_completion_installed_returns_false_when_nothing_found(
 @pytest.mark.parametrize(
     ("attr", "filename"),
     [
-        pytest.param("bash", "terokctl", id="bash-autoload"),
-        pytest.param("zsh", "_terokctl", id="zsh-autoload"),
-        pytest.param("fish", "terokctl.fish", id="fish-autoload"),
+        pytest.param("bash", "terok", id="bash-autoload"),
+        pytest.param("zsh", "_terok", id="zsh-autoload"),
+        pytest.param("fish", "terok.fish", id="fish-autoload"),
     ],
 )
 def test_is_completion_installed_detects_autoload_files(
@@ -154,7 +154,7 @@ def test_is_completion_installed_detects_rc_marker(
 ) -> None:
     """Completion detection succeeds when a shell RC file has the registration marker."""
     rc_file = tmp_path / ".bashrc"
-    rc_file.write_text("# register-python-argcomplete terokctl\n", encoding="utf-8")
+    rc_file.write_text("# register-python-argcomplete terok\n", encoding="utf-8")
     patch_completion_locations(rc=(rc_file,))
     assert completions.is_completion_installed()
 

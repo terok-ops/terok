@@ -75,9 +75,10 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = sock_path
             mock_cfg.proxy_port = 18731
@@ -114,9 +115,10 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = sock_path
             mock_cfg.proxy_port = 18731
@@ -147,7 +149,8 @@ class TestCredentialProxyEnv:
         roster = get_roster()
         auth = roster.auth_providers["claude"]
         route = roster.proxy_routes["claude"]
-        cred_dir = tmp_path / "envs" / auth.host_dir_name
+        mounts_base = tmp_path / "mounts"
+        cred_dir = mounts_base / auth.host_dir_name
         cred_dir.mkdir(parents=True)
         (cred_dir / route.credential_file).write_text('{"leaked": true}')
 
@@ -156,14 +159,15 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            patch("terok_agent.mounts_dir", return_value=mounts_base),
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
             mock_cfg.proxy_port = 18731
             mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-            mock_cfg.effective_envs_dir = tmp_path / "envs"
 
             _credential_proxy_env_and_volumes(project, "task-1")
 
@@ -195,9 +199,10 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
             mock_cfg.proxy_port = 18731
@@ -227,9 +232,10 @@ class TestCredentialProxyEnv:
 
         with (
             patch("terok_sandbox.credential_proxy_lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
             mock_cfg.proxy_port = 18731
