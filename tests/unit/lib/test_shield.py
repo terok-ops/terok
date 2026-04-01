@@ -87,7 +87,7 @@ def test_make_shield_maps_config_to_shield_config(
     cfg = SandboxConfig(config_dir=MOCK_CONFIG_ROOT, **cfg_kwargs)
     with (
         patch("terok_shield.SubprocessRunner", autospec=True),
-        patch("terok_sandbox.config.umbrella_config_root", return_value=MOCK_CONFIG_ROOT),
+        patch("terok_sandbox.paths.umbrella_config_root", return_value=MOCK_CONFIG_ROOT),
     ):
         shield = make_shield(MOCK_TASK_DIR, cfg=cfg)
 
