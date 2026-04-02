@@ -2774,8 +2774,8 @@ tomli-w = ">=1.0"
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "83bcaae"
-resolved_reference = "83bcaae506fcec2cf5e35471d48333b09465ef81"
+reference = "1ed051a"
+resolved_reference = "1ed051a2dd360fed708f868d4b1cf7d70ae882ba"
 
 [[package]]
 name = "terok-sandbox"
@@ -3285,4 +3285,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "e15c52c00a558fef3d68873e0a4a339d3ea76a6cfadeae1e865d83ea5c7e27fc"
+content-hash = "7f24140f9dd366a87cfa5a1f6298ff0765ae2038c9ef18d6d353854d2e820421"
