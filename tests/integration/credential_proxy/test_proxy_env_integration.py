@@ -46,9 +46,7 @@ class TestProxyEnvIntegration:
             ),
             patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch(
-                "terok.lib.core.config.get_credential_proxy_transport", return_value="direct"
-            ),
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
             mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
@@ -94,9 +92,7 @@ class TestProxyEnvIntegration:
             ),
             patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch(
-                "terok.lib.core.config.get_credential_proxy_transport", return_value="direct"
-            ),
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
             mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
@@ -150,9 +146,7 @@ class TestProxyEnvIntegration:
                     return_value=True,
                 ),
                 patch("terok_sandbox.ensure_proxy_reachable"),
-                patch(
-                    "terok.lib.orchestration.environment.make_sandbox_config"
-                ) as mock_cfg_fn,
+                patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
                 patch(
                     "terok.lib.core.config.get_credential_proxy_transport",
                     return_value="direct",
@@ -194,9 +188,7 @@ class TestProxyEnvIntegration:
             ),
             patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch(
-                "terok.lib.core.config.get_credential_proxy_transport", return_value="socket"
-            ),
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="socket"),
         ):
             mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
