@@ -61,6 +61,6 @@ def warn_user(component: str, message: str) -> None:
     """
     try:
         print(f"Warning [{component}]: {message}", file=sys.stderr)
+        log_warning(f"[{component}] {message}")
     except Exception:
         pass
-    log_warning(f"[{component}] {message}")

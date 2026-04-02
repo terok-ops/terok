@@ -77,7 +77,7 @@ def get_project_state(
         else:
             try:
                 dockerfiles_old = not dockerfiles_match_templates(project_id)
-            except (OSError, ValueError, KeyError) as exc:
+            except Exception as exc:
                 from ..util.logging_utils import log_warning
 
                 log_warning(f"Template comparison failed for {project_id}: {exc}")
