@@ -172,8 +172,10 @@ class TestCredentialProxyEnv:
         assert "ANTHROPIC_UNIX_SOCKET" not in env
 
     @pytest.mark.usefixtures("_enable_proxy")
-    def test_oauth_missing_roster_support_raises(self, tmp_path: Path) -> None:
-        """OAuth credential with empty oauth_phantom_env raises SystemExit."""
+    def test_oauth_missing_roster_warns_and_falls_back(
+        self, tmp_path: Path, capsys: CaptureFixture[str]
+    ) -> None:
+        """OAuth credential with empty oauth_phantom_env warns and falls back to API-key env."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -193,8 +195,11 @@ class TestCredentialProxyEnv:
 
         real_roster = get_roster()
         real_routes = real_roster.proxy_routes
-        stripped_route = MagicMock(wraps=real_routes["claude"])
+        real_claude = real_routes["claude"]
+        stripped_route = MagicMock(wraps=real_claude)
         stripped_route.oauth_phantom_env = {}
+        stripped_route.phantom_env = real_claude.phantom_env
+        stripped_route.base_url_env = real_claude.base_url_env
         fake_routes = {**real_routes, "claude": stripped_route}
         fake_roster = MagicMock(wraps=real_roster, proxy_routes=fake_routes)
 
@@ -204,7 +209,6 @@ class TestCredentialProxyEnv:
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
             patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
             patch("terok_agent.get_roster", return_value=fake_roster),
-            pytest.raises(SystemExit, match="oauth_phantom_env"),
         ):
             mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
@@ -212,7 +216,14 @@ class TestCredentialProxyEnv:
             mock_cfg.proxy_port = 18731
             mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
 
-            _credential_proxy_env_and_volumes(project, "task-1")
+            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
+
+        err = capsys.readouterr().err
+        assert "oauth_phantom_env" in err
+        assert "WARNING" in err
+        # Falls back to API-key env var
+        assert "ANTHROPIC_API_KEY" in env
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_oauth_socket_transport(self, tmp_path: Path) -> None:
