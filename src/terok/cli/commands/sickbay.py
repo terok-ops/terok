@@ -29,6 +29,7 @@ from terok_sandbox import (
     get_container_state,
     get_proxy_status,
     get_server_status,
+    is_proxy_socket_active,
     is_proxy_systemd_available,
     is_systemd_available,
 )
@@ -111,6 +112,8 @@ def _check_credential_proxy() -> _CheckResult:
         creds = len(status.credentials_stored) if status.credentials_stored else 0
         return ("ok", label, f"{status.mode}, {creds} credential(s) stored")
     if status.mode == "systemd":
+        if is_proxy_socket_active():
+            return ("ok", label, "systemd, socket active — service starts on first connection")
         return (
             "error",
             label,

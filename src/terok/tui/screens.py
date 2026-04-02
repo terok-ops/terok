@@ -1902,11 +1902,24 @@ def render_proxy_status(status: CredentialProxyStatus | None) -> Text:
         return Text("Credential proxy status unknown.")
 
     ok = Style(color="green")
+    warn = Style(color="yellow")
     err = Style(color="red")
     dim = Style(dim=True)
 
     mode_s = Text(status.mode)
-    running_s = Text("running", style=ok) if status.running else Text("stopped", style=err)
+    standby = False
+    if status.running:
+        running_s = Text("running", style=ok)
+    elif status.mode == "systemd":
+        from terok_sandbox import is_proxy_socket_active
+
+        if is_proxy_socket_active():
+            running_s = Text("standby (starts on first connection)", style=warn)
+            standby = True
+        else:
+            running_s = Text("stopped", style=err)
+    else:
+        running_s = Text("stopped", style=err)
 
     lines: list[Text] = [
         Text.assemble("Mode:        ", mode_s),
@@ -1921,7 +1934,7 @@ def render_proxy_status(status: CredentialProxyStatus | None) -> Text:
     else:
         lines.append(Text.assemble("Credentials: ", Text("none stored", style=dim)))
 
-    if not status.running:
+    if not status.running and not standby:
         lines.append(Text(""))
         lines.append(
             Text(
