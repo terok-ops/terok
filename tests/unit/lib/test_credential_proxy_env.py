@@ -172,10 +172,10 @@ class TestCredentialProxyEnv:
         assert "ANTHROPIC_UNIX_SOCKET" not in env
 
     @pytest.mark.usefixtures("_enable_proxy")
-    def test_oauth_missing_roster_warns_and_falls_back(
+    def test_oauth_without_roster_support_warns_per_provider(
         self, tmp_path: Path, capsys: CaptureFixture[str]
     ) -> None:
-        """OAuth credential with empty oauth_phantom_env warns and falls back to API-key env."""
+        """OAuth credential + empty oauth_phantom_env warns and falls back per-provider."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -219,9 +219,10 @@ class TestCredentialProxyEnv:
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
         err = capsys.readouterr().err
-        assert "oauth_phantom_env" in err
-        assert "WARNING" in err
-        # Falls back to API-key env var
+        # Warning is scoped to the specific provider
+        assert "'claude'" in err
+        assert "for 'claude'" in err
+        # Falls back to API-key env var for this provider
         assert "ANTHROPIC_API_KEY" in env
         assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
 

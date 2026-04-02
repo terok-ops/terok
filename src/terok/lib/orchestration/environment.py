@@ -308,21 +308,21 @@ def _credential_proxy_env_and_volumes(
         if name not in routed:
             continue
 
-        # Auth dimension: select phantom env vars by credential type
+        # Auth dimension: select phantom env vars by credential type.
+        # Providers with oauth_phantom_env get OAuth-specific env vars;
+        # others fall back to phantom_env (same env var for both auth types).
         is_oauth = credential_types[name] == "oauth"
         if is_oauth and route.oauth_phantom_env:
             token_vars = route.oauth_phantom_env
-        elif is_oauth:
-            import sys
-
-            print(
-                f"WARNING: OAuth credential for '{name}' but agent roster lacks "
-                f"oauth_phantom_env — falling back to API-key env vars.\n"
-                f"  Update terok-agent to enable subscription mode.",
-                file=sys.stderr,
-            )
-            token_vars = route.phantom_env
         else:
+            if is_oauth and not route.oauth_phantom_env:
+                import sys
+
+                print(
+                    f"WARNING: '{name}' has OAuth credential but no oauth_phantom_env "
+                    f"in roster — using API-key env vars for '{name}'.",
+                    file=sys.stderr,
+                )
             token_vars = route.phantom_env
         for env_var in token_vars:
             env[env_var] = tokens[name]
