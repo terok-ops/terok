@@ -101,18 +101,30 @@ def global_config_path() -> Path:
 
 def _load_validated() -> RawGlobalConfig:
     """Load and validate the global config, returning a typed model."""
+    from ..util.logging_utils import warn_user
+
     cfg_path = global_config_path()
     if not cfg_path.is_file():
         return RawGlobalConfig()
     try:
         raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, YAMLError):
-        logger.warning("Failed to read global config %s, using defaults", cfg_path, exc_info=True)
+    except (OSError, UnicodeDecodeError) as exc:
+        warn_user("config", f"Cannot read {cfg_path}: {exc}. Using defaults.")
+        logger.warning("Failed to read global config %s: %s", cfg_path, exc, exc_info=True)
+        return RawGlobalConfig()
+    except YAMLError as exc:
+        warn_user("config", f"Malformed YAML in {cfg_path}: {exc}. Using defaults.")
+        logger.warning("Malformed YAML in global config %s: %s", cfg_path, exc, exc_info=True)
         return RawGlobalConfig()
     try:
         return RawGlobalConfig.model_validate(raw)
-    except ValidationError:
-        logger.warning("Invalid global config %s, using defaults", cfg_path, exc_info=True)
+    except ValidationError as exc:
+        # Show first few field errors for actionability
+        field_errors = "; ".join(
+            f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in exc.errors()[:3]
+        )
+        warn_user("config", f"Invalid config {cfg_path}: {field_errors}. Using defaults.")
+        logger.warning("Invalid global config %s: %s", cfg_path, exc, exc_info=True)
         return RawGlobalConfig()
 
 
@@ -159,8 +171,13 @@ def _resolve_path(
             val = section.get(config_key[1])
             if val:
                 return Path(val).expanduser().resolve()
-        except (OSError, KeyError, TypeError, YAMLError):
-            pass
+        except (OSError, KeyError, TypeError, YAMLError) as exc:
+            from ..util.logging_utils import log_warning
+
+            log_warning(
+                f"Config key {config_key[0]}.{config_key[1]} lookup failed: {exc}; "
+                f"using default path"
+            )
 
     return default().resolve()
 

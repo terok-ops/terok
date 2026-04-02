@@ -73,7 +73,10 @@ def _known_project_ids() -> set[str] | None:
     """
     try:
         return {p.id for p in list_projects()}
-    except Exception:
+    except Exception as exc:
+        from ..util.logging_utils import log_warning
+
+        log_warning(f"Project discovery failed during image cleanup: {exc}. Skipping cleanup.")
         return None
 
 

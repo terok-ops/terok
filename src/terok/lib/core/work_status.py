@@ -98,7 +98,10 @@ def read_work_status(agent_config_dir: Path) -> WorkStatus:
         return WorkStatus()
     try:
         raw = _yaml_load(status_path.read_text(encoding="utf-8"))
-    except (YAMLError, OSError, UnicodeDecodeError):
+    except (YAMLError, OSError, UnicodeDecodeError) as exc:
+        from ..util.logging_utils import _log_debug
+
+        _log_debug(f"Cannot read work status {status_path}: {exc}")
         return WorkStatus()
     if raw is None:
         return WorkStatus()
@@ -157,7 +160,10 @@ def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
         return None
     try:
         raw = _yaml_load(phase_path.read_text(encoding="utf-8"))
-    except (YAMLError, OSError, UnicodeDecodeError):
+    except (YAMLError, OSError, UnicodeDecodeError) as exc:
+        from ..util.logging_utils import _log_debug
+
+        _log_debug(f"Cannot read pending phase {phase_path}: {exc}")
         return None
     if not isinstance(raw, dict):
         return None

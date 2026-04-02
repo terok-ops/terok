@@ -473,6 +473,9 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                 )
             )
         except Exception:
+            from ..util.logging_utils import log_warning
+
+            log_warning(f"Skipping malformed task metadata file: {f}")
             continue
 
     def _sort_key(t: TaskMeta) -> tuple[bool, int, str]:

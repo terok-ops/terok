@@ -134,7 +134,13 @@ def _security_mode_env_and_volumes(
             try:
                 ensure_server_reachable(cfg)
             except SystemExit:
-                pass  # gate server down; skip CLONE_FROM, fall back to upstream
+                from ..util.logging_utils import warn_user
+
+                warn_user(
+                    "gate",
+                    "Gate server unreachable; falling back to upstream clone. "
+                    "Gatekeeping is bypassed for this task.",
+                )
             else:
                 port = get_gate_server_port(cfg)
                 token = create_token(project.id, task_id, cfg)
@@ -221,12 +227,18 @@ def _load_ssh_keys_json(path: Path) -> dict[str, list[dict[str, str]]]:
     """Load the SSH key mapping JSON.  Returns empty dict if missing or malformed."""
     import json
 
+    from ..util.logging_utils import warn_user
+
     if not path.is_file():
         return {}
     try:
         result = json.loads(path.read_text(encoding="utf-8"))
         return result if isinstance(result, dict) else {}
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError as exc:
+        warn_user("ssh", f"Malformed SSH keys file {path}: {exc}. SSH key injection disabled.")
+        return {}
+    except OSError as exc:
+        warn_user("ssh", f"Cannot read SSH keys file {path}: {exc}. SSH key injection disabled.")
         return {}
 
 

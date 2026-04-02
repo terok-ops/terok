@@ -77,8 +77,10 @@ def get_project_state(
         else:
             try:
                 dockerfiles_old = not dockerfiles_match_templates(project_id)
-            except Exception:
-                # Template comparison is best-effort; treat errors as "not old"
+            except (OSError, ValueError, KeyError) as exc:
+                from ..util.logging_utils import log_warning
+
+                log_warning(f"Template comparison failed for {project_id}: {exc}")
                 dockerfiles_old = False
 
     images_old = False
@@ -97,7 +99,10 @@ def get_project_state(
                 from ..orchestration.docker import build_context_hash
 
                 context_hash = build_context_hash(project_id)
-            except Exception:
+            except (OSError, ValueError, KeyError, ImportError) as exc:
+                from ..util.logging_utils import _log_debug
+
+                _log_debug(f"Build context hash failed for {project_id}: {exc}")
                 context_hash = None
 
             if docker_mtime is not None or context_hash is not None:
@@ -135,7 +140,10 @@ def get_project_state(
     if has_gate and gate_commit_provider is not None:
         try:
             gate_last_commit = gate_commit_provider(project_id)
-        except Exception:
+        except Exception as exc:
+            from ..util.logging_utils import log_warning
+
+            log_warning(f"Gate commit lookup failed for {project_id}: {exc}")
             gate_last_commit = None
 
     return {
