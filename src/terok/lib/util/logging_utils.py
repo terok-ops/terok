@@ -28,7 +28,7 @@ def _log(message: str, *, level: str = "DEBUG") -> None:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] [{level}] {message}\n")
-    except Exception:
+    except Exception:  # nosec B110 — intentionally silent; logging must never disrupt callers
         pass
 
 
@@ -62,5 +62,5 @@ def warn_user(component: str, message: str) -> None:
     try:
         print(f"Warning [{component}]: {message}", file=sys.stderr)
         log_warning(f"[{component}] {message}")
-    except Exception:
+    except Exception:  # nosec B110 — intentionally silent; user warnings must never raise
         pass
