@@ -457,3 +457,37 @@ def test_make_sandbox_config_credentials_propagation(
     sc = cfg.make_sandbox_config()
     assert sc.proxy_db_path == (tmp_path / "creds" / "credentials.db").resolve()
     assert sc.ssh_keys_json_path == (tmp_path / "creds" / "ssh-keys.json").resolve()
+
+
+def test_make_sandbox_config_shield_bypass(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Factory bridges shield.bypass_firewall_no_protection to SandboxConfig.shield_bypass."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "shield:\n  bypass_firewall_no_protection: true\n")),
+    )
+    assert cfg.make_sandbox_config().shield_bypass is True
+
+
+def test_make_sandbox_config_shield_bypass_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Factory defaults shield_bypass to False."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.make_sandbox_config().shield_bypass is False
+
+
+def test_make_sandbox_config_shield_audit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Factory bridges shield.audit to SandboxConfig.shield_audit."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "shield:\n  audit: false\n")),
+    )
+    assert cfg.make_sandbox_config().shield_audit is False
+
+
+def test_make_sandbox_config_shield_audit_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Factory defaults shield_audit to True."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.make_sandbox_config().shield_audit is True

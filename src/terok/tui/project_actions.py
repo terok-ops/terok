@@ -574,9 +574,11 @@ class ProjectActionsMixin:
         """Install systemd socket activation for the credential proxy."""
         from terok_agent import ensure_proxy_routes
 
+        from ..lib.core.config import make_sandbox_config
+
         def _install() -> None:
-            ensure_proxy_routes()
-            install_proxy_systemd()
+            ensure_proxy_routes(cfg=make_sandbox_config())
+            install_proxy_systemd(cfg=make_sandbox_config())
 
         await self._run_suspended(
             _install,
@@ -585,8 +587,10 @@ class ProjectActionsMixin:
 
     async def _action_proxy_uninstall(self) -> None:
         """Uninstall credential proxy systemd units."""
+        from ..lib.core.config import make_sandbox_config
+
         await self._run_suspended(
-            uninstall_proxy_systemd,
+            lambda: uninstall_proxy_systemd(cfg=make_sandbox_config()),
             success_msg="Credential proxy systemd units removed",
         )
 
@@ -594,9 +598,11 @@ class ProjectActionsMixin:
         """Generate routes and start the credential proxy daemon."""
         from terok_agent import ensure_proxy_routes
 
+        from ..lib.core.config import make_sandbox_config
+
         def _start() -> None:
-            ensure_proxy_routes()
-            start_proxy()
+            ensure_proxy_routes(cfg=make_sandbox_config())
+            start_proxy(cfg=make_sandbox_config())
 
         await self._run_suspended(
             _start,

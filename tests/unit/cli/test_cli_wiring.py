@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from terok.cli.wiring import wire, wire_dispatch, wire_group
 
 # ── Lightweight test doubles matching the ArgProto/CmdProto contracts ────
@@ -42,6 +44,10 @@ def _noop(**kwargs) -> None:
     """No-op handler for test commands."""
 
 
+def _noop_with_cfg(*, cfg=None, **kwargs) -> None:
+    """No-op handler that accepts cfg for config-injected groups."""
+
+
 _TEST_COMMANDS = (
     _Cmd(
         name="alpha",
@@ -50,6 +56,16 @@ _TEST_COMMANDS = (
         args=(_Arg(name="--count", type=int, default=1, help="count"),),
     ),
     _Cmd(name="beta", help="Beta command", handler=_noop),
+)
+
+_CFG_COMMANDS = (
+    _Cmd(
+        name="alpha",
+        help="Alpha command",
+        handler=_noop_with_cfg,
+        args=(_Arg(name="--count", type=int, default=1, help="count"),),
+    ),
+    _Cmd(name="beta", help="Beta command", handler=_noop_with_cfg),
 )
 
 
@@ -100,6 +116,32 @@ class TestWireGroup:
         args = parser.parse_args(["test"])
         assert hasattr(args, "_group_help")
 
+    def test_config_factory_stored_on_defaults(self) -> None:
+        """wire_group() stores config_factory on the group defaults."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        factory = lambda: "cfg-value"  # noqa: E731
+        wire_group(sub, "grp", _CFG_COMMANDS, config_factory=factory)
+
+        args = parser.parse_args(["grp", "alpha"])
+        assert args._config_factory is factory
+
+    def test_no_factory_means_none(self) -> None:
+        """Without config_factory, _config_factory defaults to None."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", _TEST_COMMANDS)
+
+        args = parser.parse_args(["grp", "alpha"])
+        assert getattr(args, "_config_factory", None) is None
+
+    def test_missing_cfg_param_raises_type_error(self) -> None:
+        """wire_group() rejects handlers without cfg when config_factory is set."""
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        with pytest.raises(TypeError, match="lacks required.*cfg"):
+            wire_group(sub, "bad", _TEST_COMMANDS, config_factory=lambda: None)
+
 
 class TestWireDispatch:
     """Verify dispatch integration."""
@@ -146,6 +188,49 @@ class TestWireDispatch:
 
         assert handled is True
         mock_help.assert_called_once()
+
+    def test_injects_cfg_when_factory_set(self) -> None:
+        """wire_dispatch() injects cfg from config_factory into handler kwargs."""
+        received: list[dict] = []
+
+        def tracking_handler(*, cfg=None, count=1) -> None:
+            received.append({"cfg": cfg, "count": count})
+
+        cmds = (
+            _Cmd(
+                name="alpha",
+                handler=tracking_handler,
+                args=(_Arg(name="--count", type=int, default=1, help="count"),),
+            ),
+        )
+        factory = lambda: "injected-config"  # noqa: E731
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds, config_factory=factory)
+
+        args = parser.parse_args(["grp", "alpha", "--count", "5"])
+        wire_dispatch(args)
+
+        assert received == [{"cfg": "injected-config", "count": 5}]
+
+    def test_no_cfg_without_factory(self) -> None:
+        """wire_dispatch() does not inject cfg when no config_factory is set."""
+        received: list[dict] = []
+
+        def tracking_handler(**kwargs) -> None:
+            received.append(kwargs)
+
+        cmds = (_Cmd(name="alpha", handler=tracking_handler),)
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds)
+
+        args = parser.parse_args(["grp", "alpha"])
+        wire_dispatch(args)
+
+        assert received == [{}]
 
 
 class TestAgentCommandsRegistered:

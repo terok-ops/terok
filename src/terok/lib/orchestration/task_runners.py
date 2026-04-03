@@ -35,6 +35,7 @@ from ..core.config import (
     SHIELD_SECURITY_HINT,
     get_public_host,
     get_shield_bypass_firewall_no_protection,
+    make_sandbox_config,
 )
 from ..core.images import project_cli_image
 from ..core.projects import load_project
@@ -323,7 +324,6 @@ def _run_container(
         gpu_enabled=has_gpu(project),
         extra_args=tuple(extra_args or ()),
         unrestricted="TEROK_UNRESTRICTED" in env,
-        bypass_shield=get_shield_bypass_firewall_no_protection(),
     )
 
     try:
@@ -333,8 +333,8 @@ def _run_container(
 
 
 def _sandbox() -> Sandbox:
-    """Return a default :class:`Sandbox` instance."""
-    return Sandbox()
+    """Return a :class:`Sandbox` with terok's bridged config."""
+    return Sandbox(make_sandbox_config())
 
 
 def task_run_cli(

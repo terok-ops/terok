@@ -289,6 +289,9 @@ def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
     Bridges terok's config layer (env vars → config.yml → XDG defaults) to
     sandbox's plain dataclass so that all sandbox operations use terok's
     directory namespace rather than sandbox's own standalone defaults.
+
+    This is the **single source of truth** for config bridging — every
+    SandboxConfig field that terok controls must be set here.
     """
     from terok_sandbox import SandboxConfig
 
@@ -296,6 +299,8 @@ def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
         state_dir=state_dir(),
         credentials_dir=credentials_dir(),
         gate_port=get_gate_server_port(),
+        shield_bypass=get_shield_bypass_firewall_no_protection(),
+        shield_audit=get_shield_audit(),
     )
 
 
@@ -403,6 +408,11 @@ def get_shield_drop_on_task_run() -> bool:
 def get_shield_on_task_restart() -> str:
     """Return the global default for ``shield.on_task_restart``."""
     return _load_validated().shield.on_task_restart
+
+
+def get_shield_audit() -> bool:
+    """Return the global default for ``shield.audit``."""
+    return _load_validated().shield.audit
 
 
 def get_public_host() -> str:

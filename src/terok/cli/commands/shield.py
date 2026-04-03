@@ -18,6 +18,8 @@ from pathlib import Path
 from terok_sandbox import make_shield
 from terok_shield import COMMANDS, ArgDef, CommandDef, ExecError
 
+from ...lib.core.config import make_sandbox_config
+
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
     """Register an :class:`ArgDef` with an argparse parser."""
@@ -155,7 +157,7 @@ def dispatch(args: argparse.Namespace) -> bool:
     try:
         if has_task:
             cname, task_dir = _resolve_task(args.project_id, args.task_id)
-            shield = make_shield(task_dir)
+            shield = make_shield(task_dir, cfg=make_sandbox_config())
             kwargs = _extract_handler_kwargs(args, cmd_def)
             if cmd_def.needs_container:
                 cmd_def.handler(shield, cname, **kwargs)
@@ -168,7 +170,7 @@ def dispatch(args: argparse.Namespace) -> bool:
             import tempfile
 
             with tempfile.TemporaryDirectory() as tmp:
-                shield = make_shield(Path(tmp))
+                shield = make_shield(Path(tmp), cfg=make_sandbox_config())
                 kwargs = _extract_handler_kwargs(args, cmd_def)
                 cmd_def.handler(shield, **kwargs)
     except ExecError as exc:

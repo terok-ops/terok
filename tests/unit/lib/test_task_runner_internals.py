@@ -312,10 +312,6 @@ class TestRunContainer:
         project = self._make_project()
         with (
             patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=False,
-            ),
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
@@ -338,17 +334,12 @@ class TestRunContainer:
         assert spec.task_dir == MOCK_TASK_DIR
         assert spec.gpu_enabled is False
         assert spec.unrestricted is False  # FOO doesn't have TEROK_UNRESTRICTED
-        assert spec.bypass_shield is False
 
     def test_unrestricted_flag_from_env(self) -> None:
         """unrestricted is True when TEROK_UNRESTRICTED is in env."""
         project = self._make_project()
         with (
             patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=False,
-            ),
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
@@ -363,38 +354,11 @@ class TestRunContainer:
         spec = sandbox_factory.return_value.run.call_args[0][0]
         assert spec.unrestricted is True
 
-    def test_bypass_shield_flag(self) -> None:
-        """bypass_shield is True when global config says so."""
-        project = self._make_project()
-        with (
-            patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=True,
-            ),
-            patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
-        ):
-            _run_container(
-                cname="test-ctr",
-                image="alpine:latest",
-                env={},
-                volumes=[],
-                project=project,
-                task_dir=MOCK_TASK_DIR,
-            )
-
-        spec = sandbox_factory.return_value.run.call_args[0][0]
-        assert spec.bypass_shield is True
-
     def test_gpu_flag_from_project(self) -> None:
         """gpu_enabled is derived from has_gpu(project)."""
         project = self._make_project()
         with (
             patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=False,
-            ),
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=True),
         ):
             _run_container(
@@ -414,10 +378,6 @@ class TestRunContainer:
         project = self._make_project()
         with (
             patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=False,
-            ),
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
