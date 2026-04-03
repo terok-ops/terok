@@ -116,24 +116,52 @@ class TestWireGroup:
         args = parser.parse_args(["test"])
         assert hasattr(args, "_group_help")
 
-    def test_config_factory_stored_on_defaults(self) -> None:
-        """wire_group() stores config_factory on the group defaults."""
+    def test_config_factory_injects_at_dispatch(self) -> None:
+        """wire_group(config_factory=...) causes dispatch to inject cfg."""
+        received: list[dict] = []
+
+        def handler(*, cfg=None, count=1) -> None:
+            received.append({"cfg": cfg, "count": count})
+
+        cmds = (
+            _Cmd(
+                name="alpha",
+                handler=handler,
+                args=(_Arg(name="--count", type=int, default=1, help="count"),),
+            ),
+        )
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="cmd")
-        factory = lambda: "cfg-value"  # noqa: E731
-        wire_group(sub, "grp", _CFG_COMMANDS, config_factory=factory)
+        wire_group(sub, "grp", cmds, config_factory=lambda: "injected")
 
-        args = parser.parse_args(["grp", "alpha"])
-        assert args._config_factory is factory
+        args = parser.parse_args(["grp", "alpha", "--count", "3"])
+        wire_dispatch(args)
 
-    def test_no_factory_means_none(self) -> None:
-        """Without config_factory, _config_factory defaults to None."""
+        assert received == [{"cfg": "injected", "count": 3}]
+
+    def test_no_factory_does_not_inject_cfg(self) -> None:
+        """Without config_factory, handler receives only CLI args."""
+        received: list[dict] = []
+
+        def handler(**kwargs) -> None:
+            received.append(kwargs)
+
+        cmds = (
+            _Cmd(
+                name="alpha",
+                handler=handler,
+                args=(_Arg(name="--count", type=int, default=1, help="count"),),
+            ),
+        )
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="cmd")
-        wire_group(sub, "grp", _TEST_COMMANDS)
+        wire_group(sub, "grp", cmds)
 
-        args = parser.parse_args(["grp", "alpha"])
-        assert getattr(args, "_config_factory", None) is None
+        args = parser.parse_args(["grp", "alpha", "--count", "2"])
+        wire_dispatch(args)
+
+        assert received == [{"count": 2}]
+        assert "cfg" not in received[0]
 
     def test_accepts_handlers_without_cfg_at_registration(self) -> None:
         """wire_group() does not reject handlers at registration time.

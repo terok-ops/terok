@@ -14,8 +14,9 @@ no coupling to a specific package's internal module.
 
 When *config_factory* is set on a group, the factory is called at
 dispatch time and the result is injected as ``cfg`` into every handler.
-The handler is validated on first dispatch — a ``TypeError`` is raised
-if it lacks a ``cfg`` parameter.
+Handlers are accepted if they declare an explicit ``cfg`` parameter or
+accept arbitrary keyword arguments (``**kwargs``).  A ``TypeError`` is
+raised at dispatch time if the handler supports neither.
 
 Usage::
 
@@ -102,9 +103,9 @@ def wire_group(
     When the group name is given without a subcommand, prints help.
 
     When *config_factory* is set, ``config_factory()`` is called at dispatch
-    time and the result injected as ``cfg``.  The handler is validated on
-    first invocation — a ``TypeError`` is raised if it lacks a ``cfg``
-    parameter.
+    time and the result injected as ``cfg``.  Handlers that declare ``cfg``
+    explicitly or accept ``**kwargs`` are both valid.  A ``TypeError`` is
+    raised at dispatch time if the handler supports neither.
     """
     group = sub.add_parser(name, help=help)
     group_sub = group.add_subparsers(dest=f"{name}_cmd")
