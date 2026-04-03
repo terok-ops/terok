@@ -349,6 +349,17 @@ def get_credential_proxy_bypass() -> bool:
     return _load_validated().credential_proxy.bypass_no_secret_protection
 
 
+def get_credential_proxy_transport() -> str:
+    """Return the credential proxy transport mode (``"direct"`` or ``"socket"``).
+
+    Global config (config.yml)::
+
+        credential_proxy:
+          transport: socket   # or "direct"
+    """
+    return _load_validated().credential_proxy.transport
+
+
 def get_shield_bypass_firewall_no_protection() -> bool:
     """Return whether the shield firewall is globally bypassed.
 

@@ -2757,13 +2757,13 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-agent"
-version = "0.0.26"
+version = "0.0.27"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_agent-0.0.26-py3-none-any.whl", hash = "sha256:56ea3f77d418f71fed826196825ab4212f4139261c4e6fa5963188758a0b89ed"},
+    {file = "terok_agent-0.0.27-py3-none-any.whl", hash = "sha256:d1c5f0a45067ae9d6f0850614e700640bbf9366d08417d5f19040faa4d5ad301"},
 ]
 
 [package.dependencies]
@@ -2774,7 +2774,7 @@ tomli-w = ">=1.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.26/terok_agent-0.0.26-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.27/terok_agent-0.0.27-py3-none-any.whl"
 
 [[package]]
 name = "terok-sandbox"
@@ -3284,4 +3284,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "3e6a44c8c219dd38e28a95fcf038619f371b9783946e88562866c99e68f24f1b"
+content-hash = "24c231ddfdb8e911cf6ee657dacc328123e813f1d346730aec8cea08a8712d64"

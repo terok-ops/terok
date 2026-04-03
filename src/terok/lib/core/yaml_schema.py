@@ -343,6 +343,7 @@ class RawCredentialProxySection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     bypass_no_secret_protection: bool = False
+    transport: Literal["direct", "socket"] = "socket"
 
 
 class RawGateServerSection(BaseModel):

@@ -1877,6 +1877,25 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 
 
+def _format_credentials_typed(status: CredentialProxyStatus) -> str:
+    """Format stored credentials as ``name (type), ...`` for status display."""
+    try:
+        from terok_sandbox import CredentialDB
+
+        db = CredentialDB(status.db_path)
+        try:
+            parts = []
+            for name in status.credentials_stored:
+                cred = db.load_credential("default", name)
+                ctype = cred.get("type", "unknown") if cred else "unknown"
+                parts.append(f"{name} ({ctype})")
+        finally:
+            db.close()
+        return ", ".join(parts)
+    except Exception:  # noqa: BLE001
+        return ", ".join(status.credentials_stored)
+
+
 def render_proxy_status(status: CredentialProxyStatus | None) -> Text:
     """Render credential proxy status details as a Rich Text object."""
     if status is None:
@@ -1898,7 +1917,7 @@ def render_proxy_status(status: CredentialProxyStatus | None) -> Text:
     ]
 
     if status.credentials_stored:
-        lines.append(Text(f"Credentials: {', '.join(status.credentials_stored)}"))
+        lines.append(Text(f"Credentials: {_format_credentials_typed(status)}"))
     else:
         lines.append(Text.assemble("Credentials: ", Text("none stored", style=dim)))
 

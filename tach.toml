@@ -577,6 +577,7 @@ expose = [
     "set_experimental",
     "get_global_hooks",
     "get_credential_proxy_bypass",
+    "get_credential_proxy_transport",
     "get_shield_bypass_firewall_no_protection",
     "get_shield_drop_on_task_run",
     "get_shield_on_task_restart",
