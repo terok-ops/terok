@@ -253,9 +253,7 @@ def run_container_doctor(
                 if shield_result:
                     results.append(shield_result)
             else:
-                results.append(
-                    ("warn", check.label, "unknown host-side check — skipped")
-                )
+                results.append(("warn", check.label, "unknown host-side check — skipped"))
             continue
 
         # Execute probe inside container

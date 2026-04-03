@@ -98,18 +98,14 @@ class TestGitRemoteCheck:
 
     def test_warn_when_port_mismatch(self) -> None:
         check = _git_remote_check("gatekeeping", 9418)
-        verdict = check.evaluate(
-            0, "http://abc@host.containers.internal:5555/proj.git\n", ""
-        )
+        verdict = check.evaluate(0, "http://abc@host.containers.internal:5555/proj.git\n", "")
         assert verdict.severity == "warn"
         assert "5555" in verdict.detail
         assert "9418" in verdict.detail
 
     def test_ok_when_gate_port_none(self) -> None:
         check = _git_remote_check("gatekeeping", None)
-        verdict = check.evaluate(
-            0, "http://abc@host.containers.internal:5555/proj.git\n", ""
-        )
+        verdict = check.evaluate(0, "http://abc@host.containers.internal:5555/proj.git\n", "")
         assert verdict.severity == "ok"
 
 
