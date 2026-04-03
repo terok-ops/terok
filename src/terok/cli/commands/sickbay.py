@@ -37,6 +37,7 @@ from terok_sandbox import (
 from ...lib.core.config import make_sandbox_config
 from ...lib.core.project_model import ProjectConfig
 from ...lib.core.projects import list_projects, load_project
+from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
 from ...lib.orchestration.tasks import container_name, tasks_meta_dir
 from ...lib.util.yaml import load as _yaml_load
@@ -256,6 +257,48 @@ def _check_ssh_agent() -> _CheckResult:
     return ("ok", label, f"{total} project(s) registered, all keys present")
 
 
+def _check_containers(
+    project_id: str | None,
+    task_id: str | None,
+    *,
+    fix: bool,
+) -> list[_CheckResult]:
+    """Run in-container health checks for running tasks.
+
+    The per-task running-state check is handled inside
+    ``run_container_doctor`` — it returns an informational result for
+    non-running containers, so we simply forward all tasks and let the
+    orchestrator decide.
+    """
+    results: list[_CheckResult] = []
+
+    if project_id and task_id:
+        # Single task scope
+        results.extend(run_container_doctor(project_id, task_id, fix=fix))
+        return results
+
+    # Project or global scope — iterate all known tasks
+    if project_id:
+        projects = [(project_id, load_project(project_id))]
+    else:
+        projects = [(p.id, p) for p in list_projects()]
+
+    for pid, _project in projects:
+        meta_dir = tasks_meta_dir(pid)
+        if not meta_dir.is_dir():
+            continue
+        for meta_file in meta_dir.glob("*.yml"):
+            tid = meta_file.stem
+            for severity, label, detail in run_container_doctor(pid, tid, fix=fix):
+                # Prefix bare check labels with task context so multi-task
+                # output is unambiguous (early-return labels already include it)
+                if not label.startswith(("Task ", "  fix:")):
+                    label = f"Task {pid}/{tid}: {label}"
+                results.append((severity, label, detail))
+
+    return results
+
+
 _GLOBAL_CHECKS = [
     _check_gate_server,
     _check_shield,
@@ -265,6 +308,7 @@ _GLOBAL_CHECKS = [
 
 _STATUS_MARKERS = {
     "ok": "ok",
+    "info": "info",
     "warn": "WARN",
     "error": "ERROR",
 }
@@ -298,7 +342,15 @@ def _cmd_sickbay(
         print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
         worst = _update_worst(worst, status)
 
-    if not hook_results and task_id:
+    # In-container diagnostics for running tasks
+    container_results = _check_containers(project_id, task_id, fix=fix)
+    for status, label, detail in container_results:
+        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
+        worst = _update_worst(worst, status)
+
+    # Print "ok (consistent)" only when scoped to a single task and every result is "ok"
+    all_ok = all(s == "ok" for s, _, _ in hook_results + container_results)
+    if task_id and all_ok:
         print(f"  Task {project_id}/{task_id} .... ok (consistent)")
 
     if worst == "error":

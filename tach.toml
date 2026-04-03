@@ -44,6 +44,7 @@ path = "terok.cli"
 layer = "presentation"
 depends_on = [
     "terok.lib.domain.agent_config",
+    "terok.lib.orchestration.container_doctor",
     "terok.lib.orchestration.hooks",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
@@ -257,6 +258,17 @@ depends_on = ["terok.lib.util.yaml"]
 path = "terok.lib.orchestration.container_exec"
 layer = "orchestration"
 depends_on = ["terok.lib.util.logging_utils"]
+
+# In-container health checks (layered doctor protocol via podman exec)
+[[modules]]
+path = "terok.lib.orchestration.container_doctor"
+layer = "orchestration"
+depends_on = [
+    "terok.lib.orchestration.tasks",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+    "terok.lib.util.logging_utils",
+]
 
 # ── SANDBOX LAYER ─────────────────────────────────────────────────
 #
@@ -681,6 +693,10 @@ from = ["terok.lib.util.host_cmd"]
 [[interfaces]]
 expose = ["container_git_diff"]
 from = ["terok.lib.orchestration.container_exec"]
+
+[[interfaces]]
+expose = ["run_container_doctor"]
+from = ["terok.lib.orchestration.container_doctor"]
 
 [[interfaces]]
 expose = ["load", "dump", "YAMLError"]
