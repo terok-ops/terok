@@ -9,6 +9,9 @@ All functions are exception-safe — they never raise or affect callers.
 
 import sys
 
+LOG_FILENAME = "terok.log"
+"""Filename for the best-effort terok library log (written under ``state_root()``)."""
+
 
 def _log(message: str, *, level: str = "DEBUG") -> None:
     """Append a timestamped line to the terok library log.
@@ -23,7 +26,7 @@ def _log(message: str, *, level: str = "DEBUG") -> None:
 
         from ..core.paths import state_root
 
-        log_path = state_root() / "terok.log"
+        log_path = state_root() / LOG_FILENAME
         log_path.parent.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         with open(log_path, "a", encoding="utf-8") as f:

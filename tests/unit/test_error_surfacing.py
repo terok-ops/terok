@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from terok.lib.core import config as cfg
-from terok.lib.util.logging_utils import _log, _log_debug, log_warning, warn_user
+from terok.lib.util.logging_utils import LOG_FILENAME, _log, _log_debug, log_warning, warn_user
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -69,7 +69,7 @@ class TestWarnUser:
     def test_also_logs_to_file(self, tmp_path: Path) -> None:
         """warn_user also writes a WARNING line to the log file."""
         warn_user("gate", "Connection refused.")
-        log_file = tmp_path / "terok.log"
+        log_file = tmp_path / LOG_FILENAME
         assert log_file.exists()
         content = log_file.read_text(encoding="utf-8")
         assert "[WARNING]" in content
@@ -88,7 +88,7 @@ class TestLogFunctions:
         """log_warning() writes a WARNING-level line to state_root()/terok.log."""
         with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
             log_warning("disk almost full")
-        log_file = tmp_path / "terok.log"
+        log_file = tmp_path / LOG_FILENAME
         assert log_file.exists()
         content = log_file.read_text(encoding="utf-8")
         assert "[WARNING] disk almost full" in content
@@ -97,7 +97,7 @@ class TestLogFunctions:
         """_log_debug() writes a DEBUG-level line."""
         with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
             _log_debug("resolved path /foo")
-        content = (tmp_path / "terok.log").read_text(encoding="utf-8")
+        content = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8")
         assert "[DEBUG] resolved path /foo" in content
 
     def test_log_appends_multiple_lines(self, tmp_path: Path) -> None:
@@ -105,7 +105,7 @@ class TestLogFunctions:
         with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
             log_warning("first")
             log_warning("second")
-        lines = (tmp_path / "terok.log").read_text(encoding="utf-8").strip().splitlines()
+        lines = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8").strip().splitlines()
         assert len(lines) == 2
         assert "first" in lines[0]
         assert "second" in lines[1]
@@ -115,7 +115,7 @@ class TestLogFunctions:
         nested = tmp_path / "deep" / "nested"
         with patch("terok.lib.core.paths.state_root", return_value=nested):
             _log("hello", level="INFO")
-        assert (nested / "terok.log").exists()
+        assert (nested / LOG_FILENAME).exists()
 
     def test_log_never_raises_on_io_error(self) -> None:
         """Exception safety: if state_root() raises, _log swallows it."""
@@ -146,7 +146,7 @@ class TestLogFunctions:
         """Each log line starts with a bracketed timestamp."""
         with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
             log_warning("ts check")
-        line = (tmp_path / "terok.log").read_text(encoding="utf-8").strip()
+        line = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8").strip()
         # Format: [YYYY-MM-DD HH:MM:SS] [WARNING] ts check
         assert line.startswith("[")
         assert "] [WARNING] ts check" in line
