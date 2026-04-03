@@ -67,10 +67,11 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def _check_gate_server() -> _CheckResult:
     """Check gate server status."""
-    status = get_server_status()
+    cfg = make_sandbox_config()
+    status = get_server_status(cfg)
     label = "Gate server"
     if status.running:
-        outdated = check_units_outdated()
+        outdated = check_units_outdated(cfg)
         if outdated:
             return ("warn", label, f"{outdated} Run 'terok gate start' to update.")
         return ("ok", label, f"{status.mode}, port {status.port}")
