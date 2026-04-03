@@ -39,10 +39,10 @@ def _collect_all_web_ports() -> set[int]:
         for f in tdir.glob("*.yml"):
             try:
                 meta = _yaml_load(f.read_text()) or {}
-            except Exception:
+            except Exception as exc:
                 from ..util.logging_utils import log_warning
 
-                log_warning(f"Skipping malformed task metadata during port scan: {f}")
+                log_warning(f"Skipping malformed task metadata during port scan: {f}: {exc}")
                 continue
             port = meta.get("web_port")
             if isinstance(port, int):

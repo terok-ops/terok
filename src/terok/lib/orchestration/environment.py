@@ -237,7 +237,7 @@ def _load_ssh_keys_json(path: Path) -> dict[str, list[dict[str, str]]]:
     except json.JSONDecodeError as exc:
         warn_user("ssh", f"Malformed SSH keys file {path}: {exc}. SSH key injection disabled.")
         return {}
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         warn_user("ssh", f"Cannot read SSH keys file {path}: {exc}. SSH key injection disabled.")
         return {}
 

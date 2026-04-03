@@ -37,6 +37,12 @@ def write_config(tmp_path: Path, content: str) -> Path:
 class TestWarnUser:
     """Tests for ``warn_user(component, message)``."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_log(self, tmp_path: Path) -> None:
+        """Redirect log writes so tests never touch the real state dir."""
+        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+            yield
+
     def test_prints_structured_warning_to_stderr(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Output follows ``Warning [component]: message`` format on stderr."""
         warn_user("config", "Something went wrong.")
@@ -154,6 +160,12 @@ class TestLogFunctions:
 
 class TestLoadValidatedErrorPaths:
     """Tests for ``_load_validated()`` error handling in config.py."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_log(self, tmp_path: Path) -> None:
+        """Redirect log writes to tmp_path so tests never touch the real state dir."""
+        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+            yield
 
     def test_malformed_yaml_warns_and_returns_defaults(
         self,
