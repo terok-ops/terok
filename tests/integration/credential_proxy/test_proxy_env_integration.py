@@ -202,6 +202,8 @@ class TestProxyEnvIntegration:
         assert len(env["CLAUDE_CODE_OAUTH_TOKEN"]) == 32
         assert "ANTHROPIC_API_KEY" not in env
         assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
+        # Socket flag AND base URL — SDK needs base URL for HTTP on Node.js
+        assert "ANTHROPIC_BASE_URL" in env
 
     def test_oauth_credential_direct_transport(self, tmp_path: Path) -> None:
         """OAuth + direct transport → CLAUDE_CODE_OAUTH_TOKEN + ANTHROPIC_BASE_URL."""

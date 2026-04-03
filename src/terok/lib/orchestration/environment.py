@@ -318,10 +318,13 @@ def _credential_proxy_env_and_volumes(
         for env_var in token_vars:
             env[env_var] = tokens[name]
 
-        # Transport dimension: Unix socket or HTTP base URL
+        # Transport dimension: socket flag + HTTP base URL.
+        # ANTHROPIC_UNIX_SOCKET is a subscription-mode flag for Claude Code
+        # (its UD() function checks it), but actual HTTP traffic still routes
+        # through ANTHROPIC_BASE_URL — the SDK only uses unix sockets on Bun.
         if use_socket and route.socket_path and route.socket_env:
             env[route.socket_env] = route.socket_path
-        elif route.base_url_env:
+        if route.base_url_env:
             env[route.base_url_env] = proxy_base
 
         # Override OpenCode base URL for proxied providers (the original

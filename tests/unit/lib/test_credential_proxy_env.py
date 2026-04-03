@@ -223,7 +223,7 @@ class TestCredentialProxyEnv:
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_oauth_socket_transport(self, tmp_path: Path) -> None:
-        """OAuth credential with socket transport → CLAUDE_CODE_OAUTH_TOKEN + ANTHROPIC_UNIX_SOCKET."""
+        """OAuth + socket → CLAUDE_CODE_OAUTH_TOKEN + ANTHROPIC_UNIX_SOCKET + ANTHROPIC_BASE_URL."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -257,11 +257,12 @@ class TestCredentialProxyEnv:
         assert len(env["CLAUDE_CODE_OAUTH_TOKEN"]) == 32
         assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
         assert "ANTHROPIC_API_KEY" not in env
-        assert "ANTHROPIC_BASE_URL" not in env
+        # Socket flag AND base URL — SDK needs base URL for HTTP, socket is a mode flag
+        assert "ANTHROPIC_BASE_URL" in env
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_api_key_socket_transport(self, tmp_path: Path) -> None:
-        """API key credential with socket transport → ANTHROPIC_API_KEY + ANTHROPIC_UNIX_SOCKET."""
+        """API key + socket → ANTHROPIC_API_KEY + ANTHROPIC_UNIX_SOCKET + ANTHROPIC_BASE_URL."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -295,7 +296,8 @@ class TestCredentialProxyEnv:
         assert len(env["ANTHROPIC_API_KEY"]) == 32
         assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
         assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
-        assert "ANTHROPIC_BASE_URL" not in env
+        # Socket flag AND base URL — SDK needs base URL for HTTP, socket is a mode flag
+        assert "ANTHROPIC_BASE_URL" in env
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_leaked_credentials_warning(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
