@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 from terok_agent import agent_doctor_checks, get_roster
 from terok_sandbox import get_container_state, get_proxy_port, get_ssh_agent_port, make_shield
@@ -100,13 +101,19 @@ def _git_remote_check(security_class: str, gate_port: int | None) -> DoctorCheck
             return CheckVerdict("warn", "git origin: no remote configured")
         if security_class == "gatekeeping":
             # Gate URL: http://<token>@host.containers.internal:<port>/<name>
-            if "host.containers.internal" in url:
-                return CheckVerdict("ok", "git origin: routed through gate")
-            return CheckVerdict(
-                "error",
-                f"git origin: {url!r} bypasses gate — should use host.containers.internal",
-                fixable=False,
-            )
+            parsed = urlparse(url)
+            if parsed.hostname != "host.containers.internal":
+                return CheckVerdict(
+                    "error",
+                    f"git origin: {url!r} bypasses gate — should use host.containers.internal",
+                    fixable=False,
+                )
+            if gate_port is not None and parsed.port != gate_port:
+                return CheckVerdict(
+                    "warn",
+                    f"git origin: port {parsed.port} does not match gate port {gate_port}",
+                )
+            return CheckVerdict("ok", "git origin: routed through gate")
         # Online mode: any URL is acceptable
         return CheckVerdict("ok", f"git origin: {url}")
 
@@ -238,11 +245,17 @@ def run_container_doctor(
     results: list[_CheckResult] = []
 
     for check in all_checks:
-        # Host-side checks (like shield) don't use podman exec
+        # Host-side checks require custom handling because they need host
+        # Python APIs (e.g. shield) rather than podman exec.
         if check.host_side:
-            shield_result = _check_shield_state(task_dir, cname)
-            if shield_result:
-                results.append(shield_result)
+            if check.category == "shield":
+                shield_result = _check_shield_state(task_dir, cname)
+                if shield_result:
+                    results.append(shield_result)
+            else:
+                results.append(
+                    ("warn", check.label, "unknown host-side check — skipped")
+                )
             continue
 
         # Execute probe inside container

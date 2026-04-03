@@ -263,7 +263,13 @@ def _check_containers(
     *,
     fix: bool,
 ) -> list[_CheckResult]:
-    """Run in-container health checks for running tasks."""
+    """Run in-container health checks for running tasks.
+
+    The per-task running-state check is handled inside
+    ``run_container_doctor`` — it returns an informational result for
+    non-running containers, so we simply forward all tasks and let the
+    orchestrator decide.
+    """
     results: list[_CheckResult] = []
 
     if project_id and task_id:
@@ -271,7 +277,7 @@ def _check_containers(
         results.extend(run_container_doctor(project_id, task_id, fix=fix))
         return results
 
-    # Project or global scope — iterate running tasks
+    # Project or global scope — iterate all known tasks
     if project_id:
         projects = [(project_id, load_project(project_id))]
     else:
@@ -283,16 +289,7 @@ def _check_containers(
             continue
         for meta_file in meta_dir.glob("*.yml"):
             tid = meta_file.stem
-            try:
-                meta = _yaml_load(meta_file.read_text()) or {}
-            except Exception:
-                continue
-            mode = meta.get("mode")
-            if not mode:
-                continue
-            cname = container_name(pid, mode, tid)
-            if get_container_state(cname) == "running":
-                results.extend(run_container_doctor(pid, tid, fix=fix))
+            results.extend(run_container_doctor(pid, tid, fix=fix))
 
     return results
 
@@ -306,6 +303,7 @@ _GLOBAL_CHECKS = [
 
 _STATUS_MARKERS = {
     "ok": "ok",
+    "info": "info",
     "warn": "WARN",
     "error": "ERROR",
 }
@@ -339,14 +337,16 @@ def _cmd_sickbay(
         print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
         worst = _update_worst(worst, status)
 
-    if not hook_results and task_id:
-        print(f"  Task {project_id}/{task_id} .... ok (consistent)")
-
     # In-container diagnostics for running tasks
     container_results = _check_containers(project_id, task_id, fix=fix)
     for status, label, detail in container_results:
         print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
         worst = _update_worst(worst, status)
+
+    # Only print "ok (consistent)" when all checks have completed
+    has_issues = any(s in ("warn", "error") for s, _, _ in hook_results + container_results)
+    if not hook_results and not has_issues and task_id:
+        print(f"  Task {project_id}/{task_id} .... ok (consistent)")
 
     if worst == "error":
         sys.exit(2)
