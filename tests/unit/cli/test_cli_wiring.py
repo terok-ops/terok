@@ -237,14 +237,42 @@ class TestWireDispatch:
 
     def test_missing_cfg_param_raises_at_dispatch(self) -> None:
         """wire_dispatch() raises TypeError when handler lacks cfg but factory is set."""
+
+        def no_cfg_handler(*, count: int = 1) -> None:
+            pass
+
+        cmds = (
+            _Cmd(
+                name="alpha",
+                handler=no_cfg_handler,
+                args=(_Arg(name="--count", type=int, default=1, help="count"),),
+            ),
+        )
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="cmd")
-        # Registration succeeds even though handler has no cfg
-        wire_group(sub, "grp", _TEST_COMMANDS, config_factory=lambda: None)
+        wire_group(sub, "grp", cmds, config_factory=lambda: None)
 
         args = parser.parse_args(["grp", "alpha", "--count", "1"])
         with pytest.raises(TypeError, match="lacks required.*cfg"):
             wire_dispatch(args)
+
+    def test_var_keyword_handler_accepted(self) -> None:
+        """Handlers with **kwargs accept cfg injection without explicit param."""
+        received: list[dict] = []
+
+        def kwargs_handler(**kwargs) -> None:
+            received.append(kwargs)
+
+        cmds = (_Cmd(name="alpha", handler=kwargs_handler),)
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds, config_factory=lambda: "injected")
+
+        args = parser.parse_args(["grp", "alpha"])
+        wire_dispatch(args)
+
+        assert received == [{"cfg": "injected"}]
 
 
 class TestAgentCommandsRegistered:

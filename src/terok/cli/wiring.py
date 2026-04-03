@@ -134,7 +134,11 @@ def wire_dispatch(args: argparse.Namespace) -> bool:
     factory = getattr(args, "_config_factory", None)
     if factory is not None:
         sig = inspect.signature(cmd.handler)
-        if _CFG_PARAM not in sig.parameters:
+        has_cfg = _CFG_PARAM in sig.parameters
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+        if not has_cfg and not has_var_keyword:
             raise TypeError(
                 f"Handler {cmd.handler.__name__!r} lacks required {_CFG_PARAM!r} "
                 f"parameter but its group has config_factory set"
