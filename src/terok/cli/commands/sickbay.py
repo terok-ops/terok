@@ -67,10 +67,11 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def _check_gate_server() -> _CheckResult:
     """Check gate server status."""
-    status = get_server_status()
+    cfg = make_sandbox_config()
+    status = get_server_status(cfg)
     label = "Gate server"
     if status.running:
-        outdated = check_units_outdated()
+        outdated = check_units_outdated(cfg)
         if outdated:
             return ("warn", label, f"{outdated} Run 'terok gate start' to update.")
         return ("ok", label, f"{status.mode}, port {status.port}")
@@ -231,13 +232,17 @@ def _check_ssh_agent() -> _CheckResult:
     if not mapping:
         return ("warn", label, "no projects registered — run 'terok ssh-init <project>'")
 
-    missing = [
-        pid
-        for pid, entry in mapping.items()
-        if not isinstance(entry, dict)
-        or not Path(entry.get("private_key", "")).is_file()
-        or not Path(entry.get("public_key", "")).is_file()
-    ]
+    def _keys_present(entry: object) -> bool:
+        """Check whether all key files in a project entry exist on disk."""
+        keys = entry if isinstance(entry, list) else [entry]
+        return all(
+            isinstance(k, dict)
+            and Path(k.get("private_key", "")).is_file()
+            and Path(k.get("public_key", "")).is_file()
+            for k in keys
+        )
+
+    missing = [pid for pid, entry in mapping.items() if not _keys_present(entry)]
     total = len(mapping)
     if missing:
         names = ", ".join(missing[:3])
