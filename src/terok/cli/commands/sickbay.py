@@ -343,9 +343,9 @@ def _cmd_sickbay(
         print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
         worst = _update_worst(worst, status)
 
-    # Print "ok (consistent)" only when scoped to a single task and all checks passed
-    has_issues = any(s in ("warn", "error") for s, _, _ in hook_results + container_results)
-    if task_id and not has_issues:
+    # Print "ok (consistent)" only when scoped to a single task and every result is "ok"
+    all_ok = all(s == "ok" for s, _, _ in hook_results + container_results)
+    if task_id and all_ok:
         print(f"  Task {project_id}/{task_id} .... ok (consistent)")
 
     if worst == "error":

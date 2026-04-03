@@ -259,11 +259,15 @@ def run_container_doctor(
         # Execute probe inside container
         try:
             proc = _exec_in_container(cname, check.probe_cmd)
-            verdict = check.evaluate(proc.returncode, proc.stdout, proc.stderr)
         except subprocess.TimeoutExpired:
             verdict = CheckVerdict("warn", f"{check.label}: probe timed out")
         except (FileNotFoundError, OSError) as exc:
             verdict = CheckVerdict("warn", f"{check.label}: exec failed — {exc}")
+        else:
+            try:
+                verdict = check.evaluate(proc.returncode, proc.stdout, proc.stderr)
+            except Exception as exc:  # noqa: BLE001
+                verdict = CheckVerdict("warn", f"{check.label}: evaluate failed — {exc}")
 
         results.append((verdict.severity, check.label, verdict.detail))
 

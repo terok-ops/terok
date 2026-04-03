@@ -129,7 +129,7 @@ class TestRunContainerDoctor:
 
     @patch("terok.lib.orchestration.container_doctor.tasks_meta_dir")
     def test_returns_warn_for_missing_metadata(self, mock_meta_dir: MagicMock) -> None:
-        mock_meta_dir.return_value = Path("/nonexistent")
+        mock_meta_dir.return_value = MOCK_BASE / "nonexistent"
         results = run_container_doctor("proj", "99")
         assert len(results) == 1
         assert results[0][0] == "warn"
