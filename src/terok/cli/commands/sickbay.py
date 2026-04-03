@@ -72,7 +72,7 @@ def _check_gate_server() -> _CheckResult:
     if status.running:
         outdated = check_units_outdated()
         if outdated:
-            return ("warn", label, outdated)
+            return ("warn", label, f"{outdated} Run 'terok gate start' to update.")
         return ("ok", label, f"{status.mode}, port {status.port}")
     if status.mode == "systemd":
         return ("error", label, "socket installed but not active")
