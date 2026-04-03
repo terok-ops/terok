@@ -158,17 +158,21 @@ def _terok_doctor_checks(
 
 
 def _read_desired_shield_state(task_dir: Path) -> str | None:
-    """Read the ``shield_desired_state`` file, or ``None`` if absent."""
+    """Read the ``shield_desired_state`` file, or ``None`` if absent.
+
+    Raises :class:`OSError` if the file exists but cannot be read so
+    callers can distinguish "absent" from "unreadable".
+    """
     path = task_dir / _SHIELD_STATE_FILENAME
-    try:
-        return path.read_text(encoding="utf-8").strip() if path.is_file() else None
-    except OSError:
-        return None
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else None
 
 
-def _check_shield_state(task_dir: Path, cname: str) -> _CheckResult | None:
+def _check_shield_state(task_dir: Path, cname: str) -> _CheckResult:
     """Run the host-side shield state check."""
-    desired = _read_desired_shield_state(task_dir)
+    try:
+        desired = _read_desired_shield_state(task_dir)
+    except OSError as exc:
+        return ("warn", _SHIELD_STATE_LABEL, f"cannot read desired state — {exc}")
     if desired is None:
         return ("ok", _SHIELD_STATE_LABEL, "no desired state — not managed")
 
@@ -244,6 +248,40 @@ def _apply_fix(cname: str, check: DoctorCheck) -> _CheckResult:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_running_container(
+    project_id: str, task_id: str
+) -> tuple[str, Path, list[_CheckResult]]:
+    """Resolve a task to its running container name and task directory.
+
+    Returns ``(cname, task_dir, [])`` on success.  If the task cannot be
+    checked, *cname* is empty and the list holds the skip/warning result.
+    """
+    label = f"Task {project_id}/{task_id}"
+    meta_dir = tasks_meta_dir(project_id)
+    if not (meta_dir / f"{task_id}.yml").is_file():
+        return ("", Path(), [("warn", label, "metadata not found")])
+
+    meta, _ = load_task_meta(project_id, task_id)
+    mode = meta.get("mode")
+    if not mode:
+        return ("", Path(), [("warn", label, "never started (no mode)")])
+
+    cname = container_name(project_id, mode, task_id)
+    state = get_container_state(cname)
+    if state != "running":
+        return ("", Path(), [("info", label, f"not running ({state}) — skipped")])
+
+    task_dir = load_project(project_id).tasks_root / str(task_id)
+    return (cname, task_dir, [])
+
+
+def _dispatch_host_side(check: DoctorCheck, task_dir: Path, cname: str) -> _CheckResult:
+    """Handle a host-side check that cannot use podman exec."""
+    if check.category == "shield":
+        return _check_shield_state(task_dir, cname)
+    return ("warn", check.label, "unknown host-side check — skipped")
+
+
 def run_container_doctor(
     project_id: str,
     task_id: str,
@@ -257,35 +295,14 @@ def run_container_doctor(
 
     Returns a list of ``(severity, label, detail)`` tuples for display.
     """
-    meta_dir = tasks_meta_dir(project_id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        return [("warn", f"Task {project_id}/{task_id}", "metadata not found")]
-
-    meta, _ = load_task_meta(project_id, task_id)
-    mode = meta.get("mode")
-    if not mode:
-        return [("warn", f"Task {project_id}/{task_id}", "never started (no mode)")]
-
-    cname = container_name(project_id, mode, task_id)
-    state = get_container_state(cname)
-    if state != "running":
-        return [("info", f"Task {project_id}/{task_id}", f"not running ({state}) — skipped")]
-
-    project = load_project(project_id)
-    task_dir = project.tasks_root / str(task_id)
-    all_checks = _collect_all_checks(project_id, task_dir)
+    cname, task_dir, early = _resolve_running_container(project_id, task_id)
+    if early:
+        return early
 
     results: list[_CheckResult] = []
-    for check in all_checks:
-        # Host-side checks need host Python APIs, not podman exec
+    for check in _collect_all_checks(project_id, task_dir):
         if check.host_side:
-            if check.category == "shield":
-                shield_result = _check_shield_state(task_dir, cname)
-                if shield_result:
-                    results.append(shield_result)
-            else:
-                results.append(("warn", check.label, "unknown host-side check — skipped"))
+            results.append(_dispatch_host_side(check, task_dir, cname))
             continue
 
         verdict = _run_probe(cname, check)
