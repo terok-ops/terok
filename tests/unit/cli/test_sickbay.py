@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from terok.cli.commands.sickbay import (
+    _check_credential_proxy,
     _check_ssh_agent,
     _check_task_hook,
     _reconcile_post_stop,
@@ -229,3 +230,90 @@ class TestReconcilePostStop:
             result = _reconcile_post_stop("p", "1", "cli", "c", project, meta_path, "Task p/1")
             assert result[0] == "error"
             assert "boom" in result[2]
+
+
+class TestCheckCredentialProxy:
+    """Verify _check_credential_proxy three-state display."""
+
+    def _make_status(self, **overrides: object) -> unittest.mock.MagicMock:
+        """Build a mock CredentialProxyStatus with defaults."""
+        defaults = {
+            "mode": "none",
+            "running": False,
+            "healthy": False,
+            "credentials_stored": (),
+        }
+        defaults.update(overrides)
+        return unittest.mock.MagicMock(**defaults)
+
+    def test_running_shows_ok(self) -> None:
+        """Service active → ok with credential count."""
+        status = self._make_status(mode="systemd", running=True, credentials_stored=("claude",))
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.get_proxy_status", return_value=status
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "ok"
+        assert "1 credential(s)" in detail
+
+    def test_systemd_socket_active_service_idle(self) -> None:
+        """Socket active but service idle → ok with standby message."""
+        status = self._make_status(mode="systemd", running=False)
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.get_proxy_status", return_value=status),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.is_proxy_socket_active", return_value=True
+            ),
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "ok"
+        assert "starts on first connection" in detail
+
+    def test_systemd_socket_inactive(self) -> None:
+        """Socket installed but inactive → error."""
+        status = self._make_status(mode="systemd", running=False)
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.get_proxy_status", return_value=status),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.is_proxy_socket_active", return_value=False
+            ),
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "error"
+        assert "not active" in detail
+
+    def test_not_installed_systemd_available(self) -> None:
+        """No proxy, systemd available → warn with install hint."""
+        status = self._make_status(mode="none", running=False)
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.get_proxy_status", return_value=status),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.is_proxy_systemd_available", return_value=True
+            ),
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "warn"
+        assert "install" in detail
+
+    def test_not_installed_no_systemd(self) -> None:
+        """No proxy, no systemd → warn with start hint."""
+        status = self._make_status(mode="none", running=False)
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.get_proxy_status", return_value=status),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.is_proxy_systemd_available", return_value=False
+            ),
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "warn"
+        assert "start" in detail
+
+    def test_exception_returns_warn(self) -> None:
+        """Exception during status check → warn."""
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.get_proxy_status",
+            side_effect=RuntimeError("oops"),
+        ):
+            sev, _, detail = _check_credential_proxy()
+        assert sev == "warn"
+        assert "oops" in detail
