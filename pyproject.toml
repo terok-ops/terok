@@ -44,7 +44,7 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-agent = {git = "https://github.com/sliwowitz/terok-agent.git", rev = "bc6de0330efb35e72e879ef79086424280590131"}
+terok-agent = {git = "https://github.com/sliwowitz/terok-agent.git", rev = "468e1d0c0563b2f0f28febfe046bd1a193e032a2"}
 terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "20533d29b1b699c6aa04e3dd1046a390049d60da"}
 
 [tool.poetry.group.dev.dependencies]
