@@ -9,10 +9,7 @@ from terok_sandbox import GateServerStatus
 
 from tests.testnet import GATE_PORT
 
-OUTDATED_UNITS_MESSAGE = (
-    "Systemd units are outdated (installed v2, expected v3). "
-    "Run 'terok gate-server install' to update."
-)
+OUTDATED_UNITS_MESSAGE = "Systemd units are outdated (installed v2, expected v3)."
 
 
 def make_gate_server_status(

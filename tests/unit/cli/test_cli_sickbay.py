@@ -46,7 +46,7 @@ def _make_proxy_status(*, running: bool = True, mode: str = "systemd") -> MagicM
             OUTDATED_UNITS_MESSAGE,
             False,
             1,
-            ["WARN", "outdated", "gate-server install"],
+            ["WARN", "outdated", "terok gate start"],
             id="outdated-units",
         ),
         pytest.param(
