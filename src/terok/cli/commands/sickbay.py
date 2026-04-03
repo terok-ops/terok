@@ -37,6 +37,7 @@ from terok_sandbox import (
 from ...lib.core.config import make_sandbox_config
 from ...lib.core.project_model import ProjectConfig
 from ...lib.core.projects import list_projects, load_project
+from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
 from ...lib.orchestration.tasks import container_name, tasks_meta_dir
 from ...lib.util.yaml import load as _yaml_load
@@ -256,6 +257,46 @@ def _check_ssh_agent() -> _CheckResult:
     return ("ok", label, f"{total} project(s) registered, all keys present")
 
 
+def _check_containers(
+    project_id: str | None,
+    task_id: str | None,
+    *,
+    fix: bool,
+) -> list[_CheckResult]:
+    """Run in-container health checks for running tasks."""
+    results: list[_CheckResult] = []
+
+    if project_id and task_id:
+        # Single task scope
+        results.extend(run_container_doctor(project_id, task_id, fix=fix))
+        return results
+
+    # Project or global scope — iterate running tasks
+    if project_id:
+        projects = [(project_id, load_project(project_id))]
+    else:
+        projects = [(p.id, p) for p in list_projects()]
+
+    for pid, _project in projects:
+        meta_dir = tasks_meta_dir(pid)
+        if not meta_dir.is_dir():
+            continue
+        for meta_file in meta_dir.glob("*.yml"):
+            tid = meta_file.stem
+            try:
+                meta = _yaml_load(meta_file.read_text()) or {}
+            except Exception:
+                continue
+            mode = meta.get("mode")
+            if not mode:
+                continue
+            cname = container_name(pid, mode, tid)
+            if get_container_state(cname) == "running":
+                results.extend(run_container_doctor(pid, tid, fix=fix))
+
+    return results
+
+
 _GLOBAL_CHECKS = [
     _check_gate_server,
     _check_shield,
@@ -300,6 +341,12 @@ def _cmd_sickbay(
 
     if not hook_results and task_id:
         print(f"  Task {project_id}/{task_id} .... ok (consistent)")
+
+    # In-container diagnostics for running tasks
+    container_results = _check_containers(project_id, task_id, fix=fix)
+    for status, label, detail in container_results:
+        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
+        worst = _update_worst(worst, status)
 
     if worst == "error":
         sys.exit(2)
