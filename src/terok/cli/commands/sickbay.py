@@ -289,7 +289,12 @@ def _check_containers(
             continue
         for meta_file in meta_dir.glob("*.yml"):
             tid = meta_file.stem
-            results.extend(run_container_doctor(pid, tid, fix=fix))
+            for severity, label, detail in run_container_doctor(pid, tid, fix=fix):
+                # Prefix bare check labels with task context so multi-task
+                # output is unambiguous (early-return labels already include it)
+                if not label.startswith(("Task ", "  fix:")):
+                    label = f"Task {pid}/{tid}: {label}"
+                results.append((severity, label, detail))
 
     return results
 
