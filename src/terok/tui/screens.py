@@ -2020,7 +2020,10 @@ class CredentialProxyScreen(screen.Screen[str | None]):
 
         try:
             self._status = get_proxy_status()
-        except Exception:
+        except Exception as exc:
+            from ..lib.util.logging_utils import log_warning
+
+            log_warning(f"Credential proxy status refresh failed: {exc}")
             self._status = None
         self._render_status()
 
