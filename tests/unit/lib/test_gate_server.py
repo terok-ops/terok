@@ -140,7 +140,7 @@ class TestUnitVersion:
     """Tests for _UNIT_VERSION."""
 
     def test_unit_version_is_current(self) -> None:
-        assert _UNIT_VERSION == 5
+        assert _UNIT_VERSION == 6
 
 
 class TestSystemdDetection:
