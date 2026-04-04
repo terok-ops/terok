@@ -59,7 +59,7 @@ def _pre_start_with_mocks(
     shield = _make_shield(config, rootless_mode=rootless_mode)
     with (
         patch("os.geteuid", return_value=euid),
-        patch("terok_shield.mode_hook.has_global_hooks", return_value=True),
+        patch("terok_shield.core.mode_hook.has_global_hooks", return_value=True),
     ):
         return shield.pre_start(container)
 
@@ -228,7 +228,7 @@ class TestSandboxRunShieldIntegration:
                     runner=MockRunner(),
                 ),
             ),
-            patch("terok_shield.mode_hook.has_global_hooks", return_value=True),
+            patch("terok_shield.core.mode_hook.has_global_hooks", return_value=True),
         ):
             sandbox = Sandbox()
             sandbox.run(spec)
