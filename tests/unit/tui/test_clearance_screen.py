@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the TUI clearance screen, TuiNotifier, and CLI integration."""
+"""Tests for the TUI clearance screen and CLI/TUI integration."""
 
 from __future__ import annotations
 
@@ -23,97 +23,75 @@ def _import_clearance():
     return _import_with_stubs(None, "terok.tui.clearance_screen")[0]
 
 
-def _run(coro):
-    """Run a coroutine synchronously."""
-    return asyncio.run(coro)
-
-
 # ---------------------------------------------------------------------------
-# TuiNotifier
+# CallbackNotifier integration (on_notify bridge)
 # ---------------------------------------------------------------------------
 
 
-class TestTuiNotifier:
-    """Tests for the TuiNotifier Notifier-protocol implementation."""
+class TestNotifyBridge:
+    """Tests for the ClearanceScreen._on_notify → post_message bridge."""
 
-    def test_notify_returns_monotonic_ids(self) -> None:
-        """Each call to notify() returns a unique incrementing ID."""
+    def test_on_notify_posts_message(self) -> None:
+        """_on_notify posts a _NotificationPosted message to the screen."""
         mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        id1 = _run(notifier.notify("A"))
-        id2 = _run(notifier.notify("B"))
-        assert id1 < id2
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
 
-    def test_notify_replaces_id_returns_same(self) -> None:
-        """When replaces_id is given, that ID is returned."""
-        mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        nid = _run(notifier.notify("A", replaces_id=42))
-        assert nid == 42
+        from terok_dbus import Notification
 
-    def test_notify_posts_message(self) -> None:
-        """notify() posts a _NotificationPosted message to the screen."""
-        mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        _run(notifier.notify("Title", "Body", actions=[("accept", "Allow")]))
+        n = Notification(nid=1, summary="S", body="B", actions=[], replaces_id=0, timeout_ms=-1)
+        screen._on_notify(n)
         screen.post_message.assert_called_once()
+        msg = screen.post_message.call_args[0][0]
+        assert msg.nid == 1
+        assert msg.summary == "S"
+        assert msg.body == "B"
 
-    def test_on_action_stores_callback(self) -> None:
-        """on_action() stores a callback for later invocation."""
+    def test_on_notify_with_actions(self) -> None:
+        """_on_notify preserves action tuples."""
         mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        cb = mock.Mock()
-        _run(notifier.on_action(1, cb))
-        assert 1 in notifier._callbacks
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
 
-    def test_invoke_action_calls_and_removes(self) -> None:
-        """invoke_action() calls the stored callback and removes it."""
+        from terok_dbus import Notification
+
+        n = Notification(
+            nid=2,
+            summary="Blocked",
+            body="c1",
+            actions=[("accept", "Allow")],
+            replaces_id=0,
+            timeout_ms=0,
+        )
+        screen._on_notify(n)
+        msg = screen.post_message.call_args[0][0]
+        assert msg.actions == [("accept", "Allow")]
+
+    def test_on_notify_replaces_id(self) -> None:
+        """_on_notify forwards replaces_id for verdict updates."""
         mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        cb = mock.Mock()
-        _run(notifier.on_action(5, cb))
-        notifier.invoke_action(5, "accept")
-        cb.assert_called_once_with("accept")
-        assert 5 not in notifier._callbacks
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
 
-    def test_invoke_action_noop_for_unknown(self) -> None:
-        """invoke_action() is a no-op for unknown notification IDs."""
-        mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        notifier.invoke_action(999, "deny")  # should not raise
+        from terok_dbus import Notification
 
-    def test_close_removes_callback(self) -> None:
-        """close() removes the callback for a notification."""
-        mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        _run(notifier.on_action(3, mock.Mock()))
-        _run(notifier.close(3))
-        assert 3 not in notifier._callbacks
+        n = Notification(
+            nid=1, summary="Allowed", body="", actions=[], replaces_id=1, timeout_ms=5000
+        )
+        screen._on_notify(n)
+        msg = screen.post_message.call_args[0][0]
+        assert msg.replaces_id == 1
 
-    def test_disconnect_clears_all(self) -> None:
-        """disconnect() removes all callbacks."""
-        mod = _import_clearance()
-        screen = mock.Mock()
-        notifier = mod.TuiNotifier(screen)
-        _run(notifier.on_action(1, mock.Mock()))
-        _run(notifier.on_action(2, mock.Mock()))
-        _run(notifier.disconnect())
-        assert len(notifier._callbacks) == 0
-
-    def test_satisfies_notifier_protocol(self) -> None:
-        """TuiNotifier is structurally compatible with the Notifier protocol."""
-        from terok_dbus._protocol import Notifier
+    def test_callback_notifier_wired_to_on_notify(self) -> None:
+        """CallbackNotifier's on_notify hook invokes _on_notify."""
+        from terok_dbus import CallbackNotifier
 
         mod = _import_clearance()
-        notifier = mod.TuiNotifier(mock.Mock())
-        assert isinstance(notifier, Notifier)
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
+        notifier = CallbackNotifier(on_notify=screen._on_notify)
+        asyncio.run(notifier.notify("Test", "Body"))
+        screen.post_message.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

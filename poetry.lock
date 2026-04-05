@@ -2804,34 +2804,34 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-agent"
-version = "0.0.40"
+version = "0.0.41"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_agent-0.0.40-py3-none-any.whl", hash = "sha256:d4d88537e7b3a54bab7237e69ee85c307422c30aa4df24a2887d6516b84eb6e0"},
+    {file = "terok_agent-0.0.41-py3-none-any.whl", hash = "sha256:9b16ae116f8899d62e012491cdde3b1fef697b9965bf91e622e4fa5cf3beb1ec"},
 ]
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.35/terok_sandbox-0.0.35-py3-none-any.whl"}
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.36/terok_sandbox-0.0.36-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.40/terok_agent-0.0.40-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.41/terok_agent-0.0.41-py3-none-any.whl"
 
 [[package]]
 name = "terok-dbus"
-version = "0.4.0"
+version = "0.5.0"
 description = "D-Bus desktop notification package for terok"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_dbus-0.4.0-py3-none-any.whl", hash = "sha256:3e6907317f9b0acc8321253eb0231a9fa4b73f991765d7663669d17f766fa9c0"},
+    {file = "terok_dbus-0.5.0-py3-none-any.whl", hash = "sha256:c1a15ec04d867d6dac62ce0740cb4cc8f4dfd3ff11e723ca15edfb47e4fbc633"},
 ]
 
 [package.dependencies]
@@ -2839,38 +2839,38 @@ dbus-fast = ">=2.0,<5.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.4.0/terok_dbus-0.4.0-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.0/terok_dbus-0.5.0-py3-none-any.whl"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.35"
+version = "0.0.36"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_sandbox-0.0.35-py3-none-any.whl", hash = "sha256:4c84a57353f66e995f997d440a83aef5120443f91d7976001271dde1f3e3b875"},
+    {file = "terok_sandbox-0.0.36-py3-none-any.whl", hash = "sha256:413d2b689ada1182f572880cdf1e5c4021e9bfb31bfe77e5c3156f639d2b3dff"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.9"
 cryptography = ">=43.0"
 platformdirs = ">=4.0"
-terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.4/terok_shield-0.6.4-py3-none-any.whl"}
+terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.5/terok_shield-0.6.5-py3-none-any.whl"}
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.35/terok_sandbox-0.0.35-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.36/terok_sandbox-0.0.36-py3-none-any.whl"
 
 [[package]]
 name = "terok-shield"
-version = "0.6.4"
+version = "0.6.5"
 description = "nftables-based egress firewalling for Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_shield-0.6.4-py3-none-any.whl", hash = "sha256:cc386e1ead25f852d741f83f8b591c9d0bc7871e89ef8f054866ac370f9edcd1"},
+    {file = "terok_shield-0.6.5-py3-none-any.whl", hash = "sha256:46abd2d3d2da4bf50affe2d920533bfdcc1ce3496b641b061020a697214e6f40"},
 ]
 
 [package.dependencies]
@@ -2879,7 +2879,7 @@ PyYAML = ">=6.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.4/terok_shield-0.6.4-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.5/terok_shield-0.6.5-py3-none-any.whl"
 
 [[package]]
 name = "textual"
@@ -3350,4 +3350,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "bfaebee6ed0a4016df0b9e105e094560d2faf8713635ce78ad3428bbc054d82d"
+content-hash = "0a61f80aade0b2a0002da3e8c5dc6a373ccf831b9fabd286aa20c25102e63af5"

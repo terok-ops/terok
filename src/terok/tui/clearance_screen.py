@@ -3,11 +3,11 @@
 
 """In-TUI clearance screen for live D-Bus shield verdict handling.
 
-Provides a ``ClearanceScreen`` backed by a ``TuiNotifier`` that plugs into
-``terok_dbus.EventSubscriber``.  The subscriber handles the full
-signal-to-verdict cycle; the notifier bridges D-Bus events into Textual
-messages so the screen can render blocked connections and route operator
-Allow/Deny actions back through D-Bus.
+Provides a ``ClearanceScreen`` backed by ``terok_dbus.CallbackNotifier``
+plugged into ``terok_dbus.EventSubscriber``.  The subscriber handles the
+full signal-to-verdict cycle; the callback notifier bridges D-Bus events
+into Textual messages so the screen can render blocked connections and
+route operator Allow/Deny actions back through D-Bus.
 
 The screen listens on the whole session bus — all containers' events are
 shown, with the container name displayed prominently on every row.
@@ -22,7 +22,6 @@ Dual use:
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,17 +66,9 @@ class _PendingRequest:
 
 
 class _NotificationPosted(Message):
-    """Posted by :class:`TuiNotifier` when ``EventSubscriber`` fires."""
+    """Posted when ``CallbackNotifier`` fires its ``on_notify`` hook."""
 
-    def __init__(
-        self,
-        nid: int,
-        summary: str,
-        body: str,
-        actions: list[tuple[str, str]],
-        replaces_id: int,
-        timeout_ms: int,
-    ) -> None:
+    def __init__(self, nid: int, summary: str, body: str, actions: list, replaces_id: int) -> None:
         """Store notification fields for the screen handler."""
         super().__init__()
         self.nid = nid
@@ -85,77 +76,6 @@ class _NotificationPosted(Message):
         self.body = body
         self.actions = actions
         self.replaces_id = replaces_id
-        self.timeout_ms = timeout_ms
-
-
-# ---------------------------------------------------------------------------
-# TuiNotifier — Notifier protocol implementation for Textual
-# ---------------------------------------------------------------------------
-
-
-class TuiNotifier:
-    """Notifier backend that posts Textual messages instead of desktop notifications.
-
-    Satisfies the ``terok_dbus._protocol.Notifier`` structural type so it
-    can be passed directly to ``EventSubscriber``.
-    """
-
-    def __init__(self, target_screen: ClearanceScreen) -> None:
-        """Bind to the given screen for posting messages."""
-        self._screen = target_screen
-        self._next_id = 1
-        self._callbacks: dict[int, Callable[[str], None]] = {}
-
-    async def notify(
-        self,
-        summary: str,
-        body: str = "",
-        *,
-        actions: Sequence[tuple[str, str]] = (),
-        timeout_ms: int = -1,
-        hints: Mapping[str, Any] | None = None,
-        replaces_id: int = 0,
-        app_icon: str = "",
-    ) -> int:
-        """Post a notification as a Textual message.
-
-        Returns a monotonically increasing ID (or *replaces_id* when updating).
-        """
-        nid = replaces_id if replaces_id else self._next_id
-        if not replaces_id:
-            self._next_id += 1
-        self._screen.post_message(
-            _NotificationPosted(
-                nid=nid,
-                summary=summary,
-                body=body,
-                actions=list(actions),
-                replaces_id=replaces_id,
-                timeout_ms=timeout_ms,
-            )
-        )
-        return nid
-
-    async def on_action(
-        self,
-        notification_id: int,
-        callback: Callable[[str], None],
-    ) -> None:
-        """Store the action callback for a notification."""
-        self._callbacks[notification_id] = callback
-
-    async def close(self, notification_id: int) -> None:
-        """Remove the callback for a closed notification."""
-        self._callbacks.pop(notification_id, None)
-
-    async def disconnect(self) -> None:
-        """Release all stored callbacks."""
-        self._callbacks.clear()
-
-    def invoke_action(self, notification_id: int, action_key: str) -> None:
-        """Invoke the stored callback (called by the screen on Allow/Deny)."""
-        if cb := self._callbacks.pop(notification_id, None):
-            cb(action_key)
 
 
 # ---------------------------------------------------------------------------
@@ -205,9 +125,21 @@ class ClearanceScreen(screen.Screen[None]):
     def __init__(self) -> None:
         """Initialise clearance screen state."""
         super().__init__()
-        self._notifier: TuiNotifier | None = None
-        self._subscriber: Any = None  # EventSubscriber | None
+        self._notifier: Any = None  # CallbackNotifier
+        self._subscriber: Any = None  # EventSubscriber
         self._pending: dict[int, _PendingRequest] = {}
+
+    def _on_notify(self, notification: Any) -> None:
+        """Bridge ``CallbackNotifier`` hook into a Textual message."""
+        self.post_message(
+            _NotificationPosted(
+                nid=notification.nid,
+                summary=notification.summary,
+                body=notification.body,
+                actions=notification.actions,
+                replaces_id=notification.replaces_id,
+            )
+        )
 
     def compose(self) -> ComposeResult:
         """Build header, pending list, event log, and footer."""
@@ -223,11 +155,11 @@ class ClearanceScreen(screen.Screen[None]):
 
     async def on_mount(self) -> None:
         """Connect to the D-Bus session bus and start the event subscriber."""
-        self._notifier = TuiNotifier(self)
+        from terok_dbus import CallbackNotifier, EventSubscriber
+
+        self._notifier = CallbackNotifier(on_notify=self._on_notify)
         log = self.query_one("#event-log", RichLog)
         try:
-            from terok_dbus import EventSubscriber
-
             self._subscriber = EventSubscriber(self._notifier)
             await self._subscriber.start()
             log.write(Text("Listening on session bus...", style=_STYLE_INFO))
@@ -246,7 +178,7 @@ class ClearanceScreen(screen.Screen[None]):
     # -- message handler --
 
     def on__notification_posted(self, message: _NotificationPosted) -> None:
-        """Handle notifications from the TuiNotifier."""
+        """Handle notifications from the CallbackNotifier."""
         try:
             log = self.query_one("#event-log", RichLog)
             pending_list = self.query_one("#pending-list", ListView)
