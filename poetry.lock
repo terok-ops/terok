@@ -887,6 +887,53 @@ test = ["certifi (>=2024)", "cryptography-vectors (==46.0.6)", "pretend (>=0.7)"
 test-randomorder = ["pytest-randomly"]
 
 [[package]]
+name = "dbus-fast"
+version = "4.0.4"
+description = "A faster version of dbus-next"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "dbus_fast-4.0.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:cc3955d9b86717a2b126700842012e30df3c3b263707154047e9b06e91d7b48d"},
+    {file = "dbus_fast-4.0.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d1dc97206c3f7fbf45e2fc12a2a3fdf0f080325a342a140edece4bf33f0bfd23"},
+    {file = "dbus_fast-4.0.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:864e032aabfae051db27e1b63055a0f6460d0121d36ddcbe97b903149fa932f6"},
+    {file = "dbus_fast-4.0.4-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:6738fa2a98652caf29e3368e6532f3faead007739f464d047c2cc46ec5b56f6c"},
+    {file = "dbus_fast-4.0.4-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:ed82af97d3ceee7ba31a169b5b8b9341e05ebf45fdf93f02d2fee0b74ef56190"},
+    {file = "dbus_fast-4.0.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:54c67a84a9f633a745c5bf6a37fece3c13f4057b4ecb23a2e83600423cd78057"},
+    {file = "dbus_fast-4.0.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:cf5109bbc98c8427f3cc22030de55e57a7288550bc0701a493905bbad3b3dc93"},
+    {file = "dbus_fast-4.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:baca8ffed5a5b18cce9c1f17820cc699512bc97ac0743b8b88c61159aa0c961a"},
+    {file = "dbus_fast-4.0.4-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:cb570c6c8dac1ee2ca02621c0d410ec78d1a96535deee8a34e3028f475be7675"},
+    {file = "dbus_fast-4.0.4-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:1a2ee216e0ddd7b4db397bb31ff71741f6c7fc9618d9ca201e0096d9523b4f33"},
+    {file = "dbus_fast-4.0.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:139b462190f7421e55fec421108f824425a559b3d9a5e0b15421e68275735bad"},
+    {file = "dbus_fast-4.0.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:00a3db08cf1d98bbedfb73467b774fd49adcf83935b8a92f6c552ce78d93491f"},
+    {file = "dbus_fast-4.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:74183b4ef4cc79a9cd1a46e006c19d00ce9abc7d99d36e6adcd094f414446d38"},
+    {file = "dbus_fast-4.0.4-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:003f042b1299ebac900d6ee30e8ab2a29988937f56792894da7b5d39a26b1f5f"},
+    {file = "dbus_fast-4.0.4-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:87be8a41330481c3d3a5e30af10ec713e4f08fe0d6c36f5a401eaef7b5526417"},
+    {file = "dbus_fast-4.0.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:728bc8a02302c6677a42da2b037580755b29c8fccd5c0866acc529053b2d374d"},
+    {file = "dbus_fast-4.0.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1fe60ce3a97e265a3ad117b7f40fc8c08357781b1a2ed3e853f29f9e35d24af7"},
+    {file = "dbus_fast-4.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:982235dabb7e7187df4c2c299d95a6232aebc95c8c906496f630265a10bfdf95"},
+    {file = "dbus_fast-4.0.4-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:33c0168e0e65ed2d0fa91682773cc893472e3d71a5e085ee082e6484c2d29f4a"},
+    {file = "dbus_fast-4.0.4-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:069df5d46390299d7fccfc0e704af504a8b75794c2c3bc0246b6db0db1f245b0"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:3564c8a756903a6edf01ceb4dd4927354f03b40a28f000e2b896f02a784e9301"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0c3a8c07d672b1656a9c7cbdc9a85f493602f72fce8e7f9d97c5e972fa22a684"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5512b9901ba600f1efdae2555ea18da2b67a46e5c24e397edb38ecbbde4aa43f"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-manylinux_2_41_x86_64.whl", hash = "sha256:36f86ba826f05c4d238c9198ae962f90a9cd27ffacd3a4a988166b3d06c699ca"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:df0f88a9c1c9f9365627fbfb3dcae3589a12fdc82594945832cb24d9a62674d1"},
+    {file = "dbus_fast-4.0.4-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:4c6c8722e829b8e750fd6db2906b298d3bcfc32d8cdf766e50ba474ef48bf2af"},
+    {file = "dbus_fast-4.0.4-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:8a515e8de0e5971e64a3f49fad2e536b6d2167a9f489e597baf7c802cfb7eef3"},
+    {file = "dbus_fast-4.0.4-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ad5240c29ec631f9610e03a6bbf4f4c22274e04ea8791e8401542cd6cdbd7b28"},
+    {file = "dbus_fast-4.0.4-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5843c3e543ac1d48cafff67394ada9e568f20d122b44408e378ae43402b785ca"},
+    {file = "dbus_fast-4.0.4-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:7ebb845f2e15ef19f4a99cb879dfbcb1c7028a97d5aaba93b36f65cfd938a022"},
+    {file = "dbus_fast-4.0.4-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:698fe83128150dd49aaa7deb5493523309f0a9749c3c075730a6981851607455"},
+    {file = "dbus_fast-4.0.4-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:f815c979322e0f2e0ad0b1bd3adbf7d2840d69ca7f75be1215d8211e8a667fe5"},
+    {file = "dbus_fast-4.0.4-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0827134ae05d0f23349c0505ecc3b54ae8359be7f634b9eb16c8ad2dff9d51bb"},
+    {file = "dbus_fast-4.0.4-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:44e605de4e18d0e94690d0ef7270e5f1c396ec30e0aac0ae3cac8886b458965c"},
+    {file = "dbus_fast-4.0.4-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:0c869d1949065d7b3c75d926cd461faa434691b4cf57a10559617821afe30737"},
+    {file = "dbus_fast-4.0.4-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:92b3aaea0e6df4cf83208ae994b08554335166eff726947733b93da748eab641"},
+    {file = "dbus_fast-4.0.4.tar.gz", hash = "sha256:43137f0b73a7adbf7d5c0e9eb9d8d34df9e6e0aeafade2166e641c52dfe0a853"},
+]
+
+[[package]]
 name = "docstr-coverage"
 version = "2.3.2"
 description = "Utility for examining python source files to ensure proper documentation. Lists missing docstrings, and calculates overall docstring coverage percentage rating."
@@ -2777,6 +2824,24 @@ type = "url"
 url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.39/terok_agent-0.0.39-py3-none-any.whl"
 
 [[package]]
+name = "terok-dbus"
+version = "0.3.0"
+description = "D-Bus desktop notification package for terok"
+optional = false
+python-versions = ">=3.12,<4.0"
+groups = ["main"]
+files = [
+    {file = "terok_dbus-0.3.0-py3-none-any.whl", hash = "sha256:ccf78754a9a5e64284d98c837a75932019a53f2248dc098d865a5483b686b823"},
+]
+
+[package.dependencies]
+dbus-fast = ">=2.0,<5.0"
+
+[package.source]
+type = "url"
+url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.3.0/terok_dbus-0.3.0-py3-none-any.whl"
+
+[[package]]
 name = "terok-sandbox"
 version = "0.0.34"
 description = "Hardened Podman container runner with gate server and shield integration"
@@ -3285,4 +3350,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "9b7a644e6ab83757fb76b90dfa0f26bb6b55ec5e848a766cb75d8b0cbc0d788c"
+content-hash = "7b46a19cb96c2cb07283a6192630730ad1aa9ab025febbafc42a92e22f53102b"

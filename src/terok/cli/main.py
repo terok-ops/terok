@@ -18,6 +18,7 @@ from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
     completions,
     credentials,
+    dbus,
     image,
     info,
     project,
@@ -44,6 +45,7 @@ _DISPATCHERS = [
     image.dispatch,
     wire_dispatch,
     shield.dispatch,
+    dbus.dispatch,
     sickbay.dispatch,
     info.dispatch,
     completions.dispatch,
@@ -107,6 +109,7 @@ def main() -> None:
     setup.register(sub)
     image.register(sub)
     shield.register(sub)
+    dbus.register(sub)
     sickbay.register(sub)
     info.register(sub)
     completions.register(sub)

@@ -46,6 +46,7 @@ unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
 terok-agent = {url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.39/terok_agent-0.0.39-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.34/terok_sandbox-0.0.34-py3-none-any.whl"}
+terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.3.0/terok_dbus-0.3.0-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.22158.340"
