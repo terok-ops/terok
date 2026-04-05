@@ -64,12 +64,13 @@ class TestTokenFilePath:
 class TestCreateToken:
     """Tests for create_token."""
 
-    def test_returns_32char_hex(self) -> None:
+    def test_returns_prefixed_token(self) -> None:
         with patched_token_file() as token_path:
             token = create_token("proj-a", "1")
             assert token_path.exists()
-        assert len(token) == 32
-        int(token, 16)
+        assert token.startswith("terok-g-")
+        assert len(token) == 40
+        int(token.removeprefix("terok-g-"), 16)
 
     def test_persists_to_file(self) -> None:
         with patched_token_file() as token_path:

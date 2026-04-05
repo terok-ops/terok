@@ -89,7 +89,7 @@ class TestCredentialProxyEnv:
 
         # Phantom token should be injected for Claude
         assert "ANTHROPIC_API_KEY" in env
-        assert len(env["ANTHROPIC_API_KEY"]) == 32  # hex token
+        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")  # prefixed phantom token
         # Base URL override — TCP via host.containers.internal
         assert "ANTHROPIC_BASE_URL" in env
         assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
@@ -206,7 +206,7 @@ class TestCredentialProxyEnv:
 
         # Codex OAuth still gets phantom token env var (static marker is Claude-only)
         assert "OPENAI_API_KEY" in env
-        assert len(env["OPENAI_API_KEY"]) == 32
+        assert env["OPENAI_API_KEY"].startswith("terok-p-")
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_claude_oauth_socket_transport_still_only_base_url(self, tmp_path: Path) -> None:
@@ -279,7 +279,7 @@ class TestCredentialProxyEnv:
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
         assert "ANTHROPIC_API_KEY" in env
-        assert len(env["ANTHROPIC_API_KEY"]) == 32
+        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")
         assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
         assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
         # Socket flag AND base URL — SDK needs base URL for HTTP, socket is a mode flag
@@ -367,7 +367,7 @@ class TestCredentialProxyEnv:
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
         assert "TEROK_SSH_AGENT_TOKEN" in env
-        assert len(env["TEROK_SSH_AGENT_TOKEN"]) == 32
+        assert env["TEROK_SSH_AGENT_TOKEN"].startswith("terok-p-")
         assert env["TEROK_SSH_AGENT_PORT"] == "18732"
 
     @pytest.mark.usefixtures("_enable_proxy")
