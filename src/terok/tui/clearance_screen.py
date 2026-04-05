@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from terok_dbus import Notification
 
 from rich.style import Style
 from rich.text import Text
@@ -68,7 +71,9 @@ class _PendingRequest:
 class _NotificationPosted(Message):
     """Posted when ``CallbackNotifier`` fires its ``on_notify`` hook."""
 
-    def __init__(self, nid: int, summary: str, body: str, actions: list, replaces_id: int) -> None:
+    def __init__(
+        self, nid: int, summary: str, body: str, actions: list[tuple[str, str]], replaces_id: int
+    ) -> None:
         """Store notification fields for the screen handler."""
         super().__init__()
         self.nid = nid
@@ -129,7 +134,7 @@ class ClearanceScreen(screen.Screen[None]):
         self._subscriber: Any = None  # EventSubscriber
         self._pending: dict[int, _PendingRequest] = {}
 
-    def _on_notify(self, notification: Any) -> None:
+    def _on_notify(self, notification: Notification) -> None:
         """Bridge ``CallbackNotifier`` hook into a Textual message."""
         self.post_message(
             _NotificationPosted(
