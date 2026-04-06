@@ -90,6 +90,7 @@ if _HAS_TEXTUAL:
     from .polling import PollingMixin
     from .project_actions import ProjectActionsMixin
     from .screens import (
+        ConfirmDeleteScreen,
         CredentialProxyScreen,
         GateServerScreen,
         ProjectDetailsScreen,
@@ -240,6 +241,7 @@ if _HAS_TEXTUAL:
 
         BINDINGS = [
             ("q", "quit", "Quit"),
+            ("P", "panic", "PANIC"),
         ]
 
         def __init__(self) -> None:
@@ -917,6 +919,46 @@ if _HAS_TEXTUAL:
                 details.set_task(self.current_task, image_old=self._last_image_old)
                 return
 
+            if worker.group == "panic":
+                from ..lib.domain.panic import format_panic_report
+
+                panic_result = worker.result
+                if not panic_result:
+                    return
+                self._last_panic_result = panic_result
+                report = format_panic_report(panic_result)
+                severity = "error" if panic_result.has_errors else "warning"
+                self.notify(report, severity=severity, timeout=30)
+                await self.refresh_tasks()
+                self._refresh_project_state()
+                if panic_result.total_running > 0:
+                    await self.push_screen(
+                        ConfirmDeleteScreen(
+                            "Resource access has been cut.\n\n"
+                            "Also stop all containers?\n"
+                            "(This may be slow on some platforms.)",
+                            title="Stop Containers?",
+                            confirm_label="Stop",
+                        ),
+                        self._on_panic_stop_confirmed,
+                    )
+                return
+
+            if worker.group == "panic-stop":
+                stop_result = worker.result
+                if not stop_result:
+                    return
+                stopped, errors = stop_result
+                if errors:
+                    self.notify(
+                        f"Stopped {len(stopped)} container(s), {len(errors)} failed",
+                        severity="error",
+                    )
+                else:
+                    self.notify(f"Stopped {len(stopped)} container(s)")
+                await self.refresh_tasks()
+                return
+
         # ---------- Actions (keys + called from buttons) ----------
 
         async def action_edit_global_instructions(self) -> None:
@@ -926,6 +968,57 @@ if _HAS_TEXTUAL:
         async def action_show_default_instructions(self) -> None:
             """Show Default Instructions."""
             await self._action_show_default_instructions()
+
+        async def action_panic(self) -> None:
+            """Emergency panic: cut all resource access immediately."""
+            await self.push_screen(
+                ConfirmDeleteScreen(
+                    "Cut ALL resource access for ALL running containers?\n\n"
+                    "This will:\n"
+                    "  - Raise shields (deny all network)\n"
+                    "  - Stop credential proxy\n"
+                    "  - Stop gate server\n\n"
+                    "Tokens are preserved for easy resume after investigation.",
+                    title="EMERGENCY PANIC",
+                    confirm_label="PANIC",
+                ),
+                self._on_panic_confirmed,
+            )
+
+        async def _on_panic_confirmed(self, confirmed: bool) -> None:
+            """Handle the panic confirmation result."""
+            if not confirmed:
+                return
+            from ..lib.domain.panic import execute_panic
+
+            self.run_worker(
+                lambda: execute_panic(stop_containers=False),
+                name="panic-lockdown",
+                group="panic",
+                thread=True,
+                exit_on_error=False,
+            )
+
+        async def _on_panic_stop_confirmed(self, confirmed: bool) -> None:
+            """Handle the container-stop confirmation after panic lockdown."""
+            if not confirmed:
+                pr = getattr(self, "_last_panic_result", None)
+                if pr and pr.shield_bypassed:
+                    self.notify("Containers left running (shields BYPASSED — no firewall)")
+                elif pr and pr.shield_errors:
+                    self.notify("Containers left running (some shields failed)")
+                else:
+                    self.notify("Containers left running (shields are up)")
+                return
+            from ..lib.domain.panic import panic_stop_containers
+
+            self.run_worker(
+                panic_stop_containers,
+                name="panic-stop-containers",
+                group="panic-stop",
+                thread=True,
+                exit_on_error=False,
+            )
 
         async def action_quit(self) -> None:
             """Exit the TUI cleanly."""
@@ -1023,6 +1116,11 @@ if _HAS_TEXTUAL:
                 "Credential Proxy",
                 "Manage credential proxy status and operations",
                 self.action_show_proxy,
+            )
+            yield SystemCommand(
+                "PANIC — Emergency Kill Switch",
+                "Cut all resource access immediately (shields, proxy, gate)",
+                self.action_panic,
             )
 
         async def action_show_gate_server(self) -> None:

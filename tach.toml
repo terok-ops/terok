@@ -44,6 +44,7 @@ path = "terok.cli"
 layer = "presentation"
 depends_on = [
     "terok.lib.domain.agent_config",
+    "terok.lib.domain.panic",
     "terok.lib.orchestration.container_doctor",
     "terok.lib.orchestration.hooks",
     "terok.lib.orchestration.tasks",
@@ -64,6 +65,7 @@ layer = "presentation"
 depends_on = [
     "terok.lib.orchestration.autopilot",
     "terok.lib.core.task_display",
+    "terok.lib.domain.panic",
     "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
@@ -77,6 +79,17 @@ depends_on = [
 #
 # ·· aggregates ··  DDD Project/Task, facade, high-level queries
 #
+
+# Emergency panic (cross-project lockdown)
+[[modules]]
+path = "terok.lib.domain.panic"
+layer = "domain"
+depends_on = [
+    "terok.lib.core.config",
+    "terok.lib.core.paths",
+    "terok.lib.core.projects",
+    "terok.lib.orchestration.tasks",
+]
 
 # Service facade (aggregates shared cross-cutting operations)
 [[modules]]
@@ -551,6 +564,10 @@ from = ["terok.lib.orchestration.docker"]
 [[interfaces]]
 expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", "CleanupResult"]
 from = ["terok.lib.domain.image_cleanup"]
+
+[[interfaces]]
+expose = ["PanicResult", "execute_panic", "panic_stop_containers", "is_panicked", "clear_panic_lock", "format_panic_report"]
+from = ["terok.lib.domain.panic"]
 
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
