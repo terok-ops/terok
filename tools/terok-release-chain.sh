@@ -188,6 +188,7 @@ main() {
     sync_clones "${release_chain[@]}"
 
     declare -gA RELEASED_VERSIONS=()
+    declare -gA PLANNED_PINS=()    # "repo:dep" → version after sibling dep update
     local current_versions=() versions=()
     compute_versions release_chain current_versions versions
 
@@ -519,42 +520,46 @@ prepare_repo() {
 
 update_sibling_deps() {
     local repo_dir="$1" deps_str="$2"
+    local repo_name
+    repo_name=$(basename "$repo_dir")
     [[ -n "$deps_str" ]] || return 0
     for dep in $deps_str; do
         local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
         if [[ -z "$dep_ver" ]]; then
             # Not released in this run — resolve what version the chain needs.
-            # Reads the sibling clone's pyproject.toml.  This is precise even
-            # in pretend mode: unreleased deps' pins are never modified during
-            # the chain, so the clone at upstream/master has the same value
-            # as the real run's modified clone.
             dep_ver=$(_resolve_required_version "$repo_dir" "$deps_str" "$dep")
             local pinned
             pinned=$(pinned_dep_version "$repo_dir" "$dep")
             if [[ "$pinned" == "$dep_ver" ]]; then
                 log "Dep unchanged: ${dep} (v${dep_ver})"
+                verify_wheel_exists "$dep" "$dep_ver"
+                PLANNED_PINS["${repo_name}:${dep}"]="$dep_ver"
                 continue
             fi
             log "Dep stale: ${dep} v${pinned} -> v${dep_ver} (required by chain)"
         fi
         verify_wheel_exists "$dep" "$dep_ver"
         update_dep_url "$repo_dir" "$dep" "$dep_ver"
+        PLANNED_PINS["${repo_name}:${dep}"]="$dep_ver"
     done
 }
 
 # Find the version of $dep that the chain actually needs.
 #
-# Prefers siblings released in this run (their clone reflects the
-# just-released pyproject.toml), then falls back to any sibling that
-# pins it, then to the latest GitHub release tag.
+# Prefers siblings released in this run (via PLANNED_PINS, which
+# reflects the resolved version even in pretend mode where file edits
+# are skipped), then falls back to any sibling that pins it, then to
+# the latest GitHub release tag.
 _resolve_required_version() {
     local repo_dir="$1" deps_str="$2" target_dep="$3"
     local ver=""
-    # Pass 1: prefer a sibling that was released in this run
+    # Pass 1: prefer a sibling that was released in this run.
+    # Use PLANNED_PINS (in-memory) instead of reading the clone, so
+    # pretend mode sees the same resolved versions as a real run.
     for other in $deps_str; do
         [[ "$other" == "$target_dep" ]] && continue
         [[ -n "${RELEASED_VERSIONS[$other]:-}" ]] || continue
-        ver=$(pinned_dep_version "${RELEASE_DIR}/${other}" "$target_dep" 2>/dev/null) || true
+        ver="${PLANNED_PINS[${other}:${target_dep}]:-}"
         [[ -n "$ver" ]] && { echo "$ver"; return; }
     done
     # Pass 2: any sibling clone that pins it
@@ -837,9 +842,15 @@ latest_release_version() {
 }
 
 pinned_dep_version() {
-    local repo_dir="$1" dep_repo="$2"
-    grep "${GH_ORG}/${dep_repo}/releases/download/" "${repo_dir}/pyproject.toml" \
-        | sed 's|.*/download/v\([^/]*\)/.*|\1|'
+    local repo_dir="$1" dep_repo="$2" ver
+    ver=$(grep -m1 "${GH_ORG}/${dep_repo}/releases/download/" "${repo_dir}/pyproject.toml" \
+        | sed 's|.*/download/v\([^/]*\)/.*|\1|')
+    if [[ -z "$ver" ]]; then
+        printf "pinned_dep_version: no wheel URL for %s in %s/pyproject.toml\n" \
+            "$dep_repo" "$repo_dir" >&2
+        return 1
+    fi
+    printf '%s' "$ver"
 }
 
 verify_wheel_exists() {
@@ -847,7 +858,6 @@ verify_wheel_exists() {
     local pkg gh_repo="${GH_ORG}/${dep_repo}"
     pkg=$(pkg_name "$dep_repo")
     local expected="${pkg}-${version}-py3-none-any.whl"
-    if $DRY_RUN; then return 0; fi
     local assets
     assets=$(gh release view "v${version}" --repo "$gh_repo" --json assets -q '.assets[].name' 2>/dev/null || true)
     echo "$assets" | grep -qF "$expected" \
