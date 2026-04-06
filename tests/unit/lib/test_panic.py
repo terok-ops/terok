@@ -13,6 +13,7 @@ from terok.lib.domain.panic import (
     execute_panic,
     format_panic_report,
     is_panicked,
+    panic_stop_containers,
 )
 from tests.testfs import FAKE_PROJECT_TASKS_ROOT
 
@@ -63,6 +64,45 @@ class TestDiscovery:
         """Projects where get_tasks raises are skipped."""
         mock_projects.return_value = [MagicMock(id="broken")]
         mock_tasks.side_effect = Exception("boom")
+
+        from terok.lib.domain.panic import _discover_targets
+
+        assert _discover_targets() == []
+
+    @patch("terok.lib.domain.panic.list_projects")
+    @patch("terok.lib.domain.panic.get_tasks")
+    def test_skips_projects_with_no_tasks(self, mock_tasks, mock_projects):
+        """Projects with empty task list are skipped."""
+        mock_projects.return_value = [MagicMock(id="empty")]
+        mock_tasks.return_value = []
+
+        from terok.lib.domain.panic import _discover_targets
+
+        assert _discover_targets() == []
+
+    @patch("terok.lib.domain.panic.list_projects")
+    @patch("terok.lib.domain.panic.get_tasks")
+    @patch("terok.lib.domain.panic.get_all_task_states")
+    def test_includes_paused_containers(self, mock_states, mock_tasks, mock_projects):
+        """Paused containers are also discovered."""
+        cfg = MagicMock(id="proj1", tasks_root=FAKE_PROJECT_TASKS_ROOT)
+        mock_projects.return_value = [cfg]
+        mock_tasks.return_value = [_task_meta("1")]
+        mock_states.return_value = {"1": "paused"}
+
+        from terok.lib.domain.panic import _discover_targets
+
+        assert len(_discover_targets()) == 1
+
+    @patch("terok.lib.domain.panic.list_projects")
+    @patch("terok.lib.domain.panic.get_tasks")
+    @patch("terok.lib.domain.panic.get_all_task_states")
+    def test_skips_broken_task_states(self, mock_states, mock_tasks, mock_projects):
+        """Projects where get_all_task_states raises are skipped."""
+        cfg = MagicMock(id="proj1", tasks_root=FAKE_PROJECT_TASKS_ROOT)
+        mock_projects.return_value = [cfg]
+        mock_tasks.return_value = [_task_meta("1")]
+        mock_states.side_effect = Exception("state lookup failed")
 
         from terok.lib.domain.panic import _discover_targets
 
@@ -136,6 +176,147 @@ class TestExecutePanic:
         r = execute_panic(stop_containers=True)
         assert r.containers_stopped == ["c1"]
 
+    @patch(_STOP)
+    @patch(_LOCK)
+    @patch(_BYPASS, return_value=False)
+    @patch(_DISCOVER, return_value=[])
+    @patch(_PROXY, return_value=(True, None))
+    @patch(_GATE, return_value=(True, None))
+    def test_phase2_skipped_when_no_targets(self, _g, _p, _d, _b, _l, mock_stop):
+        """Phase 2 skipped when no running containers."""
+        r = execute_panic(stop_containers=True)
+        mock_stop.assert_not_called()
+        assert r.containers_stopped == []
+
+    @patch(_LOCK)
+    @patch(_BYPASS, return_value=False)
+    @patch(_DISCOVER)
+    @patch(_SHIELD, side_effect=Exception("thread crashed"))
+    @patch(_PROXY, return_value=(True, None))
+    @patch(_GATE, return_value=(True, None))
+    def test_shield_future_exception(self, _g, _p, _shield, mock_discover, _b, _l):
+        """Shield future raising an exception is captured as error."""
+        t = _target()
+        mock_discover.return_value = [t]
+
+        r = execute_panic()
+        assert len(r.shield_errors) == 1
+        assert "thread crashed" in r.shield_errors[0][1]
+
+
+class TestPanicStopContainers:
+    """Tests for panic_stop_containers (standalone Phase 2)."""
+
+    @patch(_STOP, return_value=(["c1", "c2"], []))
+    @patch(_DISCOVER)
+    def test_standalone_stop(self, mock_discover, _s):
+        """Standalone stop discovers and stops containers."""
+        mock_discover.return_value = [_target()]
+        stopped, errors = panic_stop_containers()
+        assert stopped == ["c1", "c2"]
+        assert not errors
+
+    @patch(_STOP, return_value=([], [("c1", "rm failed")]))
+    @patch(_DISCOVER)
+    def test_standalone_stop_errors(self, mock_discover, _s):
+        """Errors from stop are propagated."""
+        mock_discover.return_value = [_target()]
+        stopped, errors = panic_stop_containers()
+        assert not stopped
+        assert errors[0][1] == "rm failed"
+
+
+class TestStopContainers:
+    """Tests for _stop_containers internals."""
+
+    @patch("terok_sandbox.stop_task_containers")
+    def test_stops_all_modes(self, mock_stop):
+        """All container modes are generated for each target."""
+        from terok.lib.domain.panic import _stop_containers
+
+        t = _target()
+        stopped, errors = _stop_containers([t])
+        assert not errors
+        mock_stop.assert_called_once()
+        names = mock_stop.call_args[0][0]
+        assert len(names) > 0
+
+    @patch("terok_sandbox.stop_task_containers", side_effect=Exception("podman died"))
+    def test_stop_exception(self, _):
+        """Exception from stop_task_containers yields errors."""
+        from terok.lib.domain.panic import _stop_containers
+
+        stopped, errors = _stop_containers([_target()])
+        assert not stopped
+        assert all("podman died" in e for _, e in errors)
+
+    def test_empty_targets(self):
+        """Empty target list returns empty results."""
+        from terok.lib.domain.panic import _stop_containers
+
+        assert _stop_containers([]) == ([], [])
+
+
+class TestRaiseShield:
+    """Tests for _raise_shield."""
+
+    @patch("terok_sandbox.block")
+    def test_success(self, mock_block):
+        """Shield block succeeds."""
+        from terok.lib.domain.panic import _raise_shield
+
+        cname, err = _raise_shield(_target())
+        assert err is None
+        mock_block.assert_called_once()
+
+    @patch("terok_sandbox.block", side_effect=Exception("nft failed"))
+    def test_failure(self, _):
+        """Shield block failure returns error string."""
+        from terok.lib.domain.panic import _raise_shield
+
+        cname, err = _raise_shield(_target())
+        assert "nft failed" in err
+
+
+class TestStopProxy:
+    """Tests for _stop_proxy."""
+
+    @patch("terok_sandbox.stop_proxy")
+    def test_success(self, mock_stop):
+        """Proxy stop succeeds."""
+        from terok.lib.domain.panic import _stop_proxy
+
+        ok, err = _stop_proxy()
+        assert ok and err is None
+
+    @patch("terok_sandbox.stop_proxy", side_effect=Exception("no proxy"))
+    def test_failure(self, _):
+        """Proxy stop failure returns error."""
+        from terok.lib.domain.panic import _stop_proxy
+
+        ok, err = _stop_proxy()
+        assert not ok and "no proxy" in err
+
+
+class TestStopGate:
+    """Tests for _stop_gate."""
+
+    @patch("terok_sandbox.stop_daemon")
+    def test_success(self, mock_stop):
+        """Gate stop succeeds."""
+        from terok.lib.domain.panic import _stop_gate
+
+        ok, err = _stop_gate()
+        assert ok and err is None
+
+    @patch("terok_sandbox.stop_daemon", side_effect=Exception("no gate"))
+    def test_failure(self, _):
+        """Gate stop failure returns error."""
+        from terok.lib.domain.panic import _stop_gate
+
+        ok, err = _stop_gate()
+        assert not ok and "no gate" in err
+
 
 class TestPanicLock:
     """Tests for panic lock file lifecycle."""
@@ -150,6 +331,13 @@ class TestPanicLock:
         _write_panic_lock()
         assert is_panicked()
         clear_panic_lock()
+        assert not is_panicked()
+
+    @patch("terok.lib.domain.panic.state_root")
+    def test_clear_idempotent(self, mock_state, tmp_path):
+        """Clearing when no lock exists is a no-op."""
+        mock_state.return_value = tmp_path
+        clear_panic_lock()  # should not raise
         assert not is_panicked()
 
 
@@ -173,3 +361,31 @@ class TestFormatReport:
         """Bypass flagged."""
         r = PanicResult(shield_bypassed=True, proxy_stopped=True, gate_stopped=True)
         assert "BYPASSED" in format_panic_report(r)
+
+    def test_container_stop_errors(self):
+        """Container stop errors appear in report."""
+        r = PanicResult(
+            proxy_stopped=True,
+            gate_stopped=True,
+            container_stop_errors=[("c1", "timeout")],
+            total_running=1,
+        )
+        report = format_panic_report(r)
+        assert "stop c1: timeout" in report
+
+    def test_gate_error_in_report(self):
+        """Gate error appears in error section."""
+        r = PanicResult(proxy_stopped=True, gate_error="port in use", total_running=0)
+        report = format_panic_report(r)
+        assert "gate: port in use" in report
+
+    def test_containers_stopped_count(self):
+        """Stopped container count shown."""
+        r = PanicResult(
+            shields_raised=["c1"],
+            proxy_stopped=True,
+            gate_stopped=True,
+            containers_stopped=["c1", "c2"],
+            total_running=2,
+        )
+        assert "Containers stopped: 2" in format_panic_report(r)
