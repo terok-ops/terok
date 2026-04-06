@@ -48,6 +48,7 @@ VERSION_STEP="patch"
 VERSION_STEP_UNIFORM=false
 CHECK_TIMEOUT=1800
 SKIP_CHECKS=false
+UPGRADE_PINNED=false
 WHEEL_TIMEOUT=300
 
 # ── Output primitives ─────────────────────────────────────────────────────
@@ -144,6 +145,8 @@ ${BOLD}Options:${RESET}
   ${GREEN}-Y, --yes-all${RESET}           Auto-approve everything incl. risky actions
   ${GREEN}--check-timeout${RESET} SECS    PR check timeout (default: 1800)
   ${GREEN}--skip-checks${RESET}           Merge PRs without waiting for CI
+  ${GREEN}--upgrade-pinned${RESET}        Upgrade outside-chain pins to latest release
+                          (default: keep current pins from master)
   ${GREEN}-p, --pretend${RESET}           Dry run — show what would happen
   ${GREEN}-h, --help${RESET}              Show this help
 
@@ -159,6 +162,8 @@ ${BOLD}Examples:${RESET}
                                      ${CYAN}# minor bump on dbus, patch rest${RESET}
   terok-release-chain --version-step minor --version-step-uniform dbus
                                      ${CYAN}# minor bump on every repo${RESET}
+  terok-release-chain --upgrade-pinned agent
+                                     ${CYAN}# also upgrade outside-chain pins to latest${RESET}
   terok-release-chain -n "Comms" dbus terok -p
                                      ${CYAN}# named dry run, PR on terok${RESET}
 USAGE
@@ -230,6 +235,7 @@ parse_args() {
             --check-timeout)         [[ $# -ge 2 ]] || die "--check-timeout requires seconds"
                                      CHECK_TIMEOUT="$2"; shift 2 ;;
             --skip-checks)           SKIP_CHECKS=true; shift ;;
+            --upgrade-pinned)        UPGRADE_PINNED=true; shift ;;
             --help|-h)               usage ;;
             --)                      shift; positionals+=("$@"); break ;;
             -*)                      die "Unknown option: $1" ;;
@@ -383,16 +389,7 @@ release_repo() {
     log "New tag:         ${tag}"
 
     local deps_str="${DEPS[$repo]}"
-    if [[ -n "$deps_str" ]]; then
-        for dep in $deps_str; do
-            local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
-            if [[ -n "$dep_ver" ]]; then
-                log "Dep update: ${dep} -> v${dep_ver}"
-            else
-                log "Dep unchanged: ${dep}"
-            fi
-        done
-    fi
+    preview_deps "$repo_dir" "$deps_str"
 
     ask "Proceed with ${repo} v${new_version}?"
 
@@ -479,21 +476,7 @@ prepare_repo() {
     local deps_str="${DEPS[$repo]}"
     [[ -n "$deps_str" ]] || die "${repo} has no sibling deps to bump"
 
-    for dep in $deps_str; do
-        local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
-        if [[ -n "$dep_ver" ]]; then
-            log "Dep update: ${dep} -> v${dep_ver}"
-        else
-            local required pinned
-            required=$(_resolve_required_version "$repo_dir" "$deps_str" "$dep")
-            pinned=$(pinned_dep_version "$repo_dir" "$dep")
-            if [[ "$pinned" != "$required" ]]; then
-                log "Dep stale: ${dep} v${pinned} -> v${required}"
-            else
-                log "Dep unchanged: ${dep}"
-            fi
-        fi
-    done
+    preview_deps "$repo_dir" "$deps_str"
 
     ask "Proceed with dep bump for ${repo}?"
 
@@ -517,6 +500,24 @@ prepare_repo() {
 # ── Shared release operations ──────────────────────────────────────────────
 #
 # Building blocks used by both release_repo and prepare_repo.
+
+preview_deps() {
+    local repo_dir="$1" deps_str="$2"
+    [[ -n "$deps_str" ]] || return 0
+    for dep in $deps_str; do
+        local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
+        local pinned
+        pinned=$(pinned_dep_version "$repo_dir" "$dep")
+        if [[ -z "$dep_ver" ]]; then
+            dep_ver=$(_resolve_required_version "$repo_dir" "$deps_str" "$dep")
+        fi
+        if [[ "$pinned" == "$dep_ver" ]]; then
+            log "Dep: ${dep} v${pinned}"
+        else
+            log "Dep: ${dep} v${pinned} -> v${dep_ver}"
+        fi
+    done
+}
 
 update_sibling_deps() {
     local repo_dir="$1" deps_str="$2"
@@ -548,8 +549,11 @@ update_sibling_deps() {
 #
 # Prefers siblings released in this run (via PLANNED_PINS, which
 # reflects the resolved version even in pretend mode where file edits
-# are skipped), then falls back to any sibling that pins it, then to
-# the latest GitHub release tag.
+# are skipped), then falls back to any sibling that pins it.
+#
+# When no sibling provides a version:
+#   default       — keep the current pin (release what's on master)
+#   --upgrade-pinned — upgrade to the latest GitHub release
 _resolve_required_version() {
     local repo_dir="$1" deps_str="$2" target_dep="$3"
     local ver=""
@@ -570,8 +574,14 @@ _resolve_required_version() {
         ver=$(pinned_dep_version "$other_dir" "$target_dep" 2>/dev/null) || true
         [[ -n "$ver" ]] && { echo "$ver"; return; }
     done
-    # No sibling pins it — fall back to latest release
-    latest_release_version "$target_dep"
+    # No sibling provides a version.
+    if $UPGRADE_PINNED; then
+        # --upgrade-pinned: upgrade outside-chain deps to their latest release.
+        latest_release_version "$target_dep"
+    else
+        # Default: keep the current pin — release what's on master.
+        pinned_dep_version "$repo_dir" "$target_dep"
+    fi
 }
 
 lock_and_commit() {
@@ -829,17 +839,17 @@ normalise_repo() {
     esac
 }
 
-set_version() {
-    local repo_dir="$1" new_ver="$2"
-    log "Setting version to ${new_ver}"
-    run sed -i "s/^version = \".*\"/version = \"${new_ver}\"/" "${repo_dir}/pyproject.toml"
-}
-
 latest_release_version() {
     local tag
     tag=$(gh release view --repo "${GH_ORG}/$1" --json tagName --jq '.tagName' 2>/dev/null) \
         || die "No releases found for $1"
     echo "${tag#v}"
+}
+
+set_version() {
+    local repo_dir="$1" new_ver="$2"
+    log "Setting version to ${new_ver}"
+    run sed -i "s/^version = \".*\"/version = \"${new_ver}\"/" "${repo_dir}/pyproject.toml"
 }
 
 pinned_dep_version() {
@@ -856,6 +866,9 @@ pinned_dep_version() {
 
 verify_wheel_exists() {
     local dep_repo="$1" version="$2"
+    # Skip for versions "released" in this pretend run — the wheel doesn't exist yet.
+    # All other versions (external deps, prior releases) are checked even in pretend mode.
+    if $DRY_RUN && [[ "${RELEASED_VERSIONS[$dep_repo]:-}" == "$version" ]]; then return 0; fi
     local pkg gh_repo="${GH_ORG}/${dep_repo}"
     pkg=$(pkg_name "$dep_repo")
     local expected="${pkg}-${version}-py3-none-any.whl"
