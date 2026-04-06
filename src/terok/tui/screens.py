@@ -1389,11 +1389,17 @@ class ConfirmDeleteScreen(screen.ModalScreen[bool]):
     }
     """
 
-    def __init__(self, message: str, title: str = "Confirm Delete") -> None:
+    def __init__(
+        self,
+        message: str,
+        title: str = "Confirm Delete",
+        confirm_label: str = "Delete",
+    ) -> None:
         """Create a confirmation dialog with a warning message."""
         super().__init__()
         self._message = message
         self._title = title
+        self._confirm_label = confirm_label
 
     def compose(self) -> ComposeResult:
         """Build the confirmation message and Yes/Cancel buttons."""
@@ -1401,7 +1407,7 @@ class ConfirmDeleteScreen(screen.ModalScreen[bool]):
             yield Static(self._message, id="confirm-message", markup=False)
             with Horizontal(id="confirm-buttons"):
                 yield Button("Cancel", id="btn-cancel", variant="default")
-                yield Button("Delete", id="btn-confirm", variant="error")
+                yield Button(self._confirm_label, id="btn-confirm", variant="error")
         dialog.border_title = self._title
         dialog.border_subtitle = "Esc to cancel"
 

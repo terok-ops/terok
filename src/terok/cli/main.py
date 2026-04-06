@@ -21,6 +21,7 @@ from .commands import (
     dbus,
     image,
     info,
+    panic,
     project,
     setup,
     shield,
@@ -38,6 +39,7 @@ except ImportError:  # pragma: no cover - optional dep
 # Dispatch chain — tried in order; first True wins.
 # wire_dispatch handles commands mounted via wire_group (agent, gate).
 _DISPATCHERS = [
+    panic.dispatch,
     task.dispatch,
     project.dispatch,
     credentials.dispatch,
@@ -103,6 +105,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # Register subcommands from each module
+    panic.register(sub)
     task.register(sub)
     project.register(sub)
     credentials.register(sub)  # credential-proxy-serve (standalone)
