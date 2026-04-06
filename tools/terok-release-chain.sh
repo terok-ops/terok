@@ -11,6 +11,9 @@
 # Maintains a dedicated clone cache (~/.cache/terok-release/) so it
 # never touches dev working trees.
 #
+# Pretend mode (--pretend) must produce identical output to a real run.
+# Mismatches are bugs. See #629 for planned plan-then-execute rewrite.
+#
 # Usage:
 #   terok-release-chain [options] <start-repo> [<end-repo>]
 
@@ -53,6 +56,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
@@ -60,6 +64,18 @@ log()     { printf "${CYAN}>>>${RESET} %s\n" "$*"; }
 success() { printf "${GREEN}>>>${RESET} %s\n" "$*"; }
 warn()    { printf "${YELLOW}>>>${RESET} %s\n" "$*" >&2; }
 die()     { printf "${RED}ERROR:${RESET} %s\n" "$*" >&2; exit 1; }
+
+format_elapsed() {
+    local secs="$1"
+    local h=$((secs / 3600)) m=$(((secs % 3600) / 60)) s=$((secs % 60))
+    if ((h > 0)); then
+        printf '%dh %dm %ds' "$h" "$m" "$s"
+    elif ((m > 0)); then
+        printf '%dm %ds' "$m" "$s"
+    else
+        printf '%ds' "$s"
+    fi
+}
 
 # Ask for confirmation.  Normal-flow defaults to Y; risky defaults to N.
 # --yes auto-approves normal, --yes-all auto-approves both.
@@ -156,6 +172,11 @@ USAGE
 # → sync clones → compute versions → preview → execute each repo in turn.
 
 main() {
+    local chain_start_ts
+    chain_start_ts=$(date +%s)
+    printf "\n${MAGENTA}─── ${BOLD}Release chain started${RESET} ${MAGENTA}· %s ──────────────────────${RESET}\n\n" \
+        "$(date '+%a %b %-d %H:%M:%S %Y')"
+
     preflight
     parse_args "$@"
 
@@ -167,6 +188,7 @@ main() {
     sync_clones "${release_chain[@]}"
 
     declare -gA RELEASED_VERSIONS=()
+    declare -gA PLANNED_PINS=()    # "repo:dep" → version after sibling dep update
     local current_versions=() versions=()
     compute_versions release_chain current_versions versions
 
@@ -174,7 +196,7 @@ main() {
     ask "Start the release chain?"
 
     execute_chain release_chain versions
-    print_summary release_chain versions
+    print_summary release_chain versions "$chain_start_ts"
 }
 
 # ── Main steps ─────────────────────────────────────────────────────────────
@@ -313,6 +335,7 @@ execute_chain() {
 
 print_summary() {
     local -n _chain=$1 _versions=$2
+    local _start_ts=$3
     local prefix=""
     $DRY_RUN && prefix="${YELLOW}[pretend]${RESET} "
     printf "\n${prefix}${GREEN}${BOLD}All releases complete!${RESET}\n\n"
@@ -325,6 +348,13 @@ print_summary() {
         fi
     done
     printf "\n"
+
+    local end_ts elapsed_str
+    end_ts=$(date +%s)
+    elapsed_str=$(format_elapsed $((end_ts - _start_ts)))
+    printf "${MAGENTA}─── ${BOLD}Release chain finished${RESET} ${MAGENTA}· %s ─────────────────────${RESET}\n" \
+        "$(date '+%a %b %-d %H:%M:%S %Y')"
+    printf "${MAGENTA}    ${BOLD}Elapsed:${RESET} %s\n\n" "$elapsed_str"
 }
 
 # ── Per-repo workflows ─────────────────────────────────────────────────────
@@ -451,7 +481,18 @@ prepare_repo() {
 
     for dep in $deps_str; do
         local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
-        [[ -n "$dep_ver" ]] && log "Dep update: ${dep} -> v${dep_ver}"
+        if [[ -n "$dep_ver" ]]; then
+            log "Dep update: ${dep} -> v${dep_ver}"
+        else
+            local required pinned
+            required=$(_resolve_required_version "$repo_dir" "$deps_str" "$dep")
+            pinned=$(pinned_dep_version "$repo_dir" "$dep")
+            if [[ "$pinned" != "$required" ]]; then
+                log "Dep stale: ${dep} v${pinned} -> v${required}"
+            else
+                log "Dep unchanged: ${dep}"
+            fi
+        fi
     done
 
     ask "Proceed with dep bump for ${repo}?"
@@ -479,15 +520,58 @@ prepare_repo() {
 
 update_sibling_deps() {
     local repo_dir="$1" deps_str="$2"
+    local repo_name
+    repo_name=$(basename "$repo_dir")
     [[ -n "$deps_str" ]] || return 0
     for dep in $deps_str; do
         local dep_ver="${RELEASED_VERSIONS[$dep]:-}"
         if [[ -z "$dep_ver" ]]; then
-            log "Skipping ${dep} (not released in this run)"
-            continue
+            # Not released in this run — resolve what version the chain needs.
+            dep_ver=$(_resolve_required_version "$repo_dir" "$deps_str" "$dep")
+            local pinned
+            pinned=$(pinned_dep_version "$repo_dir" "$dep")
+            if [[ "$pinned" == "$dep_ver" ]]; then
+                log "Dep unchanged: ${dep} (v${dep_ver})"
+                verify_wheel_exists "$dep" "$dep_ver"
+                PLANNED_PINS["${repo_name}:${dep}"]="$dep_ver"
+                continue
+            fi
+            log "Dep stale: ${dep} v${pinned} -> v${dep_ver} (required by chain)"
         fi
+        verify_wheel_exists "$dep" "$dep_ver"
         update_dep_url "$repo_dir" "$dep" "$dep_ver"
+        PLANNED_PINS["${repo_name}:${dep}"]="$dep_ver"
     done
+}
+
+# Find the version of $dep that the chain actually needs.
+#
+# Prefers siblings released in this run (via PLANNED_PINS, which
+# reflects the resolved version even in pretend mode where file edits
+# are skipped), then falls back to any sibling that pins it, then to
+# the latest GitHub release tag.
+_resolve_required_version() {
+    local repo_dir="$1" deps_str="$2" target_dep="$3"
+    local ver=""
+    # Pass 1: prefer a sibling that was released in this run.
+    # Use PLANNED_PINS (in-memory) instead of reading the clone, so
+    # pretend mode sees the same resolved versions as a real run.
+    for other in $deps_str; do
+        [[ "$other" == "$target_dep" ]] && continue
+        [[ -n "${RELEASED_VERSIONS[$other]:-}" ]] || continue
+        ver="${PLANNED_PINS[${other}:${target_dep}]:-}"
+        [[ -n "$ver" ]] && { echo "$ver"; return; }
+    done
+    # Pass 2: any sibling clone that pins it
+    for other in $deps_str; do
+        [[ "$other" == "$target_dep" ]] && continue
+        local other_dir="${RELEASE_DIR}/${other}"
+        [[ -d "$other_dir" ]] || continue
+        ver=$(pinned_dep_version "$other_dir" "$target_dep" 2>/dev/null) || true
+        [[ -n "$ver" ]] && { echo "$ver"; return; }
+    done
+    # No sibling pins it — fall back to latest release
+    latest_release_version "$target_dep"
 }
 
 lock_and_commit() {
@@ -749,6 +833,36 @@ set_version() {
     local repo_dir="$1" new_ver="$2"
     log "Setting version to ${new_ver}"
     run sed -i "s/^version = \".*\"/version = \"${new_ver}\"/" "${repo_dir}/pyproject.toml"
+}
+
+latest_release_version() {
+    local tag
+    tag=$(gh release view --repo "${GH_ORG}/$1" --json tagName --jq '.tagName' 2>/dev/null) \
+        || die "No releases found for $1"
+    echo "${tag#v}"
+}
+
+pinned_dep_version() {
+    local repo_dir="$1" dep_repo="$2" ver
+    ver=$(grep -m1 "${GH_ORG}/${dep_repo}/releases/download/" "${repo_dir}/pyproject.toml" \
+        | sed 's|.*/download/v\([^/]*\)/.*|\1|')
+    if [[ -z "$ver" ]]; then
+        printf "pinned_dep_version: no wheel URL for %s in %s/pyproject.toml\n" \
+            "$dep_repo" "$repo_dir" >&2
+        return 1
+    fi
+    printf '%s' "$ver"
+}
+
+verify_wheel_exists() {
+    local dep_repo="$1" version="$2"
+    local pkg gh_repo="${GH_ORG}/${dep_repo}"
+    pkg=$(pkg_name "$dep_repo")
+    local expected="${pkg}-${version}-py3-none-any.whl"
+    local assets
+    assets=$(gh release view "v${version}" --repo "$gh_repo" --json assets -q '.assets[].name' 2>/dev/null || true)
+    echo "$assets" | grep -qF "$expected" \
+        || die "Wheel ${expected} not found in ${gh_repo} v${version} — release may be incomplete"
 }
 
 update_dep_url() {
