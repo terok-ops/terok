@@ -132,9 +132,9 @@ ${BOLD}Options:${RESET}
   ${GREEN}-h, --help${RESET}              Show this help
 
 ${BOLD}Environment:${RESET}
-  ${YELLOW}TEROK_RELEASE_DIR${RESET}       Clone cache dir (~/.cache/terok-release)
-  ${YELLOW}TEROK_GH_ORG${RESET}            Upstream GitHub org (terok-ai)
   ${YELLOW}TEROK_GH_FORK${RESET}           Fork owner ${BOLD}(required)${RESET}
+  ${YELLOW}TEROK_RELEASE_DIR${RESET}       Clone cache dir [~/.cache/terok-release]
+  ${YELLOW}TEROK_GH_ORG${RESET}            Upstream GitHub org [terok-ai]
 
 ${BOLD}Examples:${RESET}
   terok-release-chain dbus           ${CYAN}# patch-release entire chain${RESET}
