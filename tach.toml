@@ -703,7 +703,7 @@ from = ["terok.lib.domain.task"]
 # Utility interfaces
 
 [[interfaces]]
-expose = ["WORKSPACE_DANGEROUS_DIRNAME", "is_in_dangerous_workspace", "assert_not_in_dangerous_workspace"]
+expose = ["SHARED_DIRNAME", "WORKSPACE_DANGEROUS_DIRNAME", "is_in_dangerous_workspace", "assert_not_in_dangerous_workspace"]
 from = ["terok.lib.util.host_cmd"]
 
 [[interfaces]]

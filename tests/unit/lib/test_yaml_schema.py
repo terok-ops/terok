@@ -331,3 +331,32 @@ class ProjectYamlValidationErrorTests(unittest.TestCase):
         with self.assertRaises(ValidationError) as ctx:
             RawProjectYaml.model_validate({"docker": {"base_imagee": "ubuntu:24.04"}})
         self.assertIn("base_imagee", str(ctx.exception))
+
+
+class SharedDirFieldTests(unittest.TestCase):
+    """Tests for the ``shared_dir`` top-level field in project.yml."""
+
+    def test_omitted_defaults_to_none(self) -> None:
+        """shared_dir is None by default (disabled)."""
+        raw = RawProjectYaml.model_validate({})
+        self.assertIsNone(raw.shared_dir)
+
+    def test_true_accepted(self) -> None:
+        """``shared_dir: true`` enables auto-created shared directory."""
+        raw = RawProjectYaml.model_validate({"shared_dir": True})
+        self.assertTrue(raw.shared_dir)
+
+    def test_false_accepted(self) -> None:
+        """``shared_dir: false`` disables shared directory."""
+        raw = RawProjectYaml.model_validate({"shared_dir": False})
+        self.assertFalse(raw.shared_dir)
+
+    def test_path_string_accepted(self) -> None:
+        """``shared_dir: /path`` passes through as string."""
+        raw = RawProjectYaml.model_validate({"shared_dir": "/tmp/terok-testing/shared"})
+        self.assertEqual(raw.shared_dir, "/tmp/terok-testing/shared")
+
+    def test_null_stays_none(self) -> None:
+        """``shared_dir: ~`` (YAML null) stays None."""
+        raw = RawProjectYaml.model_validate({"shared_dir": None})
+        self.assertIsNone(raw.shared_dir)

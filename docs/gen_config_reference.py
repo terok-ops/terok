@@ -73,6 +73,8 @@ _FIELD_DOCS: dict[str, str] = {
     "docker.base_image": "Base Docker image for container builds",
     "docker.user_snippet_inline": "Inline Dockerfile snippet injected into the project image",
     "docker.user_snippet_file": "Path to a file containing a Dockerfile snippet",
+    # shared dir
+    "shared_dir": "Shared directory for multi-agent IPC (``true`` = auto-create under tasks root, or absolute path)",
     # top-level
     "default_agent": "Default agent provider (e.g. ``claude``, ``codex``)",
     "agent": "Agent configuration dict (model, subagents, MCP servers, etc.)",

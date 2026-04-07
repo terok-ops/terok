@@ -67,6 +67,8 @@ class ProjectConfig(BaseModel):
     docker_base_image: str = "ubuntu:24.04"
     docker_snippet_inline: str | None = None
     docker_snippet_file: str | None = None
+    # Shared task directory (multi-agent IPC)
+    shared_dir: Path | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -15,6 +15,9 @@ WORKSPACE_DANGEROUS_DIRNAME = "workspace-dangerous"
 """Sentinel directory name for agent-writable workspaces that must never be
 targeted by host-side subprocess calls."""
 
+SHARED_DIRNAME = "_shared"
+"""Default directory name for per-project shared task IPC under ``tasks_root``."""
+
 
 def is_in_dangerous_workspace(path: str | Path) -> bool:
     """Return ``True`` if *path* contains the ``workspace-dangerous`` sentinel.

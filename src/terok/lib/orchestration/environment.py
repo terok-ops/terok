@@ -403,6 +403,7 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
             human_email=project.human_email or "nobody@localhost",
             credential_scope=project.id,
             unrestricted=False,  # task_runners resolves per-provider config
+            shared_dir=project.shared_dir,
             envs_dir=mounts_dir(),
         ),
         get_roster(),

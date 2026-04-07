@@ -207,6 +207,35 @@ class TestProject:
         with project_env(yaml_text, project_id=project_id):
             assert load_project(project_id).shield_on_task_restart == expected
 
+    def test_shared_dir_true_resolves_to_tasks_root(self) -> None:
+        """``shared_dir: true`` resolves to tasks_root/_shared."""
+        yaml_text = project_yaml("proj-shared") + "shared_dir: true\n"
+        with project_env(yaml_text, project_id="proj-shared"):
+            project = load_project("proj-shared")
+        assert project.shared_dir is not None
+        assert project.shared_dir.name == "_shared"
+        assert project.shared_dir.parent == project.tasks_root
+
+    def test_shared_dir_path_resolves_absolute(self) -> None:
+        """``shared_dir: /path`` resolves to an absolute Path."""
+        yaml_text = project_yaml("proj-shared-path") + "shared_dir: /tmp/terok-testing/custom\n"
+        with project_env(yaml_text, project_id="proj-shared-path"):
+            project = load_project("proj-shared-path")
+        assert project.shared_dir == Path("/tmp/terok-testing/custom")
+
+    def test_shared_dir_relative_path_rejected(self) -> None:
+        """Relative path in shared_dir raises SystemExit."""
+        yaml_text = project_yaml("proj-shared-rel") + "shared_dir: relative/path\n"
+        with project_env(yaml_text, project_id="proj-shared-rel"):
+            with pytest.raises(SystemExit, match="absolute path"):
+                load_project("proj-shared-rel")
+
+    def test_shared_dir_omitted_is_none(self) -> None:
+        """Omitting ``shared_dir`` leaves it None (disabled)."""
+        with project_env(project_yaml("proj-no-shared"), project_id="proj-no-shared"):
+            project = load_project("proj-no-shared")
+        assert project.shared_dir is None
+
     def test_get_project_state(self) -> None:
         project_id = "proj3"
         with project_env(

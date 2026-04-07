@@ -253,6 +253,10 @@ class RawProjectYaml(BaseModel):
     docker: RawDockerSection = Field(default_factory=RawDockerSection)
     default_agent: str | None = None
     default_login: str | None = None
+    shared_dir: bool | str | None = Field(
+        default=None,
+        description="Shared directory for multi-agent IPC (true = auto, or absolute path)",
+    )
     agent: dict[str, Any] = Field(default_factory=dict)
 
     _SECTION_KEYS: ClassVar[frozenset[str]] = frozenset(

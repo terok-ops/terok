@@ -66,7 +66,11 @@ def dispatch(args: argparse.Namespace) -> bool:
             print("Known projects:")
             for p in projs:
                 upstream = p.upstream_url or "-"
-                print(f"- {p.id} [{p.security_class}] upstream={upstream} config_root={p.root}")
+                shared = f" shared={p.shared_dir}" if p.shared_dir else ""
+                print(
+                    f"- {p.id} [{p.security_class}] upstream={upstream}{shared}"
+                    f" config_root={p.root}"
+                )
         return True
     if args.cmd == "project-derive":
         target = derive_project(args.source_id, args.new_id)
