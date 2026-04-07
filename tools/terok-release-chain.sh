@@ -616,6 +616,11 @@ push_and_create_pr() {
 
 tag_and_release() {
     local repo_dir="$1" gh_repo="$2" tag="$3" title="$4" target="${5:-}"
+    # Bail out if this release already exists — avoids overwriting a
+    # prior release whose version-bump PR was never merged to master.
+    if gh release view "$tag" --repo "$gh_repo" --json tagName &>/dev/null; then
+        die "Release ${tag} already exists on ${gh_repo} — aborting"
+    fi
     # Always fetch — the squash-merge commit only exists on the remote
     # until we pull it into the local clone.
     run git -C "$repo_dir" fetch upstream
@@ -800,8 +805,9 @@ pkg_name() { echo "${1//-/_}"; }
 
 # Read version from upstream/master without touching the worktree.
 upstream_version() {
-    git -C "${RELEASE_DIR}/$1" show upstream/master:pyproject.toml \
-        | grep -m1 '^version = ' | sed 's/version = "\(.*\)"/\1/'
+    # Use the latest GitHub release tag as source of truth — master's
+    # pyproject.toml may lag if a release PR was never merged back.
+    latest_release_version "$1"
 }
 
 # X.Y.Z → next version at the given semver level.
