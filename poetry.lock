@@ -2804,13 +2804,13 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-agent"
-version = "0.0.46"
+version = "0.0.47"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_agent-0.0.46-py3-none-any.whl", hash = "sha256:a2610d7a1745dce86b629b7e97300d56f2f4b3d69dfe999b6ef68efa7d54c2d9"},
+    {file = "terok_agent-0.0.47-py3-none-any.whl", hash = "sha256:16ec542571ec6c39af5890b2a3a5ec5db8b047dd6c83be4358aba4b90c2300cc"},
 ]
 
 [package.dependencies]
@@ -2821,7 +2821,7 @@ tomli-w = ">=1.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.46/terok_agent-0.0.46-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.47/terok_agent-0.0.47-py3-none-any.whl"
 
 [[package]]
 name = "terok-dbus"
@@ -3350,4 +3350,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "6f525e27b277d544224d88379b2861dee8f047fcea33514d2aabf7a2783e4c6c"
+content-hash = "91a3177d25c70442da199a682ddb0647d77d9278da6390d08d17e5fb2f86960a"
