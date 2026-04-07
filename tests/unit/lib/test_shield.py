@@ -86,7 +86,7 @@ def test_make_shield_maps_config_to_shield_config(
     """SandboxConfig values are translated into the per-task ``ShieldConfig``."""
     cfg = SandboxConfig(config_dir=MOCK_CONFIG_ROOT, **cfg_kwargs)
     with (
-        patch("terok_shield.core.run.SubprocessRunner", autospec=True),
+        patch("terok_shield.run.SubprocessRunner", autospec=True),
         patch("terok_sandbox.paths.umbrella_config_root", return_value=MOCK_CONFIG_ROOT),
     ):
         shield = make_shield(MOCK_TASK_DIR, cfg=cfg)

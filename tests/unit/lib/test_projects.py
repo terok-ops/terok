@@ -269,6 +269,7 @@ class TestProject:
                 ),
             ):
                 run_mock.return_value.returncode = 0
+                run_mock.return_value.stdout = "2024-01-01T00:00:00Z\t<no value>"
                 state = get_project_state(project_id, gate_commit_provider=lambda _pid: None)
 
         assert state == {
