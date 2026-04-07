@@ -180,11 +180,14 @@ USAGE
 main() {
     local chain_start_ts
     chain_start_ts=$(date +%s)
-    printf "\n${MAGENTA}─── ${BOLD}Release chain started${RESET} ${MAGENTA}· %s ──────────────────────${RESET}\n\n" \
-        "$(date '+%a %b %-d %H:%M:%S %Y')"
 
     preflight
     parse_args "$@"
+
+    local _heading="Release chain"
+    $DRY_RUN && _heading="Release simulation"
+    printf "\n${MAGENTA}─── ${BOLD}%s started${RESET} ${MAGENTA}· %s ──────────────────────${RESET}\n\n" \
+        "$_heading" "$(date '+%a %b %-d %H:%M:%S %Y')"
 
     local release_chain=()
     build_chain release_chain
@@ -359,8 +362,10 @@ print_summary() {
     local end_ts elapsed_str
     end_ts=$(date +%s)
     elapsed_str=$(format_elapsed $((end_ts - _start_ts)))
-    printf "${MAGENTA}─── ${BOLD}Release chain finished${RESET} ${MAGENTA}· %s ─────────────────────${RESET}\n" \
-        "$(date '+%a %b %-d %H:%M:%S %Y')"
+    local _heading="Release chain"
+    $DRY_RUN && _heading="Release simulation"
+    printf "${MAGENTA}─── ${BOLD}%s finished${RESET} ${MAGENTA}· %s ─────────────────────${RESET}\n" \
+        "$_heading" "$(date '+%a %b %-d %H:%M:%S %Y')"
     printf "${MAGENTA}    ${BOLD}Elapsed:${RESET} %s\n\n" "$elapsed_str"
 }
 
