@@ -85,8 +85,8 @@ def _security_mode_env_and_volumes(
 
                 warn_user(
                     "gate",
-                    "Gate server unreachable; falling back to upstream clone. "
-                    "Gatekeeping is bypassed for this task.",
+                    "Gate server unreachable; cloning directly from upstream. "
+                    "This is safe — online mode does not require the gate.",
                 )
             else:
                 port = get_gate_server_port(cfg)
