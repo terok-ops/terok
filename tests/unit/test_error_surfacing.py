@@ -486,7 +486,7 @@ class TestEnvironmentWarnings:
         assert capsys.readouterr().err == ""
 
     def test_gate_fallback_warns(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Gate server unreachable triggers a bypass warning on stderr."""
+        """Gate server unreachable triggers an informational warning on stderr."""
         from terok.lib.orchestration.environment import _security_mode_env_and_volumes
 
         mock_project = MagicMock()
@@ -518,4 +518,4 @@ class TestEnvironmentWarnings:
 
         err = capsys.readouterr().err
         assert "Gate server unreachable" in err
-        assert "bypassed" in err.lower()
+        assert "online mode" in err.lower()
