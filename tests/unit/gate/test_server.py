@@ -31,7 +31,7 @@ from terok_sandbox.gate.server import (
 from tests.testfs import NONEXISTENT_TOKENS_PATH
 from tests.testnet import GATE_PORT, LOCALHOST_PEER
 
-VALID_TOKEN_DATA = {"validtoken": {"project": "proj-a", "task": "1"}}
+VALID_TOKEN_DATA = {"validtoken": {"scope": "proj-a", "task": "1"}}
 SUCCESS_CGI_RESPONSE = b"Status: 200 OK\r\nContent-Type: text/plain\r\n\r\nok"
 
 
@@ -139,12 +139,12 @@ class TestTokenStore:
 
     def test_mtime_reload(self) -> None:
         """Token store reloads when file mtime changes."""
-        with token_store_file({"t1": {"project": "p1", "task": "1"}}) as token_file:
+        with token_store_file({"t1": {"scope": "p1", "task": "1"}}) as token_file:
             store = TokenStore(token_file)
             assert store.validate("t1") == "p1"
 
             time.sleep(0.05)
-            token_file.write_text(json.dumps({"t2": {"project": "p2", "task": "2"}}))
+            token_file.write_text(json.dumps({"t2": {"scope": "p2", "task": "2"}}))
             stat_result = token_file.stat()
             os.utime(token_file, (stat_result.st_atime, stat_result.st_mtime + 1))
 
@@ -154,7 +154,7 @@ class TestTokenStore:
     def test_malformed_token_entry_skipped(self) -> None:
         """Token entries with wrong structure are ignored."""
         with token_store_file(
-            {"bad": "not-a-dict", "ok": {"project": "p", "task": "1"}}
+            {"bad": "not-a-dict", "ok": {"scope": "p", "task": "1"}}
         ) as token_file:
             store = TokenStore(token_file)
             assert store.validate("bad") is None
@@ -165,7 +165,7 @@ class TestValidateTokenData:
     """Tests for _validate_token_data."""
 
     def test_valid_data(self) -> None:
-        data = {"t1": {"project": "p", "task": "1"}}
+        data = {"t1": {"scope": "p", "task": "1"}}
         assert _validate_token_data(data) == data
 
     @pytest.mark.parametrize(
@@ -174,10 +174,10 @@ class TestValidateTokenData:
             ([1, 2], {}),
             ("string", {}),
             (
-                {"good": {"project": "p", "task": "1"}, "bad": "string"},
-                {"good": {"project": "p", "task": "1"}},
+                {"good": {"scope": "p", "task": "1"}, "bad": "string"},
+                {"good": {"scope": "p", "task": "1"}},
             ),
-            ({"no_task": {"project": "p"}, "no_proj": {"task": "1"}}, {}),
+            ({"no_task": {"scope": "p"}, "no_scope": {"task": "1"}}, {}),
         ],
         ids=["non-dict-list", "non-dict-string", "skip-non-dict-values", "skip-missing-fields"],
     )
@@ -322,7 +322,7 @@ class TestAuth:
             ("/proj-b.git/info/refs", "validtoken", 403),
             ("/invalid/path", "validtoken", 404),
         ],
-        ids=["no-auth", "wrong-token", "wrong-project", "invalid-path"],
+        ids=["no-auth", "wrong-token", "wrong-scope", "invalid-path"],
     )
     def test_auth_failures(self, path: str, token: str | None, expected: int) -> None:
         code, _handler = make_request(path, token=token)
@@ -330,7 +330,7 @@ class TestAuth:
 
     @unittest.mock.patch("subprocess.Popen")
     def test_valid_auth_delegates_to_cgi(self, mock_popen: unittest.mock.Mock) -> None:
-        """Valid token + matching project delegates to git http-backend."""
+        """Valid token + matching scope delegates to git http-backend."""
         mock_popen.return_value = make_cgi_process()
         code, _handler = make_request(
             "/proj-a.git/info/refs?service=git-upload-pack",

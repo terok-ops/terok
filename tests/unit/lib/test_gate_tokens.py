@@ -76,7 +76,7 @@ class TestCreateToken:
         with patched_token_file() as token_path:
             token = create_token("proj-a", "1")
             data = read_token_json(token_path)
-        assert data[token] == {"project": "proj-a", "task": "1"}
+        assert data[token] == {"scope": "proj-a", "task": "1"}
 
     def test_multiple_tokens_coexist(self) -> None:
         with patched_token_file() as token_path:
@@ -116,8 +116,8 @@ class TestAtomicWrite:
     def test_write_creates_parent_dirs(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             token_path = Path(td) / "sub" / "dir" / "tokens.json"
-            _write_tokens(token_path, {"abc": {"project": "p", "task": "1"}})
-            assert read_token_json(token_path) == {"abc": {"project": "p", "task": "1"}}
+            _write_tokens(token_path, {"abc": {"scope": "p", "task": "1"}})
+            assert read_token_json(token_path) == {"abc": {"scope": "p", "task": "1"}}
 
     @pytest.mark.parametrize(
         ("path", "content", "expected"),
@@ -129,13 +129,13 @@ class TestAtomicWrite:
                 Path("tokens.json"),
                 json.dumps(
                     {
-                        "good": {"project": "p", "task": "1"},
+                        "good": {"scope": "p", "task": "1"},
                         "bad_info": "not a dict",
-                        "missing_task": {"project": "p"},
-                        "int_project": {"project": 123, "task": "1"},
+                        "missing_task": {"scope": "p"},
+                        "int_scope": {"scope": 123, "task": "1"},
                     }
                 ),
-                {"good": {"project": "p", "task": "1"}},
+                {"good": {"scope": "p", "task": "1"}},
             ),
         ],
         ids=["missing", "corrupt-json", "non-dict-json", "malformed-entries"],
@@ -158,8 +158,8 @@ class TestAtomicWrite:
         """Verify that _write_tokens uses atomic replacement semantics."""
         with tempfile.TemporaryDirectory() as td:
             token_path = Path(td) / "tokens.json"
-            _write_tokens(token_path, {"t1": {"project": "p", "task": "1"}})
-            _write_tokens(token_path, {"t2": {"project": "p", "task": "2"}})
+            _write_tokens(token_path, {"t1": {"scope": "p", "task": "1"}})
+            _write_tokens(token_path, {"t2": {"scope": "p", "task": "2"}})
             data = read_token_json(token_path)
-            assert data == {"t2": {"project": "p", "task": "2"}}
+            assert data == {"t2": {"scope": "p", "task": "2"}}
             assert list(Path(td).glob("*.tmp")) == []
