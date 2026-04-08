@@ -8,3 +8,6 @@ frame  # noqa
 # Re-exported from terok_shield for public API consumers.
 NftNotFoundError  # noqa
 ShieldState  # noqa
+# TuiNotifier.notify() must accept these for Notifier protocol compatibility.
+hints  # noqa
+app_icon  # noqa

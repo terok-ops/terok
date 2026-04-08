@@ -16,6 +16,7 @@ import sys
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
+    clearance,
     completions,
     credentials,
     dbus,
@@ -48,6 +49,7 @@ _DISPATCHERS = [
     wire_dispatch,
     shield.dispatch,
     dbus.dispatch,
+    clearance.dispatch,
     sickbay.dispatch,
     info.dispatch,
     completions.dispatch,
@@ -113,6 +115,7 @@ def main() -> None:
     image.register(sub)
     shield.register(sub)
     dbus.register(sub)
+    clearance.register(sub)
     sickbay.register(sub)
     info.register(sub)
     completions.register(sub)

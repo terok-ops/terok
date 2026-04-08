@@ -4,7 +4,7 @@
 """Dockerfile generation, image building, and build-context hashing.
 
 L0 (base dev) and L1 (agent CLI) image builds are delegated to
-``terok_agent.build``.  This module owns L2 (project customisation)
+``terok_agent.container.build``.  This module owns L2 (project customisation)
 rendering and the project-level build orchestration that ties all
 three layers together.
 """
@@ -149,7 +149,7 @@ def _render_all_dockerfiles(project: ProjectConfig) -> dict[str, str]:
     L0 and L1 are rendered by terok-agent; L2 is rendered locally.
     Returns name→content mapping for the build context.
     """
-    from terok_agent.build import render_l0, render_l1
+    from terok_agent.container.build import render_l0, render_l1
 
     return {
         "L0.Dockerfile": render_l0(project.docker_base_image),

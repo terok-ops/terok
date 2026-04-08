@@ -33,7 +33,7 @@ def docker_project(project_id: str, *, security_class: str = "online") -> Iterat
 
 def _mock_base_images(base_image: str = "ubuntu:24.04") -> ImageSet:
     """Return a mock ImageSet matching the default base image."""
-    from terok_agent.build import l0_image_tag, l1_image_tag
+    from terok_agent.container.build import l0_image_tag, l1_image_tag
 
     return ImageSet(l0=l0_image_tag(base_image), l1=l1_image_tag(base_image))
 

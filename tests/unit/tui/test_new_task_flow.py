@@ -752,7 +752,7 @@ class TestOnLaunchScreenResultTitle:
                 {"get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"])},
             ),
             mock.patch.dict(
-                "terok_agent.headless_providers.HEADLESS_PROVIDERS",
+                "terok_agent.provider.headless.HEADLESS_PROVIDERS",
                 {"claude": fake_provider},
                 clear=True,
             ),
@@ -790,7 +790,7 @@ class TestOnLaunchScreenResultTitle:
                 {"get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"])},
             ),
             mock.patch.dict(
-                "terok_agent.headless_providers.HEADLESS_PROVIDERS",
+                "terok_agent.provider.headless.HEADLESS_PROVIDERS",
                 {},
                 clear=True,
             ),
