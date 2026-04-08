@@ -51,6 +51,7 @@ _FIELD_DOCS: dict[str, str] = {
     "ssh.key_name": "SSH key filename (default: ``id_ed25519_<project_id>``)",
     "ssh.host_dir": "Host directory for SSH key storage (keys served via SSH agent proxy, not mounted)",
     "ssh.config_template": "Path to an SSH config template file (supports ``{{IDENTITY_FILE}}``, ``{{KEY_NAME}}``, ``{{PROJECT_ID}}``)",
+    "ssh.allow_host_keys": "Allow fallback to ``~/.ssh`` host keys for gate operations (default: ``false``)",
     # tasks
     "tasks.root": "Override task workspace root directory",
     "tasks.name_categories": "Word categories for auto-generated task names (string or list of strings)",

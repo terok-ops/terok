@@ -174,14 +174,18 @@ def make_git_gate(config: ProjectConfig) -> GitGate:
     """Construct a :class:`GitGate` from a :class:`ProjectConfig` (adapter factory).
 
     Injects ``validate_gate_upstream_match`` as the gate validation callback.
+    Resolves *ssh_host_dir* via :func:`make_sandbox_config` so the gate looks
+    in terok's state directory, not sandbox's standalone default.
     """
+    ssh_dir = config.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / config.id)
     return GitGate(
         scope=config.id,
         gate_path=config.gate_path,
         upstream_url=config.upstream_url,
         default_branch=config.default_branch,
-        ssh_host_dir=config.ssh_host_dir,
+        ssh_host_dir=ssh_dir,
         ssh_key_name=config.ssh_key_name,
+        allow_host_keys=config.ssh_allow_host_keys,
         validate_gate_fn=validate_gate_upstream_match,
     )
 

@@ -121,6 +121,10 @@ class RawSSHSection(BaseModel):
     key_name: str | None = None
     host_dir: str | None = Field(default=None, description="Host-side SSH directory")
     config_template: str | None = None
+    allow_host_keys: bool = Field(
+        default=False,
+        description="Allow fallback to ~/.ssh host keys for gate operations",
+    )
 
 
 class RawTasksSection(BaseModel):
