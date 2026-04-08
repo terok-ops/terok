@@ -257,20 +257,27 @@ class ClearanceScreen(screen.Screen[None]):
     def _send_verdict(self, action: str) -> None:
         """Invoke the notifier callback for the currently highlighted item."""
         if not self._notifier:
+            self.app.notify("DEBUG: notifier is None")
             return
         try:
             pending_list = self.query_one(_ID_PENDING, ListView)
         except NoMatches:
+            self.app.notify("DEBUG: no pending list widget")
             return
         item = pending_list.highlighted_child
         if item is None:
             self.app.notify("No pending request selected.")
             return
         nid = getattr(item, "clearance_nid", None)
-        if nid is None or nid not in self._pending:
+        if nid is None:
+            self.app.notify("DEBUG: item has no clearance_nid")
+            return
+        if nid not in self._pending:
+            self.app.notify(f"DEBUG: nid={nid} not in pending={list(self._pending.keys())}")
             return
         try:
             self._notifier.invoke_action(nid, action)
+            self.app.notify(f"DEBUG: invoke_action({nid}, {action}) called")
         except Exception as exc:
             _log.debug("Failed to send %s verdict for %s: %s", action, nid, exc)
             self.app.notify(f"Failed to send verdict: {exc}")
