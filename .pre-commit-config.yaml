@@ -1,0 +1,11 @@
+# Pre-commit hooks — runs automatically before every git commit.
+# Install once:  pre-commit install  (or:  make install-dev)
+# Manual run:    pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format

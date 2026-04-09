@@ -132,6 +132,7 @@ install:
 # Install all dependencies (dev, test, docs)
 install-dev:
 	poetry install --with dev,test,docs
+	poetry run pre-commit install
 
 # Build documentation locally
 docs:
