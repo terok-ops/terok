@@ -15,13 +15,17 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _reset_umbrella_config_cache() -> Iterator[None]:
-    """Clear the umbrella path resolver config cache between tests."""
+def _reset_config_caches() -> Iterator[None]:
+    """Clear config caches between tests to prevent cross-test pollution."""
     import terok_sandbox.paths as _sandbox_paths
 
+    import terok.lib.core.config as _config
+
     _sandbox_paths._config_paths_cache = None
+    _config._validated_config_cache = None
     yield
     _sandbox_paths._config_paths_cache = None
+    _config._validated_config_cache = None
 
 
 @pytest.fixture(autouse=True)

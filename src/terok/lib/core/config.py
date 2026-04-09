@@ -3,7 +3,6 @@
 
 """Global configuration, directory helpers, and preset/image path resolution."""
 
-import logging
 import os
 import sys
 from collections.abc import Callable
@@ -14,13 +13,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..util.yaml import YAMLError, load as _yaml_load
-from .paths import (
-    config_root as _config_root_base,
-    credentials_root as _credentials_root_base,
-)
+from .paths import config_root as _config_root_base
 from .yaml_schema import RawGlobalConfig
-
-logger = logging.getLogger(__name__)
 
 # ---------- Prefix & roots ----------
 
@@ -98,33 +92,44 @@ def global_config_path() -> Path:
 # ---------- Global config (cached) ----------
 
 
+_validated_config_cache: RawGlobalConfig | None = None
+
+
 def _load_validated() -> RawGlobalConfig:
-    """Load and validate the global config, returning a typed model."""
+    """Load and validate the global config, returning a typed model (cached).
+
+    Warnings are emitted once on first load; subsequent calls return the
+    cached result without re-parsing or re-warning.
+    """
+    global _validated_config_cache  # noqa: PLW0603
+    if _validated_config_cache is not None:
+        return _validated_config_cache
+
     from ..util.logging_utils import warn_user
 
     cfg_path = global_config_path()
     if not cfg_path.is_file():
-        return RawGlobalConfig()
+        _validated_config_cache = RawGlobalConfig()
+        return _validated_config_cache
     try:
         raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError) as exc:
         warn_user("config", f"Cannot read {cfg_path}: {exc}. Using defaults.")
-        logger.warning("Failed to read global config %s: %s", cfg_path, exc, exc_info=True)
-        return RawGlobalConfig()
+        _validated_config_cache = RawGlobalConfig()
+        return _validated_config_cache
     except YAMLError as exc:
         warn_user("config", f"Malformed YAML in {cfg_path}: {exc}. Using defaults.")
-        logger.warning("Malformed YAML in global config %s: %s", cfg_path, exc, exc_info=True)
-        return RawGlobalConfig()
+        _validated_config_cache = RawGlobalConfig()
+        return _validated_config_cache
     try:
-        return RawGlobalConfig.model_validate(raw)
+        _validated_config_cache = RawGlobalConfig.model_validate(raw)
     except ValidationError as exc:
-        # Show first few field errors for actionability
         field_errors = "; ".join(
             f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in exc.errors()[:3]
         )
         warn_user("config", f"Invalid config {cfg_path}: {field_errors}. Using defaults.")
-        logger.warning("Invalid global config %s: %s", cfg_path, exc, exc_info=True)
-        return RawGlobalConfig()
+        _validated_config_cache = RawGlobalConfig()
+    return _validated_config_cache
 
 
 def load_global_config() -> dict[str, Any]:
@@ -318,10 +323,15 @@ def credentials_dir() -> Path:
     Precedence:
     - ``TEROK_CREDENTIALS_DIR`` environment variable.
     - Global config ``credentials.dir``.
-    - ``credentials_root()`` → ``~/.local/share/terok/credentials``
-      (or ``/var/lib/terok/credentials`` for root).
+    - Umbrella root + ``credentials/`` (honors ``paths.root``).
     """
-    return _resolve_path("TEROK_CREDENTIALS_DIR", ("credentials", "dir"), _credentials_root_base)
+    from terok_sandbox.paths import umbrella_state_dir
+
+    return _resolve_path(
+        "TEROK_CREDENTIALS_DIR",
+        ("credentials", "dir"),
+        lambda: umbrella_state_dir("credentials"),
+    )
 
 
 def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
