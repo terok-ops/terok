@@ -104,6 +104,14 @@ def effective_ssh_key_name(project: ProjectConfig, key_type: str = "ed25519") ->
     return f"id_{algo}_{project.id}"
 
 
+_PROJECT_ID_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
+
+
+def is_valid_project_id(project_id: str) -> bool:
+    """Return whether *project_id* matches the ``[a-z0-9][a-z0-9_-]*`` contract."""
+    return bool(project_id) and _PROJECT_ID_RE.fullmatch(project_id) is not None
+
+
 def validate_project_id(project_id: str) -> None:
     """Ensure a project ID is safe for use as a directory and OCI image name.
 
@@ -111,9 +119,7 @@ def validate_project_id(project_id: str) -> None:
     separators or traversal sequences, or uses characters outside
     ``[a-z0-9_-]``.
     """
-    if not project_id:
-        raise SystemExit("Project ID must not be empty")
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", project_id):
+    if not is_valid_project_id(project_id):
         raise SystemExit(
             f"Invalid project ID '{project_id}': "
             "must start with a lowercase letter or digit, followed by lowercase letters, "

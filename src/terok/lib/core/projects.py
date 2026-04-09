@@ -32,6 +32,7 @@ from .project_model import (  # noqa: F401 — re-exported public API
     PresetInfo,
     ProjectConfig,
     effective_ssh_key_name,
+    is_valid_project_id,
     validate_project_id,
 )
 from .yaml_schema import RawGlobalGitSection, RawProjectYaml
@@ -145,6 +146,7 @@ def _build_project_config(
 ) -> ProjectConfig:
     """Transform a validated raw YAML model + resolved identity into a flat ProjectConfig."""
     pid = raw.project.id or project_id
+    validate_project_id(pid)
     sec = raw.project.security_class
     sr = state_dir()
 
@@ -340,7 +342,7 @@ def list_projects() -> list[ProjectConfig]:
         for d in root.iterdir():
             if not d.is_dir():
                 continue
-            if (d / _PROJECT_YML).is_file():
+            if (d / _PROJECT_YML).is_file() and is_valid_project_id(d.name):
                 ids.add(d.name)
 
     projects: list[ProjectConfig] = []

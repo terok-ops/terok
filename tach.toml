@@ -449,6 +449,7 @@ expose = [
     "ProjectConfig",
     "PresetInfo",
     "effective_ssh_key_name",
+    "is_valid_project_id",
     "validate_project_id",
 ]
 from = ["terok.lib.core.project_model"]
