@@ -86,7 +86,6 @@ _FIELD_DOCS: dict[str, str] = {
     # paths
     "paths.root": "Umbrella state root shared by all ecosystem packages "
     "(Podman model — one config, multiple readers)",
-    "paths.state_dir": "**Deprecated** — alias for ``paths.root``, accepted for one release cycle",
     "paths.sandbox_live_dir": "Container-writable runtime data (tasks, agent mounts). "
     "For hardened installs, mount the target with ``noexec,nosuid,nodev``",
     "paths.build_dir": "Build artifacts directory (generated Dockerfiles)",

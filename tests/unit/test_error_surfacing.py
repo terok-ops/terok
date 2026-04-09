@@ -280,8 +280,8 @@ class TestResolvePathFallback:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """ValueError during config key lookup falls back to default path."""
-        # Write a config file with a non-UTF-8-safe path value that triggers ValueError
-        bad_file = write_config(tmp_path, "paths:\n  state_dir: null\n")
+        # Write a config file with a null path value that triggers fallback
+        bad_file = write_config(tmp_path, "paths:\n  build_dir: null\n")
         monkeypatch.setenv("TEROK_CONFIG_FILE", str(bad_file))
         # _resolve_path should fall back to default without raising
         result = cfg.state_dir()
