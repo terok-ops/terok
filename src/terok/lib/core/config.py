@@ -182,7 +182,7 @@ def _resolve_path(
 
 
 def state_dir() -> Path:
-    """Terok core state directory (host-only: build, archive, metadata).
+    """Terok core state directory (host-only: build artifacts, task metadata).
 
     Precedence:
     - ``TEROK_STATE_DIR`` environment variable (per-package escape hatch).
