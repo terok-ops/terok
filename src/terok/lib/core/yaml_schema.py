@@ -313,6 +313,7 @@ class RawPathsSection(BaseModel):
 
     state_dir: str | None = None
     build_dir: str | None = None
+    sandbox_live_dir: str | None = None
     user_projects_dir: str | None = None
     user_presets_dir: str | None = None
 

@@ -255,19 +255,21 @@ class TestStoryEnvWiring:
                 "terok_sandbox.credentials.lifecycle.is_daemon_running",
                 return_value=True,
             ),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = sock_path
+            mock_cfg.proxy_port = 18731
             mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
 
             env, volumes = _credential_proxy_env_and_volumes(project, "task-42")
 
         # All stored providers get phantom tokens
         assert "ANTHROPIC_API_KEY" in env
+        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")
         assert "ANTHROPIC_BASE_URL" in env
         # TCP transport — no socket mount needed
         assert volumes == []
-        # Phantom token is a 32-char hex string
-        assert len(env["ANTHROPIC_API_KEY"]) == 32

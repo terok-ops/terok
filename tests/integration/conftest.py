@@ -365,6 +365,12 @@ def terok_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TerokIntegrati
     agent_state = tmp_path / "agent-state"
     agent_state.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TEROK_AGENT_STATE_DIR", str(agent_state))
+    sandbox_live = tmp_path / "sandbox-live"
+    sandbox_state = tmp_path / "sandbox-state"
+    sandbox_live.mkdir(parents=True, exist_ok=True)
+    sandbox_state.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TEROK_SANDBOX_LIVE_DIR", str(sandbox_live))
+    monkeypatch.setenv("TEROK_SANDBOX_STATE_DIR", str(sandbox_state))
     return env
 
 

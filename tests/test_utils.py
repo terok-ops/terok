@@ -59,11 +59,15 @@ def project_env(
         write_project(config_root, project_id, yaml_text)
 
         agent_state_dir = base / "agent"
+        sandbox_live = base / "sandbox-live"
+        sandbox_state = base / "sandbox-state"
         env_vars: dict[str, str] = {
             "TEROK_CONFIG_DIR": str(config_base),
             "TEROK_STATE_DIR": str(state_dir),
             "TEROK_CREDENTIALS_DIR": str(credentials_dir),
             "TEROK_AGENT_STATE_DIR": str(agent_state_dir),
+            "TEROK_SANDBOX_LIVE_DIR": str(sandbox_live),
+            "TEROK_SANDBOX_STATE_DIR": str(sandbox_state),
         }
 
         config_file = None
@@ -74,7 +78,7 @@ def project_env(
 
         gate_dir = None
         if with_gate:
-            gate_dir = state_dir / "gate" / f"{project_id}.git"
+            gate_dir = sandbox_state / "gate" / f"{project_id}.git"
             gate_dir.mkdir(parents=True, exist_ok=True)
 
         if extra_env:

@@ -23,7 +23,7 @@ from terok_sandbox import (
     get_gate_server_port,
 )
 
-from ..core.config import make_sandbox_config
+from ..core.config import make_sandbox_config, sandbox_live_mounts_dir
 from ..core.projects import ProjectConfig
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 
@@ -338,9 +338,9 @@ def _credential_proxy_env_and_volumes(
 
     # Warn about real credential files in shared mounts that will be visible
     # to the container alongside proxy phantom tokens.
-    from terok_agent import mounts_dir, scan_leaked_credentials
+    from terok_agent import scan_leaked_credentials
 
-    leaked = scan_leaked_credentials(mounts_dir())
+    leaked = scan_leaked_credentials(sandbox_live_mounts_dir())
     if leaked:
         import sys
 
@@ -384,7 +384,7 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
         authorship=project.git_authorship,
     )
 
-    from terok_agent import ContainerEnvSpec, assemble_container_env, get_roster, mounts_dir
+    from terok_agent import ContainerEnvSpec, assemble_container_env, get_roster
 
     result = assemble_container_env(
         ContainerEnvSpec(
@@ -404,7 +404,7 @@ def build_task_env_and_volumes(project: ProjectConfig, task_id: str) -> tuple[di
             credential_scope=project.id,
             unrestricted=False,  # task_runners resolves per-provider config
             shared_dir=project.shared_dir,
-            envs_dir=mounts_dir(),
+            envs_dir=sandbox_live_mounts_dir(),
         ),
         get_roster(),
         proxy_bypass=True,  # terok uses richer proxy handling below

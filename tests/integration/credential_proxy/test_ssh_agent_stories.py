@@ -241,9 +241,11 @@ class TestStorySSHAgentEnvWiring:
                 "terok_sandbox.credentials.lifecycle.is_daemon_running",
                 return_value=True,
             ),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = sock_path
             mock_cfg.proxy_port = 18731
@@ -254,7 +256,7 @@ class TestStorySSHAgentEnvWiring:
 
         # SSH agent token should be injected
         assert "TEROK_SSH_AGENT_TOKEN" in env
-        assert len(env["TEROK_SSH_AGENT_TOKEN"]) == 32  # hex token
+        assert env["TEROK_SSH_AGENT_TOKEN"].startswith("terok-p-")
         assert env["TEROK_SSH_AGENT_PORT"] == "18732"
         # Regular proxy vars also present
         assert "ANTHROPIC_API_KEY" in env
@@ -279,9 +281,11 @@ class TestStorySSHAgentEnvWiring:
                 "terok_sandbox.credentials.lifecycle.is_daemon_running",
                 return_value=True,
             ),
-            patch("terok_sandbox.SandboxConfig") as mock_cfg_cls,
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
-            mock_cfg = mock_cfg_cls.return_value
+            mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path
             mock_cfg.proxy_socket_path = sock_path
             mock_cfg.proxy_port = 18731

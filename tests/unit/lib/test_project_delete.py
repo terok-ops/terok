@@ -38,8 +38,10 @@ def build_dir(_env: SimpleNamespace, project_id: str) -> Path:
 
 
 def ssh_dir(env: SimpleNamespace, project_id: str) -> Path:
-    """Create and return the project's SSH keys dir."""
-    target = env.state_dir / "ssh-keys" / project_id
+    """Create and return the project's SSH keys dir (under sandbox state)."""
+    from terok.lib.core.config import make_sandbox_config
+
+    target = make_sandbox_config().ssh_keys_dir / project_id
     target.mkdir(parents=True, exist_ok=True)
     (target / "id_ed25519").write_text("# private key", encoding="utf-8")
     return target
@@ -88,7 +90,8 @@ def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_p
     projects_root = config_base / "projects"
     state_dir = tmp_path / "state"
     envs_dir = tmp_path / "envs"
-    gate_path = state_dir / "gate" / "shared.git"
+    sandbox_state = tmp_path / "sandbox-state"
+    gate_path = sandbox_state / "gate" / "shared.git"
     config_file = tmp_path / "config.yml"
     gate_path.mkdir(parents=True, exist_ok=True)
     envs_dir.mkdir(parents=True, exist_ok=True)
@@ -108,6 +111,7 @@ def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.setenv("TEROK_CONFIG_DIR", str(config_base))
     monkeypatch.setenv("TEROK_STATE_DIR", str(state_dir))
+    monkeypatch.setenv("TEROK_SANDBOX_STATE_DIR", str(sandbox_state))
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(config_file))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
 

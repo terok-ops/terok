@@ -86,14 +86,22 @@ def runner_env_vars(base: Path, config_file: Path) -> dict[str, str]:
         "TEROK_STATE_DIR": str(base / "state"),
         "TEROK_AGENT_STATE_DIR": str(base / "agent"),
         "TEROK_CONFIG_FILE": str(config_file),
+        "TEROK_SANDBOX_LIVE_DIR": str(base / "sandbox-live"),
+        "TEROK_SANDBOX_STATE_DIR": str(base / "sandbox-state"),
     }
 
 
-def task_paths(state_dir: Path, project_id: str, task_id: str = "1") -> tuple[Path, Path]:
-    """Return ``(agent_config_dir, meta_path)`` for a task."""
+def task_paths(base: Path, project_id: str, task_id: str = "1") -> tuple[Path, Path]:
+    """Return ``(agent_config_dir, meta_path)`` for a task.
+
+    agent_config_dir lives under sandbox-live (container-writable),
+    meta_path lives under state (terok-core metadata).
+    """
+    sandbox_live = base / "sandbox-live"
+    state = base / "state"
     return (
-        state_dir / "tasks" / project_id / task_id / "agent-config",
-        state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml",
+        sandbox_live / "tasks" / project_id / task_id / "agent-config",
+        state / "projects" / project_id / "tasks" / f"{task_id}.yml",
     )
 
 
@@ -121,14 +129,14 @@ def write_runner_project(base: Path, project_id: str, extra_yml: str = "") -> Pa
     return config_file
 
 
-def read_task_agents(state_dir: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
+def read_task_agents(base: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
     """Load ``agents.json`` for a task."""
-    return json.loads((task_paths(state_dir, project_id, task_id)[0] / "agents.json").read_text())
+    return json.loads((task_paths(base, project_id, task_id)[0] / "agents.json").read_text())
 
 
-def read_task_meta(state_dir: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
+def read_task_meta(base: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
     """Load task metadata YAML for a task."""
-    return yaml_load(task_paths(state_dir, project_id, task_id)[1].read_text())
+    return yaml_load(task_paths(base, project_id, task_id)[1].read_text())
 
 
 def prepare_agent_config(
@@ -305,7 +313,6 @@ class TestTaskRunHeadless:
         """task_run_headless creates a task with prompt.txt in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
             result = run_headless_request(
                 base,
                 write_runner_project(base, "proj_hl"),
@@ -313,7 +320,7 @@ class TestTaskRunHeadless:
             )
 
             assert result.task_id == "1"
-            agent_config_dir, _meta_path = task_paths(state_dir, "proj_hl")
+            agent_config_dir, _meta_path = task_paths(base, "proj_hl")
             prompt_file = agent_config_dir / "prompt.txt"
             assert prompt_file.is_file()
             assert prompt_file.read_text() == "Fix the auth bug"
@@ -333,14 +340,14 @@ class TestTaskRunHeadless:
         """task_run_headless generates terok-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             run_headless_request(
                 base,
                 write_runner_project(base, "proj_wrap"),
                 HeadlessRunRequest("proj_wrap", "test"),
             )
 
-            wrapper = task_paths(state_dir, "proj_wrap")[0] / "terok-agent.sh"
+            wrapper = task_paths(base, "proj_wrap")[0] / "terok-agent.sh"
             assert wrapper.is_file()
             content = wrapper.read_text()
             assert "claude()" in content
@@ -356,7 +363,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_hook", "test"),
             )
 
-            settings = base / "agent" / "mounts" / "_claude-config" / "settings.json"
+            settings = base / "sandbox-live" / "mounts" / "_claude-config" / "settings.json"
             assert settings.is_file()
             assert "SessionStart" in json.loads(settings.read_text())["hooks"]
 
@@ -364,14 +371,14 @@ class TestTaskRunHeadless:
         """task_run_headless includes default subagents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             run_headless_request(
                 base,
                 write_runner_project(base, "proj_agents", DEFAULT_SUBAGENTS_YAML),
                 HeadlessRunRequest("proj_agents", "test"),
             )
 
-            agents_data = read_task_agents(state_dir, "proj_agents")
+            agents_data = read_task_agents(base, "proj_agents")
             assert isinstance(agents_data, dict)
             assert "reviewer" in agents_data
             assert "debugger" not in agents_data
@@ -381,14 +388,14 @@ class TestTaskRunHeadless:
         """task_run_headless includes selected non-default agents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             run_headless_request(
                 base,
                 write_runner_project(base, "proj_sel", DEFAULT_SUBAGENTS_YAML),
                 HeadlessRunRequest("proj_sel", "test", agents=["debugger"]),
             )
 
-            agents_data = read_task_agents(state_dir, "proj_sel")
+            agents_data = read_task_agents(base, "proj_sel")
             assert "reviewer" in agents_data
             assert "debugger" in agents_data
 
@@ -396,7 +403,7 @@ class TestTaskRunHeadless:
         """CLI model/max_turns appear in headless bash command, not in wrapper."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             result = run_headless_request(
                 base,
                 write_runner_project(base, "proj_flags"),
@@ -408,7 +415,7 @@ class TestTaskRunHeadless:
             assert "--max-turns 100" in bash_cmd
             assert "--terok-timeout" in bash_cmd
 
-            wrapper = task_paths(state_dir, "proj_flags")[0] / "terok-agent.sh"
+            wrapper = task_paths(base, "proj_flags")[0] / "terok-agent.sh"
             content = wrapper.read_text()
             assert "--model" not in content
             assert "--max-turns" not in content
@@ -429,14 +436,14 @@ class TestTaskRunHeadless:
         """task_run_headless sets mode=run and updates status on completion."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             run_headless_request(
                 base,
                 write_runner_project(base, "proj_meta"),
                 HeadlessRunRequest("proj_meta", "test"),
             )
 
-            meta = read_task_meta(state_dir, "proj_meta")
+            meta = read_task_meta(base, "proj_meta")
             assert meta["mode"] == "run"
             assert meta["exit_code"] == 0
 
@@ -477,7 +484,7 @@ class TestTaskRunHeadless:
         """task_run_headless reads subagents from YAML config file."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             agent_config = base / "my-agent-config.yml"
             agent_config.write_text(
                 "subagents:\n"
@@ -493,7 +500,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_cfgfile", "test", config_path=str(agent_config)),
             )
 
-            agents_data = read_task_agents(state_dir, "proj_cfgfile")
+            agents_data = read_task_agents(base, "proj_cfgfile")
             assert "extra-agent" in agents_data
             assert agents_data["extra-agent"]["prompt"] == "I am an extra agent"
 
@@ -515,7 +522,7 @@ class TestTaskFollowupHeadless:
         """Follow-up replaces prompt.txt and archives old prompt to history."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             task_id = self._create_completed_task(base, "proj_fu")
 
             run_followup_request(
@@ -526,7 +533,7 @@ class TestTaskFollowupHeadless:
                 container_state=["exited", "running"],
             )
 
-            agent_cfg, _meta_path = task_paths(state_dir, "proj_fu")
+            agent_cfg, _meta_path = task_paths(base, "proj_fu")
             assert (agent_cfg / "prompt.txt").read_text() == "fix the remaining tests"
             history = (agent_cfg / "prompt-history.txt").read_text()
             assert "initial prompt" in history
@@ -548,7 +555,7 @@ class TestTaskFollowupHeadless:
         """Follow-up rejects tasks that aren't headless (mode != 'run')."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             config_file = write_runner_project(base, "proj_mode")
 
             from terok.lib.orchestration.tasks import task_new
@@ -558,7 +565,7 @@ class TestTaskFollowupHeadless:
             ):
                 with mock_git_config():
                     task_id = task_new("proj_mode")
-                    _agent_cfg, meta_path = task_paths(state_dir, "proj_mode", task_id)
+                    _agent_cfg, meta_path = task_paths(base, "proj_mode", task_id)
                     meta = yaml_load(meta_path.read_text())
                     meta["mode"] = "cli"
                     meta_path.write_text(yaml_dump(meta))
@@ -571,7 +578,7 @@ class TestTaskFollowupHeadless:
         """Follow-up rejects tasks that are still running."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             config_file = write_runner_project(base, "proj_run")
 
             from terok.lib.orchestration.tasks import task_new
@@ -581,7 +588,7 @@ class TestTaskFollowupHeadless:
             ):
                 with mock_git_config():
                     task_id = task_new("proj_run")
-                    _agent_cfg, meta_path = task_paths(state_dir, "proj_run", task_id)
+                    _agent_cfg, meta_path = task_paths(base, "proj_run", task_id)
                     meta = yaml_load(meta_path.read_text())
                     meta["mode"] = "run"
                     meta_path.write_text(yaml_dump(meta))
@@ -620,21 +627,21 @@ class TestTaskFollowupHeadless:
         """Follow-up updates task status to running then completed."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             task_id = self._create_completed_task(base, "proj_meta2")
 
             run_followup_request(
                 base, "proj_meta2", task_id, "continue", container_state=["exited", "running"]
             )
 
-            meta = read_task_meta(state_dir, "proj_meta2", task_id)
+            meta = read_task_meta(base, "proj_meta2", task_id)
             assert meta["exit_code"] == 0
 
     def test_followup_no_follow_mode(self) -> None:
         """Follow-up with follow=False prints detached info and skips wait."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            state_dir = base / "state"
+
             task_id = self._create_completed_task(base, "proj_meta2")
 
             result = run_followup_request(
@@ -649,7 +656,7 @@ class TestTaskFollowupHeadless:
             result.wait_mock.assert_not_called()
             assert "detached" in result.output.lower()
 
-            meta = read_task_meta(state_dir, "proj_meta2", task_id)
+            meta = read_task_meta(base, "proj_meta2", task_id)
             assert meta["exit_code"] is None
 
     def test_followup_container_not_found(self) -> None:

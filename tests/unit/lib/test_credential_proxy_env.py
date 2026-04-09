@@ -315,7 +315,10 @@ class TestCredentialProxyEnv:
             patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
             patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok_agent.mounts_dir", return_value=mounts_base),
+            patch(
+                "terok.lib.orchestration.environment.sandbox_live_mounts_dir",
+                return_value=mounts_base,
+            ),
             patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
         ):
             mock_cfg = mock_cfg_fn.return_value

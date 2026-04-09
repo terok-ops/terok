@@ -57,6 +57,7 @@ from ..core.config import (
     credentials_dir,
     make_sandbox_config,
     projects_dir,
+    sandbox_live_dir,
     state_dir,
     user_projects_dir,
 )
@@ -95,6 +96,8 @@ def _is_under_terok_root(path: Path) -> bool:
         projects_dir(),
         user_projects_dir(),
         state_dir(),
+        sandbox_live_dir(),
+        make_sandbox_config().state_dir,
         credentials_dir(),
         build_dir(),
     ]

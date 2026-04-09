@@ -58,13 +58,13 @@ class TestProxyEnvIntegration:
 
         # Claude phantom token
         assert "ANTHROPIC_API_KEY" in env
-        assert len(env["ANTHROPIC_API_KEY"]) == 32
+        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")
         # Claude base URL override (TCP transport via host.containers.internal)
         assert "ANTHROPIC_BASE_URL" in env
         assert "host.containers.internal" in env["ANTHROPIC_BASE_URL"]
         # Vibe phantom token (per-provider — distinct from Claude's)
         assert "MISTRAL_API_KEY" in env
-        assert len(env["MISTRAL_API_KEY"]) == 32
+        assert env["MISTRAL_API_KEY"].startswith("terok-p-")
         # TCP transport — no socket volume mounts
         assert volumes == []
 
@@ -162,10 +162,14 @@ class TestProxyEnvIntegration:
                 tokens.append(env["ANTHROPIC_API_KEY"])
 
         assert tokens[0] != tokens[1]
-        assert len(tokens[0]) == 32
+        assert tokens[0].startswith("terok-p-")
 
-    def test_oauth_credential_uses_oauth_phantom_env(self, tmp_path: Path) -> None:
-        """OAuth credentials inject CLAUDE_CODE_OAUTH_TOKEN, not ANTHROPIC_API_KEY."""
+    def test_oauth_credential_uses_base_url_only(self, tmp_path: Path) -> None:
+        """Claude OAuth skips phantom token env vars; only ANTHROPIC_BASE_URL is set.
+
+        Claude Code determines subscription tier from .credentials.json, not env
+        vars — so the proxy injects a static marker file instead of a phantom token.
+        """
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -198,15 +202,15 @@ class TestProxyEnvIntegration:
 
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
-        assert "CLAUDE_CODE_OAUTH_TOKEN" in env
-        assert len(env["CLAUDE_CODE_OAUTH_TOKEN"]) == 32
+        # Claude OAuth: no phantom token env vars — marker file handles auth
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
         assert "ANTHROPIC_API_KEY" not in env
-        assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
-        # Socket flag AND base URL — SDK needs base URL for HTTP on Node.js
+        assert "ANTHROPIC_UNIX_SOCKET" not in env
+        # Base URL is still set so the SDK routes through the proxy
         assert "ANTHROPIC_BASE_URL" in env
 
     def test_oauth_credential_direct_transport(self, tmp_path: Path) -> None:
-        """OAuth + direct transport → CLAUDE_CODE_OAUTH_TOKEN + ANTHROPIC_BASE_URL."""
+        """OAuth + direct transport → ANTHROPIC_BASE_URL only (no phantom token)."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -239,8 +243,8 @@ class TestProxyEnvIntegration:
 
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
-        assert "CLAUDE_CODE_OAUTH_TOKEN" in env
-        assert len(env["CLAUDE_CODE_OAUTH_TOKEN"]) == 32
+        # Claude OAuth: no phantom token env vars — marker file handles auth
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
         assert "ANTHROPIC_API_KEY" not in env
         assert "ANTHROPIC_BASE_URL" in env
         assert "ANTHROPIC_UNIX_SOCKET" not in env

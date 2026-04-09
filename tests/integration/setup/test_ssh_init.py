@@ -49,7 +49,7 @@ class TestSshInit:
         first = terok_env.run_cli("ssh-init", "demo")
         second = terok_env.run_cli("ssh-init", "demo")
 
-        ssh_dir = terok_env.state_root / "ssh-keys" / "demo"
+        ssh_dir = terok_env.sandbox_state_root / "ssh-keys" / "demo"
         private_key = ssh_dir / "id_ed25519_demo"
         public_key = ssh_dir / "id_ed25519_demo.pub"
         config_path = ssh_dir / "config"

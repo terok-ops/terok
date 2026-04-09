@@ -90,7 +90,7 @@ def test_sync_project_gate_https_clone() -> None:
     with project_env(
         git_project_yaml(project_id, default_branch=None), project_id=project_id
     ) as ctx:
-        gate_dir = ctx.state_dir / "gate" / f"{project_id}.git"
+        gate_dir = ctx.base / "sandbox-state" / "gate" / f"{project_id}.git"
 
         def run_side_effect(cmd: list[str], **kwargs: object) -> MagicMock:
             if cmd[:3] == ["git", "clone", "--mirror"]:

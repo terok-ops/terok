@@ -57,7 +57,7 @@ def resolve_security_env(
         patch("terok.lib.orchestration.environment.get_gate_server_port", return_value=GATE_PORT),
         patch(
             "terok.lib.orchestration.environment.get_gate_base_path",
-            return_value=ctx.state_dir / "gate",
+            return_value=ctx.base / "sandbox-state" / "gate",
         ),
         patch("terok.lib.orchestration.environment.create_token", return_value=token),
     ):

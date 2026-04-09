@@ -581,6 +581,8 @@ expose = [
     "projects_dir",
     "state_dir",
     "gate_repos_dir",
+    "sandbox_live_dir",
+    "sandbox_live_mounts_dir",
     "build_dir",
     "archive_dir",
     "user_projects_dir",

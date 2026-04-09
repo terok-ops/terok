@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.core.config import build_dir, state_dir
+from terok.lib.core.config import build_dir, make_sandbox_config, sandbox_live_dir
 from terok.lib.core.projects import list_projects, load_project
 from terok.lib.domain.project_state import get_project_state
 from tests.test_utils import project_env, write_project
@@ -55,8 +55,11 @@ class TestProject:
             project = load_project(project_id)
             assert project.id == project_id
             assert project.security_class == "gatekeeping"
-            assert project.tasks_root == (state_dir() / "tasks" / project_id).resolve()
-            assert project.gate_path == (state_dir() / "gate" / f"{project_id}.git").resolve()
+            assert project.tasks_root == (sandbox_live_dir() / "tasks" / project_id).resolve()
+            assert (
+                project.gate_path
+                == (make_sandbox_config().gate_base_path / f"{project_id}.git").resolve()
+            )
             assert project.staging_root == (build_dir() / project_id).resolve()
             assert project.git_authorship == "agent-human"
 
@@ -252,7 +255,7 @@ class TestProject:
             ssh_dir.mkdir(parents=True, exist_ok=True)
             (ssh_dir / "config").write_text("", encoding="utf-8")
 
-            gate_dir = state_dir() / "gate" / f"{project_id}.git"
+            gate_dir = make_sandbox_config().gate_base_path / f"{project_id}.git"
             gate_dir.mkdir(parents=True, exist_ok=True)
 
             mock_sandbox_cfg = unittest.mock.MagicMock()

@@ -71,6 +71,16 @@ class TerokIntegrationEnv:
         return self.user_projects_root if scope == "user" else self.system_projects_root
 
     @property
+    def sandbox_live_root(self) -> Path:
+        """Return the isolated sandbox-live directory."""
+        return self.base_dir / "sandbox-live"
+
+    @property
+    def sandbox_state_root(self) -> Path:
+        """Return the isolated sandbox-state directory."""
+        return self.base_dir / "sandbox-state"
+
+    @property
     def cli_env(self) -> dict[str, str]:
         """Return environment variables for a real ``python -m terok.cli`` run."""
         env = os.environ.copy()
@@ -83,6 +93,8 @@ class TerokIntegrationEnv:
                 "TEROK_CONFIG_DIR": str(self.system_config_root),
                 "TEROK_STATE_DIR": str(self.state_root),
                 "TEROK_CREDENTIALS_DIR": str(self.credentials_dir),
+                "TEROK_SANDBOX_LIVE_DIR": str(self.sandbox_live_root),
+                "TEROK_SANDBOX_STATE_DIR": str(self.sandbox_state_root),
             }
         )
         return env
@@ -138,7 +150,7 @@ class TerokIntegrationEnv:
 
     def tasks_root(self, project_id: str) -> Path:
         """Return the live task workspace root for *project_id*."""
-        return self.state_root / "tasks" / project_id
+        return self.sandbox_live_root / "tasks" / project_id
 
     def task_dir(self, project_id: str, task_id: str) -> Path:
         """Return the task directory for *task_id*."""
@@ -162,7 +174,7 @@ class TerokIntegrationEnv:
 
     def gate_path(self, project_id: str) -> Path:
         """Return the host-side gate mirror path for ``project_id``."""
-        return self.state_root / "gate" / f"{project_id}.git"
+        return self.sandbox_state_root / "gate" / f"{project_id}.git"
 
 
 def _hook_diagnostics(extra_args: list[str]) -> str:

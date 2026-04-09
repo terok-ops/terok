@@ -23,7 +23,7 @@ from .config import (
     get_shield_drop_on_task_run,
     get_shield_on_task_restart,
     projects_dir,
-    state_dir,
+    sandbox_live_dir,
     user_presets_dir,
     user_projects_dir,
 )
@@ -148,9 +148,7 @@ def _build_project_config(
     pid = raw.project.id or project_id
     validate_project_id(pid)
     sec = raw.project.security_class
-    sr = state_dir()
-
-    tasks_root = Path(raw.tasks.root or (sr / "tasks" / pid)).resolve()
+    tasks_root = Path(raw.tasks.root or (sandbox_live_dir() / "tasks" / pid)).resolve()
     gate_path = Path(raw.gate.path or (gate_repos_dir() / f"{pid}.git")).resolve()
 
     staging_root: Path | None = None

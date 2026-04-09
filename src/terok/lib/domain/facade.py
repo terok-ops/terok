@@ -125,12 +125,12 @@ def authenticate(project_id: str, provider: str) -> None:
     Thin wrapper around the instrumentation-layer ``authenticate()`` that
     supplies ``mounts_dir`` and ``image`` from terok's config/image system.
     """
-    from terok_agent import mounts_dir
+    from ..core.config import sandbox_live_mounts_dir
 
     _authenticate_raw(
         project_id,
         provider,
-        mounts_dir=mounts_dir(),
+        mounts_dir=sandbox_live_mounts_dir(),
         image=project_cli_image(project_id),
     )
 
