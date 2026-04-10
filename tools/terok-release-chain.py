@@ -996,7 +996,8 @@ def quick(
 
     # Save plan
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    plan_path = cd / "plans" / f"{ts}-{release_name or 'release'}.json"
+    slug = release_name.replace(" ", "-").strip("-") or "release"
+    plan_path = cd / "plans" / f"{ts}-{slug}.json"
     ctx.plan_path = plan_path
     save_plan(plan, plan_path)
     console.print(f"\nPlan saved: {plan_path}")
