@@ -814,7 +814,19 @@ def _common_ctx(
 
 
 def _parse_pr_specs(specs: str) -> dict[str, int]:
-    return {normalise(r): int(n) for r, n in (p.strip().split(":") for p in specs.split(","))}
+    result = {}
+    for part in specs.split(","):
+        part = part.strip()
+        if ":" not in part or part.count(":") != 1:
+            die(f"Malformed --from-prs entry '{part}': expected repo:PR (e.g. sandbox:42)")
+        repo, num = part.split(":")
+        if not repo or not num:
+            die(f"Malformed --from-prs entry '{part}': repo and PR number must be non-empty")
+        try:
+            result[normalise(repo)] = int(num)
+        except ValueError:
+            die(f"Malformed --from-prs entry '{part}': PR number must be an integer")
+    return result
 
 
 def _resolve_chain(

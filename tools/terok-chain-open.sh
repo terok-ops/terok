@@ -100,13 +100,12 @@ ensure_clone() {
 #     → {git = "https://github.com/FORK/terok-sandbox.git", branch = "BRANCH"}
 set_branch_dep() {
     local repo_dir="$1" dep_repo="$2" branch="$3"
-    local dep_pkg
-    dep_pkg=$(pkg_name "$dep_repo")
     local fork_url="https://github.com/${GH_FORK}/${dep_repo}.git"
 
     log "Wiring ${dep_repo} -> branch ${branch}"
+    # Use dep_repo (hyphens) — pyproject.toml keys are hyphenated.
     run sed -i \
-        "s|${dep_pkg} = {url = \"https://[^\"]*\"}|${dep_pkg} = {git = \"${fork_url}\", branch = \"${branch}\"}|" \
+        "s|${dep_repo} = {url = \"https://[^\"]*\"}|${dep_repo} = {git = \"${fork_url}\", branch = \"${branch}\"}|" \
         "${repo_dir}/pyproject.toml"
 }
 
