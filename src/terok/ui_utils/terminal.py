@@ -11,6 +11,7 @@ This module re-exports them and adds higher-level helpers.
 
 from terok.lib.util.ansi import (  # noqa: F401  -- re-exports
     blue,
+    bold,
     color,
     green,
     red,

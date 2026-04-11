@@ -52,6 +52,8 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.core.version",
     "terok.lib.domain.facade",
+    "terok.lib.domain.storage",
+    "terok.lib.util.ansi",
     "terok.lib.util.emoji",
     "terok.lib.util.yaml",
     "terok.lib.domain.wizards.new_project",
@@ -164,6 +166,16 @@ depends_on = ["terok.lib.util.ansi"]
 path = "terok.lib.domain.image_cleanup"
 layer = "domain"
 depends_on = ["terok.lib.core.projects"]
+
+# Storage usage aggregation across package stack
+[[modules]]
+path = "terok.lib.domain.storage"
+layer = "domain"
+depends_on = [
+    "terok.lib.domain.image_cleanup",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+]
 
 # Agent config resolution (terok-specific stack composition)
 [[modules]]
@@ -570,6 +582,10 @@ from = ["terok.lib.orchestration.docker"]
 [[interfaces]]
 expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", "CleanupResult"]
 from = ["terok.lib.domain.image_cleanup"]
+
+[[interfaces]]
+expose = ["StorageOverview", "ProjectDetail", "ProjectSummary", "get_storage_overview", "get_project_storage_detail", "format_bytes", "parse_image_size"]
+from = ["terok.lib.domain.storage"]
 
 [[interfaces]]
 expose = ["PanicResult", "execute_panic", "panic_stop_containers", "is_panicked", "clear_panic_lock", "format_panic_report"]

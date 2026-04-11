@@ -41,6 +41,11 @@ def color(text: str, code: str, enabled: bool) -> str:
     return f"\x1b[{code}m{text}\x1b[0m"
 
 
+def bold(text: str, enabled: bool) -> str:
+    """Return *text* in bold (ANSI 1) when *enabled*."""
+    return color(text, "1", enabled)
+
+
 def yellow(text: str, enabled: bool) -> str:
     """Return *text* in yellow (ANSI 33) when *enabled*."""
     return color(text, "33", enabled)
