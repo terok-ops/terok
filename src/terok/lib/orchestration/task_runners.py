@@ -66,6 +66,7 @@ if TYPE_CHECKING:
 _LOCALHOST = "127.0.0.1"
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 _TOAD_CONTAINER_PORT = 8080
+_ANTHROPIC_API_HOST = "api.anthropic.com"
 _FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
 
 
@@ -267,11 +268,11 @@ def _maybe_deny_anthropic_api(cname: str, task_dir: Path) -> None:
     try:
         from terok_sandbox import make_shield
 
-        make_shield(task_dir).deny(cname, "api.anthropic.com")
+        make_shield(task_dir).deny(cname, _ANTHROPIC_API_HOST)
     except Exception as exc:  # noqa: BLE001
         import warnings
 
-        warnings.warn(f"shield deny api.anthropic.com: {exc}", stacklevel=2)
+        warnings.warn(f"shield deny {_ANTHROPIC_API_HOST}: {exc}", stacklevel=2)
 
 
 def _apply_shield_policy(

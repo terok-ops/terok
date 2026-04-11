@@ -525,3 +525,106 @@ def test_make_sandbox_config_shield_audit_default(
     """Factory defaults shield_audit to True."""
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
     assert cfg.make_sandbox_config().shield_audit is True
+
+
+# ---------- Experimental flag from config ----------
+
+
+def test_is_experimental_reads_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_experimental()`` falls back to the config file when the CLI flag is off."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "experimental: true\n")),
+    )
+    assert cfg.is_experimental() is True
+
+
+def test_is_experimental_cli_flag_wins(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """CLI flag (``set_experimental``) overrides the config file."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "experimental: false\n")),
+    )
+    cfg.set_experimental(True)
+    assert cfg.is_experimental() is True
+
+
+# ---------- Claude agent config getters ----------
+
+
+def test_claude_allow_oauth_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_claude_allow_oauth()`` defaults to False."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_claude_allow_oauth() is False
+
+
+def test_claude_allow_oauth_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_claude_allow_oauth()`` reads ``agent.claude.allow_oauth``."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  claude:\n    allow_oauth: true\n")),
+    )
+    assert cfg.get_claude_allow_oauth() is True
+
+
+def test_claude_allow_oauth_rejects_truthy_string(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_claude_allow_oauth()`` returns False for non-bool values like ``"yes"``."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, 'agent:\n  claude:\n    allow_oauth: "yes"\n')),
+    )
+    assert cfg.get_claude_allow_oauth() is False
+
+
+def test_claude_expose_oauth_token_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_claude_expose_oauth_token()`` defaults to False."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_claude_expose_oauth_token() is False
+
+
+def test_claude_expose_oauth_token_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_claude_expose_oauth_token()`` reads config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  claude:\n    expose_oauth_token: true\n")),
+    )
+    assert cfg.get_claude_expose_oauth_token() is True
+
+
+def test_claude_agent_config_non_dict_returns_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_claude_agent_config()`` returns ``{}`` when ``agent.claude`` is not a dict."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  claude: just-a-string\n")),
+    )
+    assert cfg.get_claude_allow_oauth() is False
+    assert cfg.get_claude_expose_oauth_token() is False
+
+
+def test_is_claude_oauth_proxied_tier2(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_claude_oauth_proxied()`` returns True for tier 2."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(tmp_path, "experimental: true\nagent:\n  claude:\n    allow_oauth: true\n")
+        ),
+    )
+    assert cfg.is_claude_oauth_proxied() is True
+
+
+def test_is_claude_oauth_proxied_tier3(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_claude_oauth_proxied()`` returns False for tier 3 (expose overrides)."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(
+                tmp_path,
+                "experimental: true\nagent:\n  claude:\n    allow_oauth: true\n    expose_oauth_token: true\n",
+            )
+        ),
+    )
+    assert cfg.is_claude_oauth_proxied() is False

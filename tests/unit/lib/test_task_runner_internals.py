@@ -292,6 +292,47 @@ class TestApplyShieldPolicy:
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=True)
 
 
+# ── _maybe_deny_anthropic_api ────────────────────────────
+
+
+class TestMaybeDenyAnthropicApi:
+    """Verify tier-2 shield deny for api.anthropic.com."""
+
+    def test_noop_when_not_proxied(self) -> None:
+        """No-op when Claude OAuth is not in tier 2."""
+        from terok.lib.orchestration.task_runners import _maybe_deny_anthropic_api
+
+        with patch(
+            "terok.lib.core.config.is_claude_oauth_proxied",
+            return_value=False,
+        ):
+            _maybe_deny_anthropic_api("ctr", MOCK_TASK_DIR)
+
+    def test_calls_shield_deny_when_proxied(self, tmp_path: Path) -> None:
+        """Calls shield.deny('api.anthropic.com') when tier 2 is active."""
+        from terok.lib.orchestration.task_runners import _maybe_deny_anthropic_api
+
+        mock_shield = MagicMock()
+        with (
+            patch("terok.lib.core.config.is_claude_oauth_proxied", return_value=True),
+            patch("terok_sandbox.make_shield", return_value=mock_shield),
+        ):
+            _maybe_deny_anthropic_api("ctr", tmp_path)
+
+        mock_shield.deny.assert_called_once_with("ctr", "api.anthropic.com")
+
+    def test_warns_on_failure(self) -> None:
+        """Emits a warning when shield.deny raises."""
+        from terok.lib.orchestration.task_runners import _maybe_deny_anthropic_api
+
+        with (
+            patch("terok.lib.core.config.is_claude_oauth_proxied", return_value=True),
+            patch("terok_sandbox.make_shield", side_effect=RuntimeError("nft missing")),
+            pytest.warns(match="shield deny api.anthropic.com"),
+        ):
+            _maybe_deny_anthropic_api("ctr", MOCK_TASK_DIR)
+
+
 # ── _run_container ────────────────────────────────────────
 
 

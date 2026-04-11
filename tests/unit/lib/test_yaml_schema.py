@@ -204,6 +204,12 @@ class RawGlobalConfigTests(unittest.TestCase):
         self.assertEqual(cfg.shield.on_task_restart, "retain")
         self.assertEqual(cfg.gate_server.port, 9418)
         self.assertIsNone(cfg.default_agent)
+        self.assertFalse(cfg.experimental)
+
+    def test_experimental_flag(self) -> None:
+        """``experimental: true`` is accepted as a top-level bool."""
+        cfg = RawGlobalConfig.model_validate({"experimental": True})
+        self.assertTrue(cfg.experimental)
 
     def test_custom_values(self) -> None:
         """Custom values are parsed correctly."""
