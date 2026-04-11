@@ -3045,25 +3045,24 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-agent"
-version = "0.0.64"
+version = "0.0.65"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "terok_agent-0.0.65-py3-none-any.whl", hash = "sha256:3d2c31de7e13fc4fb90c9965c62ac36cc91aec8554fd752149803854e49eefae"},
+]
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/config-stack"}
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.58/terok_sandbox-0.0.58-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
-type = "git"
-url = "https://github.com/sliwowitz/terok-agent.git"
-reference = "feat/config-stack-to-sandbox"
-resolved_reference = "10e04bdd8fde87b4e2e5f6b609d26d9991fac1df"
+type = "url"
+url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.65/terok_agent-0.0.65-py3-none-any.whl"
 
 [[package]]
 name = "terok-dbus"
@@ -3085,25 +3084,24 @@ url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.6/terok_dbu
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.57"
+version = "0.0.58"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "terok_sandbox-0.0.58-py3-none-any.whl", hash = "sha256:7b17669b9250cc3fc3cacf60841dcc682601f7c2fff9210444ded9257f4c40e9"},
+]
 
 [package.dependencies]
 aiohttp = ">=3.9"
 cryptography = ">=43.0"
 platformdirs = ">=4.0"
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.17/terok_shield-0.6.17-py3-none-any.whl"}
+terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.17/terok_shield-0.6.17-py3-none-any.whl"}
 
 [package.source]
-type = "git"
-url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "feat/config-stack"
-resolved_reference = "ee4959e9f6cd069e0fd4294fc86a222125e6709e"
+type = "url"
+url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.58/terok_sandbox-0.0.58-py3-none-any.whl"
 
 [[package]]
 name = "terok-shield"
@@ -3611,4 +3609,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "e3ba507649a17c105e2faadc42c07684bcc19093d7dcdec3811019b4b8e0864b"
+content-hash = "b8c4b865866590479a13b9a6d1755a65ea2db74dfc61fe76e905c3af82aa5199"
