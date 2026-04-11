@@ -91,13 +91,15 @@ def _tmux_config_hash() -> str:
 
 
 def _resolve_user_snippet(project: ProjectConfig) -> str:
-    """Resolve the docker user snippet from project config (inline or file).
+    """Resolve the docker user snippet from project config (file and/or inline).
+
+    When both ``docker.user_snippet_file`` and ``docker.user_snippet_inline``
+    are set, the file is included first and the inline block is appended.
 
     Raises :class:`SystemExit` if ``docker.user_snippet_file`` is configured but
     the file does not exist or cannot be read.
     """
-    if project.docker_snippet_inline and project.docker_snippet_inline.strip():
-        return project.docker_snippet_inline
+    parts: list[str] = []
     if project.docker_snippet_file:
         us_path = Path(project.docker_snippet_file).expanduser()
         if not us_path.is_absolute():
@@ -108,10 +110,12 @@ def _resolve_user_snippet(project: ProjectConfig) -> str:
                 f"  (configured in project '{project.id}')"
             )
         try:
-            return us_path.read_text()
-        except OSError as exc:
+            parts.append(us_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError) as exc:
             raise SystemExit(f"Failed to read docker.user_snippet_file {us_path}: {exc}")
-    return ""
+    if project.docker_snippet_inline and project.docker_snippet_inline.strip():
+        parts.append(project.docker_snippet_inline)
+    return "\n".join(parts)
 
 
 def _render_l2(project: ProjectConfig) -> str:

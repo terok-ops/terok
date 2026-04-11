@@ -154,6 +154,35 @@ def test_l2_includes_user_snippet_from_file() -> None:
         Path(snippet_path).unlink(missing_ok=True)
 
 
+def test_l2_combines_snippet_file_and_inline() -> None:
+    """L2 includes both snippet file and inline, file first."""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".dockerfile", delete=False) as f:
+        f.write("RUN pip install numpy\n")
+        snippet_path = f.name
+
+    try:
+        yaml = (
+            "project:\n  id: proj_both_snippets\n"
+            "git:\n  upstream_url: https://example.com/repo.git\n"
+            f"docker:\n  user_snippet_file: {snippet_path}\n"
+            "  user_snippet_inline: RUN apt-get install -y fortran-compiler\n"
+        )
+        with project_env(yaml, project_id="proj_both_snippets"):
+            generate_dockerfiles("proj_both_snippets")
+            content = (build_dir() / "proj_both_snippets" / "L2.Dockerfile").read_text(
+                encoding="utf-8"
+            )
+            assert "RUN pip install numpy" in content
+            assert "RUN apt-get install -y fortran-compiler" in content
+            # File comes before inline
+            assert content.index("pip install numpy") < content.index("fortran-compiler")
+    finally:
+        Path(snippet_path).unlink(missing_ok=True)
+
+
 def test_l2_missing_snippet_file_exits() -> None:
     """Missing user_snippet_file raises SystemExit."""
     import pytest

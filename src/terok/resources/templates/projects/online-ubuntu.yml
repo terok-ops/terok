@@ -12,6 +12,7 @@ git:
 docker:
   base_image: "ubuntu:24.04"
   # Optional: extra Dockerfile commands injected into the project image.
-  # Use user_snippet_file to point to an external .dockerinclude file instead.
+  # Use user_snippet_file to point to an external .dockerinclude file.
+  # Both can be set — file is included first, inline appended.
   user_snippet_inline: |
     {{USER_SNIPPET}}
