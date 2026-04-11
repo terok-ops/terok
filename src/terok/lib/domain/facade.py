@@ -125,14 +125,23 @@ def authenticate(project_id: str, provider: str) -> None:
 
     Thin wrapper around the instrumentation-layer ``authenticate()`` that
     supplies ``mounts_dir`` and ``image`` from terok's config/image system.
+    When ``expose_oauth_token`` is active (tier 3), passes ``expose_token``
+    so the real credential file is preserved instead of being replaced with
+    a phantom marker.
     """
-    from ..core.config import sandbox_live_mounts_dir
+    from ..core.config import (
+        get_claude_expose_oauth_token,
+        is_experimental,
+        sandbox_live_mounts_dir,
+    )
 
+    expose = provider == "claude" and is_experimental() and get_claude_expose_oauth_token()
     _authenticate_raw(
         project_id,
         provider,
         mounts_dir=sandbox_live_mounts_dir(),
         image=project_cli_image(project_id),
+        expose_token=expose,
     )
 
 

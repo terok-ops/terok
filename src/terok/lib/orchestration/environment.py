@@ -378,6 +378,16 @@ def _credential_proxy_env_and_volumes(
     from ..core.config import get_claude_expose_oauth_token, is_experimental
 
     if is_experimental() and get_claude_expose_oauth_token():  # tier 3: intentional
+        import sys
+
+        print(
+            "\n\033[1;33m"  # bold yellow
+            "  WARNING: Claude OAuth token is EXPOSED to all task containers.\n"
+            "  The credential proxy does NOT protect this token — it is mounted\n"
+            "  directly via .credentials.json in the shared config directory.\n"
+            "  Every task container managed by terok can read the real token.\033[0m\n",
+            file=sys.stderr,
+        )
         leaked = [(p, path) for p, path in leaked if p != "claude"]
     if leaked:
         import sys
