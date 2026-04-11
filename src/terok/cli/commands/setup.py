@@ -132,9 +132,10 @@ def dispatch(args: argparse.Namespace) -> bool:
         )
         if not res["success"]:
             raise SystemExit(f"Gate sync failed: {', '.join(res['errors'])}")
+        cache_note = " (clone cache refreshed)" if res.get("cache_refreshed") else ""
         print(
             f"Gate ready at {res['path']} "
-            f"(upstream: {res['upstream_url']}; created: {res['created']})"
+            f"(upstream: {res['upstream_url']}; created: {res['created']}){cache_note}"
         )
         return True
     if args.cmd == "project-init":
