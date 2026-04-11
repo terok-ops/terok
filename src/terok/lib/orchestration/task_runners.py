@@ -23,6 +23,7 @@ from terok_sandbox import (
     LifecycleHooks,
     RunSpec,
     Sandbox,
+    Sharing,
     VolumeSpec,
     down as _shield_down_impl,
     get_container_state,
@@ -417,7 +418,7 @@ def task_run_cli(
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
-    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", relabel="Z"))
+    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", sharing=Sharing.PRIVATE))
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
     if unrestricted is None:
@@ -562,7 +563,7 @@ def task_run_toad(
     env, volumes = build_task_env_and_volumes(project, task_id)
 
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
-    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", relabel="Z"))
+    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", sharing=Sharing.PRIVATE))
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
     if unrestricted is None:
@@ -792,7 +793,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         _apply_unrestricted_env(env)
 
     # Mount agent-config dir to /home/dev/.terok
-    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", relabel="Z"))
+    volumes.append(VolumeSpec(agent_config_dir, "/home/dev/.terok", sharing=Sharing.PRIVATE))
 
     # Build headless command via provider registry
     headless_cmd = build_headless_command(

@@ -332,7 +332,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_mount", "test prompt"),
             )
             assert any(
-                v.container_path == "/home/dev/.terok" and v.relabel == "Z"
+                v.container_path == "/home/dev/.terok" and v.sharing == "private"
                 for v in result.last_spec.volumes
             )
 
