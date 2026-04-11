@@ -1174,7 +1174,9 @@ def plan_cmd(
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, True, True, True, 0)
     chain, stop_at, pr_specs = _resolve_chain(repos, from_prs)
     if not release_name:
-        console.print("[yellow]Warning: no release name (-n). Release titles will be version-only.[/]")
+        console.print(
+            "[yellow]Warning: no release name (-n). Release titles will be version-only.[/]"
+        )
 
     for repo in chain:
         ensure_clone(repo, cd, org, fork)

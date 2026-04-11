@@ -13,6 +13,7 @@ concerns (gate server, credential proxy with OAuth/socket/SSH support).
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -26,6 +27,8 @@ from terok_sandbox import (
 from ..core.config import make_sandbox_config, sandbox_live_mounts_dir
 from ..core.projects import ProjectConfig
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
+
+_logger = logging.getLogger(__name__)
 
 
 def _gate_url(gate_repo: Path, gate_base: Path, port: int, token: str) -> str:
@@ -390,9 +393,17 @@ def _seed_workspace_cache(repo_dir: Path, project_id: str, code_repo: str | None
     except ImportError:
         return
 
-    seed_workspace_from_clone_cache(
-        repo_dir, project_id, origin_url=code_repo, cfg=make_sandbox_config()
-    )
+    try:
+        seed_workspace_from_clone_cache(
+            repo_dir, project_id, origin_url=code_repo, cfg=make_sandbox_config()
+        )
+    except Exception:
+        _logger.warning(
+            "seed_workspace_from_clone_cache failed for project %s at %s",
+            project_id,
+            repo_dir,
+            exc_info=True,
+        )
 
 
 # ---------- Main builder ----------
