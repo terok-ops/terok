@@ -268,8 +268,10 @@ def _maybe_deny_anthropic_api(cname: str, task_dir: Path) -> None:
         from terok_sandbox import make_shield
 
         make_shield(task_dir).deny(cname, "api.anthropic.com")
-    except Exception:  # noqa: BLE001
-        pass  # best-effort, non-fatal
+    except Exception as exc:  # noqa: BLE001
+        import warnings
+
+        warnings.warn(f"shield deny api.anthropic.com: {exc}", stacklevel=2)
 
 
 def _apply_shield_policy(

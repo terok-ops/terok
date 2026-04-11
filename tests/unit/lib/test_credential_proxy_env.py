@@ -135,7 +135,48 @@ class TestCredentialProxyEnv:
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_claude_oauth_only_base_url(self, tmp_path: Path) -> None:
-        """Claude OAuth → only ANTHROPIC_BASE_URL (no token env vars, no socket flag)."""
+        """Claude OAuth (tier 2) → only ANTHROPIC_BASE_URL (no token env vars, no socket flag)."""
+        from terok_sandbox import CredentialDB
+
+        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
+
+        db_path = tmp_path / "proxy" / "credentials.db"
+        db = CredentialDB(db_path)
+        db.store_credential("default", "claude", {"type": "oauth", "access_token": "tok"})
+        db.close()
+
+        sock_path = tmp_path / "proxy.sock"
+        sock_path.touch()
+
+        project = MagicMock()
+        project.id = "test-project"
+
+        with (
+            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
+            patch("terok_sandbox.ensure_proxy_reachable"),
+            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
+            patch("terok.lib.orchestration.environment._skip_claude_oauth", return_value=False),
+        ):
+            mock_cfg = mock_cfg_fn.return_value
+            mock_cfg.proxy_db_path = db_path
+            mock_cfg.proxy_socket_path = sock_path
+            mock_cfg.proxy_port = 18731
+            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
+
+            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
+
+        # Claude OAuth uses the static marker in .credentials.json — no env var token
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
+        assert "ANTHROPIC_API_KEY" not in env
+        assert "ANTHROPIC_UNIX_SOCKET" not in env
+        # Only base URL for HTTP routing to the proxy
+        assert "ANTHROPIC_BASE_URL" in env
+        assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
+
+    @pytest.mark.usefixtures("_enable_proxy")
+    def test_claude_oauth_skipped_by_default(self, tmp_path: Path) -> None:
+        """Claude OAuth (tier 1, default) → no ANTHROPIC env vars at all."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -165,13 +206,10 @@ class TestCredentialProxyEnv:
 
             env, _ = _credential_proxy_env_and_volumes(project, "task-1")
 
-        # Claude OAuth uses the static marker in .credentials.json — no env var token
-        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
+        # Tier 1 (default): Claude OAuth is skipped entirely
         assert "ANTHROPIC_API_KEY" not in env
-        assert "ANTHROPIC_UNIX_SOCKET" not in env
-        # Only base URL for HTTP routing to the proxy
-        assert "ANTHROPIC_BASE_URL" in env
-        assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
+        assert "ANTHROPIC_BASE_URL" not in env
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_non_claude_oauth_still_uses_phantom_env(self, tmp_path: Path) -> None:
@@ -210,7 +248,7 @@ class TestCredentialProxyEnv:
 
     @pytest.mark.usefixtures("_enable_proxy")
     def test_claude_oauth_socket_transport_still_only_base_url(self, tmp_path: Path) -> None:
-        """Claude OAuth + socket transport → still only ANTHROPIC_BASE_URL (no socket flag)."""
+        """Claude OAuth (tier 2) + socket transport → still only ANTHROPIC_BASE_URL."""
         from terok_sandbox import CredentialDB
 
         from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
@@ -231,6 +269,7 @@ class TestCredentialProxyEnv:
             patch("terok_sandbox.ensure_proxy_reachable"),
             patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
             patch("terok.lib.core.config.get_credential_proxy_transport", return_value="socket"),
+            patch("terok.lib.orchestration.environment._skip_claude_oauth", return_value=False),
         ):
             mock_cfg = mock_cfg_fn.return_value
             mock_cfg.proxy_db_path = db_path

@@ -534,7 +534,7 @@ def get_claude_allow_oauth() -> bool:
           claude:
             allow_oauth: true
     """
-    return _claude_agent_config().get("allow_oauth", False)
+    return _claude_agent_config().get("allow_oauth", False) is True
 
 
 def get_claude_expose_oauth_token() -> bool:
@@ -552,7 +552,7 @@ def get_claude_expose_oauth_token() -> bool:
           claude:
             expose_oauth_token: true
     """
-    return _claude_agent_config().get("expose_oauth_token", False)
+    return _claude_agent_config().get("expose_oauth_token", False) is True
 
 
 def is_claude_oauth_proxied() -> bool:
