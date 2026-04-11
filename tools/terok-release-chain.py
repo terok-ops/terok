@@ -391,7 +391,7 @@ def squash_merge(pr_url: str, gh_repo: str) -> str:
     """Squash-merge PR. Returns merge SHA. Handles race conditions."""
     console.print("Squash-merging PR...")
     r = subprocess.run(
-        ["gh", "pr", "merge", pr_url, "--squash", "--delete-branch", "--admin"],
+        ["gh", "pr", "merge", pr_url, "--repo", gh_repo, "--squash", "--delete-branch", "--admin"],
         capture_output=True,
         text=True,
     )
@@ -1173,6 +1173,8 @@ def plan_cmd(
     """Generate a release plan without executing it."""
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, True, True, True, 0)
     chain, stop_at, pr_specs = _resolve_chain(repos, from_prs)
+    if not release_name:
+        console.print("[yellow]Warning: no release name (-n). Release titles will be version-only.[/]")
 
     for repo in chain:
         ensure_clone(repo, cd, org, fork)
