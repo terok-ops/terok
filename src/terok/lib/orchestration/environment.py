@@ -449,17 +449,18 @@ def build_task_env_and_volumes(
     concerns: ``PROJECT_ID``, gate server URLs, and the full credential
     proxy (OAuth, socket transport, SSH agent).
 
-    In **sealed** isolation mode (``project.is_sealed``), no
-    host-side workspace directory is created — the container starts empty
-    and clones from the gate.
+    In **sealed** isolation mode (``project.is_sealed``), volumes are
+    injected via ``podman cp`` instead of bind mounts — the sandbox
+    handles this transparently when ``RunSpec.sealed`` is set.  The
+    workspace is still created and cache-seeded on the host so the
+    container benefits from fast startup in both modes.
     """
     sealed = project.is_sealed
 
     task_dir = project.tasks_root / str(task_id)
     task_dir.mkdir(parents=True, exist_ok=True)
-    if not sealed:
-        repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
-        repo_dir.mkdir(exist_ok=True)
+    repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
+    repo_dir.mkdir(exist_ok=True)
 
     # Pre-resolve gate server URLs → CODE_REPO / CLONE_FROM / GIT_BRANCH
     sec_env, _sec_volumes = _security_mode_env_and_volumes(project, task_id)
@@ -467,9 +468,8 @@ def build_task_env_and_volumes(
     # Seed workspace from clone cache (fast-start optimisation).
     # Only for new tasks (marker present, no .git yet).  The in-container
     # init script then does fetch+reset instead of a full git clone.
-    # Sealed mode has no host workspace — container clones from gate.
-    if not sealed:
-        _seed_workspace_cache(repo_dir, project.id, sec_env.get("CODE_REPO"))
+    # In sealed mode the seeded dir is podman-cp'd into the container.
+    _seed_workspace_cache(repo_dir, project.id, sec_env.get("CODE_REPO"))
 
     # Pre-resolve git identity using terok's authorship logic so the
     # container has correct GIT_AUTHOR_*/GIT_COMMITTER_* from launch.
@@ -487,7 +487,7 @@ def build_task_env_and_volumes(
         ContainerEnvSpec(
             task_id=task_id,
             provider_name=project.default_agent or "claude",
-            workspace_host_path=task_dir if sealed else repo_dir,
+            workspace_host_path=repo_dir,
             code_repo=sec_env.get("CODE_REPO"),
             clone_from=sec_env.get("CLONE_FROM"),
             branch=sec_env.get("GIT_BRANCH"),
@@ -508,11 +508,7 @@ def build_task_env_and_volumes(
     )
 
     env = dict(result.env)
-    # Sealed mode: strip the workspace volume — the container clones from gate
-    # into its own /workspace, no host-side content to inject.
-    volumes: list[VolumeSpec] = [
-        v for v in result.volumes if not (sealed and v.container_path == "/workspace")
-    ]
+    volumes: list[VolumeSpec] = list(result.volumes)
 
     # terok-specific env vars not covered by the shared assembly
     env["PROJECT_ID"] = project.id
