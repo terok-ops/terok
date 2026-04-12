@@ -33,6 +33,7 @@ from ..lib.domain.facade import (
     find_projects_sharing_gate,
     generate_dockerfiles,
     maybe_pause_for_ssh_key_registration,
+    register_ssh_key,
 )
 from ..lib.domain.project import make_git_gate, make_ssh_manager
 from .shell_launch import launch_login
@@ -176,8 +177,13 @@ class ProjectActionsMixin:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
+
+        def _init_and_register() -> None:
+            result = make_ssh_manager(load_project(pid)).init()
+            register_ssh_key(pid, result)
+
         await self._run_suspended(
-            lambda: make_ssh_manager(load_project(pid)).init(),
+            _init_and_register,
             success_msg=f"Initialized SSH dir for {pid}",
         )
 
@@ -217,7 +223,8 @@ class ProjectActionsMixin:
             nonlocal gate_ok
             print(f"=== Full Setup for {pid} ===\n")
             print("Step 1/4: Initializing SSH...")
-            make_ssh_manager(load_project(pid)).init()
+            result = make_ssh_manager(load_project(pid)).init()
+            register_ssh_key(pid, result)
             maybe_pause_for_ssh_key_registration(pid)
             print("\nStep 2/4: Generating Dockerfiles...")
             generate_dockerfiles(pid)

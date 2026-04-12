@@ -676,6 +676,66 @@ class TestActionDispatch:
         instance._action_follow_logs.assert_called_once()
 
 
+class TestSSHKeyRegistration:
+    """TUI SSH init and project-init must register keys in ssh-keys.json."""
+
+    def _get_mixin(self):
+        """Import ProjectActionsMixin directly — avoids import_app() Textual stubs."""
+        from terok.tui.project_actions import ProjectActionsMixin
+
+        return ProjectActionsMixin
+
+    def test_action_init_ssh_registers_key(self) -> None:
+        """action_init_ssh must forward the init() result to register_ssh_key."""
+        mixin = self._get_mixin()
+        instance = mock.Mock(spec=mixin)
+        instance.current_project_id = "proj"
+        fake_result = {"private_key": "/tmp/terok-testing/k", "dir": "/tmp/terok-testing/d"}
+
+        with (
+            mock.patch("terok.tui.project_actions.make_ssh_manager") as m_ssh,
+            mock.patch("terok.tui.project_actions.register_ssh_key") as m_reg,
+            mock.patch("terok.tui.project_actions.load_project"),
+        ):
+            m_ssh.return_value.init.return_value = fake_result
+            instance._run_suspended = mock.AsyncMock(side_effect=lambda fn, **kw: fn())
+            run(mixin.action_init_ssh(instance))
+
+            m_reg.assert_called_once_with("proj", fake_result)
+
+    def test_action_project_init_registers_key(self) -> None:
+        """_action_project_init must register the SSH key (not discard the result)."""
+        mixin = self._get_mixin()
+        instance = mock.Mock(spec=mixin)
+        instance.current_project_id = "proj"
+        fake_result = {"private_key": "/tmp/terok-testing/k", "dir": "/tmp/terok-testing/d"}
+
+        with (
+            mock.patch("terok.tui.project_actions.make_ssh_manager") as m_ssh,
+            mock.patch("terok.tui.project_actions.register_ssh_key") as m_reg,
+            mock.patch("terok.tui.project_actions.load_project"),
+            mock.patch("terok.tui.project_actions.maybe_pause_for_ssh_key_registration"),
+            mock.patch("terok.tui.project_actions.generate_dockerfiles"),
+            mock.patch("terok.tui.project_actions.build_images"),
+            mock.patch("terok.tui.project_actions.make_git_gate") as m_gate,
+        ):
+            m_ssh.return_value.init.return_value = fake_result
+            m_gate.return_value.sync.return_value = {
+                "success": True,
+                "path": "/tmp/terok-testing/g",
+            }
+
+            async def run_work(fn, **kw):
+                fn()
+                return True
+
+            instance._run_suspended = run_work
+            instance.notify = mock.Mock()
+            run(mixin._action_project_init(instance))
+
+            m_reg.assert_called_once_with("proj", fake_result)
+
+
 class TestActionSelection:
     """Tests for task selection after task creation flows."""
 

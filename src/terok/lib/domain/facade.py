@@ -104,6 +104,18 @@ def derive_project(source_id: str, new_id: str) -> Project:
 # ---------------------------------------------------------------------------
 
 
+def register_ssh_key(project_id: str, init_result: dict) -> None:
+    """Register an SSH key in ``ssh-keys.json`` for the credential proxy's SSH agent.
+
+    Call this after :meth:`SSHManager.init` with the returned result dict.
+    """
+    from terok_sandbox import update_ssh_keys_json
+
+    from ..core.config import make_sandbox_config
+
+    update_ssh_keys_json(make_sandbox_config().ssh_keys_json_path, project_id, init_result)
+
+
 def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
     """If the project's upstream uses SSH, pause so the user can register the deploy key.
 
@@ -189,6 +201,7 @@ __all__ = [
     "make_ssh_manager",
     "make_git_gate",
     # Workflow helpers
+    "register_ssh_key",
     "maybe_pause_for_ssh_key_registration",
     # Auth
     "authenticate",

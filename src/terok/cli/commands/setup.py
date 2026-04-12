@@ -15,6 +15,7 @@ from ...lib.domain.facade import (
     build_images,
     generate_dockerfiles,
     maybe_pause_for_ssh_key_registration,
+    register_ssh_key,
 )
 from ...lib.domain.project import make_git_gate, make_ssh_manager
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
@@ -124,7 +125,7 @@ def dispatch(args: argparse.Namespace) -> bool:
             key_name=getattr(args, "key_name", None),
             force=getattr(args, "force", False),
         )
-        _register_ssh_key(project.id, result)
+        register_ssh_key(project.id, result)
         return True
     if args.cmd == "gate-sync":
         res = make_git_gate(load_project(args.project_id)).sync(
@@ -147,22 +148,13 @@ def dispatch(args: argparse.Namespace) -> bool:
     return False
 
 
-def _register_ssh_key(project_id: str, result: dict) -> None:
-    """Register the SSH key in ssh-keys.json for the credential proxy's SSH agent."""
-    from terok_sandbox import update_ssh_keys_json
-
-    from ...lib.core.config import make_sandbox_config
-
-    update_ssh_keys_json(make_sandbox_config().ssh_keys_json_path, project_id, result)
-
-
 def cmd_project_init(project_id: str) -> None:
     """Full project setup: ssh-init, generate, build, gate-sync."""
     project = load_project(project_id)
 
     print("==> Initializing SSH...")
     result = make_ssh_manager(project).init()
-    _register_ssh_key(project_id, result)
+    register_ssh_key(project_id, result)
     maybe_pause_for_ssh_key_registration(project_id)
 
     print("==> Generating Dockerfiles...")

@@ -716,6 +716,7 @@ expose = [
     "authenticate",
     "get_project_state",
     "is_task_image_old",
+    "register_ssh_key",
     "maybe_pause_for_ssh_key_registration",
 ]
 from = ["terok.lib.domain.facade"]

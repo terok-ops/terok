@@ -20,7 +20,7 @@ def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     mock_gate_cls, mock_load.
     """
     func = unittest.mock.patch("terok.cli.commands.setup.make_ssh_manager")(func)
-    func = unittest.mock.patch("terok.cli.commands.setup._register_ssh_key")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.register_ssh_key")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
         func
     )
