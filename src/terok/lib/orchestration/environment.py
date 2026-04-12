@@ -467,7 +467,9 @@ def build_task_env_and_volumes(
     # Seed workspace from clone cache (fast-start optimisation).
     # Only for new tasks (marker present, no .git yet).  The in-container
     # init script then does fetch+reset instead of a full git clone.
-    _seed_workspace_cache(repo_dir, project.id, sec_env.get("CODE_REPO"))
+    # Sealed mode has no host workspace — container clones from gate.
+    if not sealed:
+        _seed_workspace_cache(repo_dir, project.id, sec_env.get("CODE_REPO"))
 
     # Pre-resolve git identity using terok's authorship logic so the
     # container has correct GIT_AUTHOR_*/GIT_COMMITTER_* from launch.
