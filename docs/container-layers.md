@@ -49,7 +49,7 @@ The `--full-rebuild` flag rebuilds from L0 with `--no-cache` and `--pull=always`
 ## Runtime Behavior
 
 - `terok task run-cli` starts `<project>:l2-cli`.
-- Mounts a per-task workspace to `/workspace`, shared credential directories, and optionally SSH config.
+- Mounts a per-task workspace to `/workspace` and shared credential directories.
 - The init script clones or syncs the project repository into `/workspace`.
 
 See [Shared Directories](shared-dirs.md) for mount details.
