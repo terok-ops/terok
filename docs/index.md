@@ -37,16 +37,34 @@ provisioning.
 pipx install ./terok-*.whl
 ```
 
-### Basic Workflow
+### One-time setup
+
+Install OCI hooks for the egress firewall, start the host-side services
+(credential proxy and git gate), and optionally add shell completions:
 
 ```bash
-# 1. Create and initialize a project (interactive — walks you through config)
-terok project-wizard
+terok shield setup --user               # install OCI hooks for terok-shield
+terok credential-proxy start            # start the credential proxy daemon
+terok gate start                        # start the git gate server
+terok completions install               # (optional) tab completion
+```
 
-# 2. Run a task
-terok task start myproj                # CLI agent (default)
-terok task start myproj --toad         # Toad multi-agent TUI (browser access)
-terok login myproj a3                  # Attach to running task by hex ID prefix
+### First project
+
+```bash
+# Interactive wizard — creates config, builds images, sets up SSH + gate
+terok project-wizard
+```
+
+From here you can launch the full TUI or work directly from the CLI:
+
+```bash
+terok tui                               # Textual TUI (manage projects & tasks)
+
+# — or use the CLI directly —
+terok task start myproj                 # start a CLI agent task
+terok task start myproj --toad          # Toad multi-agent TUI (browser access)
+terok login myproj a3                   # attach to a running task by hex ID prefix
 ```
 
 The wizard creates the project config, generates Dockerfiles, builds images,
