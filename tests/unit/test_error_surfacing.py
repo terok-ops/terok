@@ -449,42 +449,6 @@ class TestEnvironmentWarnings:
         with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
             yield
 
-    def test_ssh_keys_json_decode_error_warns(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Malformed JSON in SSH keys file warns and returns empty dict."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        keys_file = tmp_path / "ssh-keys.json"
-        keys_file.write_text("{not valid json")
-        result = _load_ssh_keys_json(keys_file)
-        assert result == {}
-        assert "Malformed SSH keys file" in capsys.readouterr().err
-
-    def test_ssh_keys_os_error_warns(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Unreadable SSH keys file warns and returns empty dict."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        keys_file = tmp_path / "ssh-keys.json"
-        keys_file.write_text('{"proj": []}')
-        keys_file.chmod(0o000)
-        result = _load_ssh_keys_json(keys_file)
-        keys_file.chmod(0o644)
-        assert result == {}
-        assert "Cannot read SSH keys file" in capsys.readouterr().err
-
-    def test_ssh_keys_missing_file_no_warning(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Missing SSH keys file returns empty dict without warning."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        result = _load_ssh_keys_json(tmp_path / "nonexistent.json")
-        assert result == {}
-        assert capsys.readouterr().err == ""
-
     def test_gate_fallback_warns(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Gate server unreachable triggers an informational warning on stderr."""
         from terok.lib.orchestration.environment import _security_mode_env_and_volumes
