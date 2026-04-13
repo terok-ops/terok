@@ -296,10 +296,10 @@ class TestApplyShieldPolicy:
 
 
 class TestMaybeDenyAnthropicApi:
-    """Verify tier-2 shield deny for api.anthropic.com."""
+    """Verify shield deny for api.anthropic.com when Claude OAuth is proxied."""
 
     def test_noop_when_not_proxied(self) -> None:
-        """No-op when Claude OAuth is not in tier 2."""
+        """No-op when Claude OAuth is not proxied."""
         from terok.lib.orchestration.task_runners import _maybe_deny_anthropic_api
 
         with patch(
@@ -309,7 +309,7 @@ class TestMaybeDenyAnthropicApi:
             _maybe_deny_anthropic_api("ctr", MOCK_TASK_DIR)
 
     def test_calls_shield_deny_when_proxied(self, tmp_path: Path) -> None:
-        """Calls shield.deny('api.anthropic.com') when tier 2 is active."""
+        """Calls shield.deny('api.anthropic.com') when Claude OAuth is proxied."""
         from terok.lib.orchestration.task_runners import _maybe_deny_anthropic_api
 
         mock_shield = MagicMock()

@@ -556,14 +556,26 @@ def get_claude_expose_oauth_token() -> bool:
 
 
 def is_claude_oauth_proxied() -> bool:
-    """Return True when Claude OAuth is in tier 2 (proxy active, not exposed).
+    """Return True when Claude OAuth traffic is routed through the proxy.
 
-    Centralises the three-tier decision so callers don't duplicate the
+    Centralises the three-mode decision so callers don't duplicate the
     flag combination logic:
 
-    - **Tier 1** (default): experimental off or allow_oauth off — skip Claude OAuth.
-    - **Tier 2**: experimental + allow_oauth — proxy handles OAuth, shield denies
-      ``api.anthropic.com``.
-    - **Tier 3**: experimental + expose_oauth_token — proxy bypassed for Claude.
+    - **Skipped** (default): experimental off or allow_oauth off — Claude
+      OAuth bypasses the proxy entirely.
+    - **Proxied**: experimental + allow_oauth — proxy handles OAuth auth,
+      shield denies ``api.anthropic.com`` to prevent direct access.
+    - **Exposed**: experimental + expose_oauth_token — real OAuth token
+      mounted directly for Claude Code subscription features.
     """
     return is_experimental() and get_claude_allow_oauth() and not get_claude_expose_oauth_token()
+
+
+def is_claude_oauth_exposed() -> bool:
+    """Return True when the real Claude OAuth token is intentionally exposed.
+
+    Exposed mode trades token security for Claude Code subscription
+    features — the real ``.credentials.json`` is mounted directly
+    instead of being replaced with a phantom marker.
+    """
+    return is_experimental() and get_claude_expose_oauth_token()

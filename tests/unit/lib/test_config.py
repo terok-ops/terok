@@ -605,8 +605,10 @@ def test_claude_agent_config_non_dict_returns_empty(
     assert cfg.get_claude_expose_oauth_token() is False
 
 
-def test_is_claude_oauth_proxied_tier2(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``is_claude_oauth_proxied()`` returns True for tier 2."""
+def test_is_claude_oauth_proxied_when_allowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_claude_oauth_proxied()`` returns True when experimental + allow_oauth."""
     monkeypatch.setenv(
         "TEROK_CONFIG_FILE",
         str(
@@ -616,8 +618,10 @@ def test_is_claude_oauth_proxied_tier2(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert cfg.is_claude_oauth_proxied() is True
 
 
-def test_is_claude_oauth_proxied_tier3(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``is_claude_oauth_proxied()`` returns False for tier 3 (expose overrides)."""
+def test_is_claude_oauth_not_proxied_when_exposed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_claude_oauth_proxied()`` returns False when token is exposed."""
     monkeypatch.setenv(
         "TEROK_CONFIG_FILE",
         str(
@@ -628,3 +632,28 @@ def test_is_claude_oauth_proxied_tier3(monkeypatch: pytest.MonkeyPatch, tmp_path
         ),
     )
     assert cfg.is_claude_oauth_proxied() is False
+
+
+def test_is_claude_oauth_exposed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_claude_oauth_exposed()`` returns True when experimental + expose_oauth_token."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(
+                tmp_path,
+                "experimental: true\nagent:\n  claude:\n    expose_oauth_token: true\n",
+            )
+        ),
+    )
+    assert cfg.is_claude_oauth_exposed() is True
+
+
+def test_is_claude_oauth_not_exposed_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_claude_oauth_exposed()`` returns False when experimental is off."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  claude:\n    expose_oauth_token: true\n")),
+    )
+    assert cfg.is_claude_oauth_exposed() is False

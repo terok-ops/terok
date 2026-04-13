@@ -171,34 +171,7 @@ def apply_git_identity_env(
     )
 
 
-# ---------- SSH keys JSON ----------
-
-
-def _load_ssh_keys_json(path: Path) -> dict[str, list[dict[str, str]]]:
-    """Load the SSH key mapping JSON.  Returns empty dict if missing or malformed."""
-    import json
-
-    from ..util.logging_utils import warn_user
-
-    if not path.is_file():
-        return {}
-    try:
-        result = json.loads(path.read_text(encoding="utf-8"))
-        return result if isinstance(result, dict) else {}
-    except json.JSONDecodeError as exc:
-        warn_user("ssh", f"Malformed SSH keys file {path}: {exc}. SSH key injection disabled.")
-        return {}
-    except (OSError, UnicodeDecodeError) as exc:
-        warn_user("ssh", f"Cannot read SSH keys file {path}: {exc}. SSH key injection disabled.")
-        return {}
-
-
 # ---------- Credential proxy ----------
-
-
-def _credential_type(cred: dict) -> str:
-    """Return the credential type from the stored ``type`` field."""
-    return cred.get("type") or "api_key"
 
 
 def ensure_credential_proxy() -> None:
@@ -229,179 +202,72 @@ def ensure_credential_proxy() -> None:
         ) from exc
 
 
-def _skip_claude_oauth() -> bool:
-    """Return True when Claude OAuth should be excluded from the credential proxy.
+def _apply_claude_oauth_overrides(env: dict[str, str]) -> None:
+    """Adjust Claude OAuth env vars based on the experimental proxy config.
 
-    Only tier 2 (proxy active, not exposed) keeps Claude OAuth in the proxy.
-    Tiers 1 and 3 both skip it — tier 1 because the path is broken
-    (hardcoded ``BASE_API_URL``), tier 3 because Claude manages its own
-    credentials directly.
+    Executor handles all generic proxy plumbing (phantom tokens, transport,
+    SSH agent).  This function only adjusts Claude-specific env vars:
+
+    - **Proxied** (``is_claude_oauth_proxied``): remove phantom token, keep
+      ``ANTHROPIC_BASE_URL`` — the container uses the mounted
+      ``.credentials.json`` marker directly with the proxy.
+    - **Skipped** (default): remove all Claude proxy env vars — Claude Code's
+      hardcoded ``BASE_API_URL`` bypasses the proxy anyway.
+    - **Exposed** (``expose_oauth_token``): also removes vars — the real
+      OAuth token is mounted directly for Claude Code subscription features.
     """
     from ..core.config import is_claude_oauth_proxied
 
-    return not is_claude_oauth_proxied()
+    # Only act when executor injected Claude OAuth vars
+    if "CLAUDE_CODE_OAUTH_TOKEN" not in env:
+        return
+
+    if is_claude_oauth_proxied():
+        # Proxied: remove phantom token (the mounted .credentials.json
+        # marker is used for auth), keep ANTHROPIC_BASE_URL for routing
+        env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+    else:
+        # Skipped or exposed: remove all Claude proxy env vars
+        for key in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_UNIX_SOCKET"):
+            env.pop(key, None)
 
 
-def _credential_proxy_env_and_volumes(
-    project: ProjectConfig, task_id: str
-) -> tuple[dict[str, str], list[str]]:
-    """Return env vars and volumes for the credential proxy.
+def _warn_leaked_credentials() -> None:
+    """Warn about real credential files in shared mounts.
 
-    Injects phantom token env vars and transport overrides (HTTP base URL or
-    Unix socket path) pointing to the proxy.  The choice of env vars depends
-    on two orthogonal dimensions:
-
-    - **Auth**: stored credential type (``api_key`` → :attr:`phantom_env`,
-      ``oauth`` → :attr:`oauth_phantom_env`).
-    - **Transport**: global config ``credential_proxy.transport``
-      (``direct`` → :attr:`base_url_env`, ``socket`` → :attr:`socket_env`).
-
-    Raises ``SystemExit`` if the proxy is not running — no silent fallback.
-    The only way to skip the proxy is the explicit bypass flag
-    ``credential_proxy.bypass_no_secret_protection`` in global config.
+    When the Claude OAuth token is intentionally exposed (for Claude Code
+    subscription features), the Claude-specific warning is suppressed.
     """
-    from ..core.config import get_credential_proxy_bypass, get_credential_proxy_transport
-
-    if get_credential_proxy_bypass():
-        return {}, []
-
-    from terok_executor import get_roster
-    from terok_sandbox import (
-        CredentialDB,
-        ProxyUnreachableError,
-        ensure_proxy_reachable,
-        get_proxy_port,
-        get_ssh_agent_port,
-    )
-
-    cfg = make_sandbox_config()
-    try:
-        ensure_proxy_reachable(cfg)
-    except ProxyUnreachableError as exc:
-        raise SystemExit(
-            f"{exc}\n\n"
-            "Start it with:\n"
-            "  terok credential-proxy install   (systemd socket activation)\n"
-            "  terok credential-proxy start     (manual daemon)"
-        ) from exc
-
-    roster = get_roster()
-    proxy_routes = roster.proxy_routes
-    use_socket = get_credential_proxy_transport() == "socket"
-
-    db = CredentialDB(cfg.proxy_db_path)
-    try:
-        credential_set = "default"
-        stored_providers = set(db.list_credentials(credential_set))
-        routed = stored_providers & proxy_routes.keys()
-        tokens: dict[str, str] = {}
-        credential_types: dict[str, str] = {}
-        for name in routed:
-            cred = db.load_credential(credential_set, name)
-            ctype = _credential_type(cred) if cred else "api_key"
-            credential_types[name] = ctype
-            # Claude OAuth never needs a per-task phantom token — the static
-            # marker in .credentials.json is accepted by the proxy directly.
-            # Tier gating (skip vs proxy vs expose) happens in the env loop below.
-            if name == "claude" and ctype == "oauth":
-                continue
-            tokens[name] = db.create_proxy_token(project.id, task_id, credential_set, name)
-
-        # SSH agent: create phantom token if project has at least one valid key registered
-        ssh_keys = _load_ssh_keys_json(cfg.ssh_keys_json_path)
-        ssh_entry = ssh_keys.get(project.id)
-        if isinstance(ssh_entry, list) and any(
-            e.get("private_key") and e.get("public_key") for e in ssh_entry
-        ):
-            ssh_token = db.create_proxy_token(project.id, task_id, project.id, "ssh")
-        else:
-            ssh_token = None
-    finally:
-        db.close()
-
-    port = get_proxy_port(cfg)
-    proxy_base = f"http://host.containers.internal:{port}"
-    env: dict[str, str] = {}
-
-    for name, route in proxy_routes.items():
-        if name not in routed:
-            continue
-
-        is_oauth = credential_types[name] == "oauth"
-
-        # Claude OAuth: tier gating (see _skip_claude_oauth / is_claude_oauth_proxied).
-        if name == "claude" and is_oauth:
-            if _skip_claude_oauth():
-                continue
-            if route.base_url_env:
-                env[route.base_url_env] = proxy_base
-            continue
-
-        # Auth dimension: select phantom env vars by credential type.
-        # Providers with oauth_phantom_env get OAuth-specific env vars;
-        # others fall back to phantom_env (same env var for both auth types).
-        token_vars = (
-            route.oauth_phantom_env if (is_oauth and route.oauth_phantom_env) else route.phantom_env
-        )
-        for env_var in token_vars:
-            env[env_var] = tokens[name]
-
-        # Transport dimension: socket flag + HTTP base URL.
-        if use_socket and route.socket_path and route.socket_env:
-            env[route.socket_env] = route.socket_path
-        if route.base_url_env:
-            env[route.base_url_env] = proxy_base
-
-        # Override OpenCode base URL for proxied providers (the original
-        # value from collect_opencode_provider_env points to the real upstream;
-        # this override redirects through the proxy instead)
-        oc_provider = roster.providers.get(name)
-        if oc_provider and oc_provider.opencode_config:
-            env[f"TEROK_OC_{name.upper()}_BASE_URL"] = f"{proxy_base}/v1"
-        if name == "glab":
-            env["GITLAB_API_HOST"] = f"host.containers.internal:{port}"
-            env["API_PROTOCOL"] = "http"
-
-    if routed:
-        env["TEROK_PROXY_PORT"] = str(port)
-
-    if ssh_token:
-        env["TEROK_SSH_AGENT_TOKEN"] = ssh_token
-        env["TEROK_SSH_AGENT_PORT"] = str(get_ssh_agent_port(cfg))
-
-    # Warn about real credential files in shared mounts that will be visible
-    # to the container alongside proxy phantom tokens.
     from terok_executor import scan_leaked_credentials
 
-    leaked = scan_leaked_credentials(sandbox_live_mounts_dir())
-    # Tier 3: suppress warning for Claude when expose_oauth_token is active —
-    # real credentials in the shared mount are intentional.
-    from ..core.config import get_claude_expose_oauth_token, is_experimental
+    from ..core.config import is_claude_oauth_exposed
+    from ..util.ansi import bold, supports_color, yellow
 
-    if is_experimental() and get_claude_expose_oauth_token():  # tier 3: intentional
+    leaked = scan_leaked_credentials(sandbox_live_mounts_dir())
+
+    if is_claude_oauth_exposed():
         import sys
 
+        color = supports_color()
         print(
-            "\n\033[1;33m"  # bold yellow
-            "  WARNING: Claude OAuth token is EXPOSED to all task containers.\n"
-            "  The credential proxy does NOT protect this token — it is mounted\n"
-            "  directly via .credentials.json in the shared config directory.\n"
-            "  Every task container managed by terok can read the real token.\033[0m\n",
+            "\n"
+            + bold(
+                yellow(
+                    "  WARNING: Claude OAuth token is EXPOSED to all task containers.\n"
+                    "  The credential proxy does NOT protect this token — it is mounted\n"
+                    "  directly via .credentials.json in the shared config directory.\n"
+                    "  Every task container managed by terok can read the real token.\n",
+                    color,
+                ),
+                color,
+            ),
             file=sys.stderr,
         )
         leaked = [(p, path) for p, path in leaked if p != "claude"]
-    if leaked:
-        import sys
 
-        print("WARNING: Real credentials in shared mounts:", file=sys.stderr)
-        for provider, path in leaked:
-            print(f"  {provider}: {path}", file=sys.stderr)
-        print(
-            "Remove these files — containers should only see proxy tokens.",
-            file=sys.stderr,
-        )
-
-    return env, []
+    for provider, path in leaked:
+        _logger.warning("Real credential in shared mount for provider %s", provider)
+        _logger.debug("  path: %s", path)
 
 
 # ---------- Clone-cache workspace seeding ----------
@@ -483,6 +349,13 @@ def build_task_env_and_volumes(
 
     from terok_executor import ContainerEnvSpec, assemble_container_env, get_roster
 
+    from ..core.config import get_credential_proxy_bypass, get_credential_proxy_transport
+
+    # Proxy: bypass → no proxy at all; otherwise ensure it's up before assembly
+    proxy_bypass = get_credential_proxy_bypass()
+    if not proxy_bypass:
+        ensure_credential_proxy()
+
     result = assemble_container_env(
         ContainerEnvSpec(
             task_id=task_id,
@@ -499,12 +372,15 @@ def build_task_env_and_volumes(
             human_name=project.human_name or "Nobody",
             human_email=project.human_email or "nobody@localhost",
             credential_scope=project.id,
+            proxy_transport=get_credential_proxy_transport(),
+            proxy_required=not proxy_bypass,
             unrestricted=False,  # task_runners resolves per-provider config
             shared_dir=None if sealed else project.shared_dir,
             envs_dir=sandbox_live_mounts_dir(),
         ),
         get_roster(),
-        caller_manages_proxy=True,  # terok injects richer per-provider proxy tokens below
+        # bypass → skip proxy entirely (no tokens, no check)
+        caller_manages_proxy=proxy_bypass,
     )
 
     env = dict(result.env)
@@ -516,8 +392,9 @@ def build_task_env_and_volumes(
     if "EXTERNAL_REMOTE_URL" in sec_env:
         env["EXTERNAL_REMOTE_URL"] = sec_env["EXTERNAL_REMOTE_URL"]
 
-    # Credential proxy: full OAuth / socket / SSH support (terok-specific)
-    proxy_env, _proxy_volumes = _credential_proxy_env_and_volumes(project, task_id)
-    env.update(proxy_env)
+    # Claude OAuth overrides + leaked-cred scan with exposed-token filtering
+    if not proxy_bypass:
+        _apply_claude_oauth_overrides(env)
+        _warn_leaked_credentials()
 
     return env, volumes

@@ -137,9 +137,9 @@ def authenticate(project_id: str, provider: str) -> None:
 
     Thin wrapper around the instrumentation-layer ``authenticate()`` that
     supplies ``mounts_dir`` and ``image`` from terok's config/image system.
-    When ``expose_oauth_token`` is active (tier 3), passes ``expose_token``
-    so the real credential file is preserved instead of being replaced with
-    a phantom marker.
+    When ``expose_oauth_token`` is active (exposed mode), passes
+    ``expose_token`` so the real credential file is preserved instead of
+    being replaced with a phantom marker.
     """
     from ..core.config import (
         get_claude_expose_oauth_token,

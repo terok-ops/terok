@@ -259,10 +259,11 @@ def _drop_shield_on_creation(cname: str, task_dir: Path) -> None:
 
 
 def _maybe_deny_anthropic_api(cname: str, task_dir: Path) -> None:
-    """Block ``api.anthropic.com`` when Claude OAuth is proxied (tier 2).
+    """Block ``api.anthropic.com`` when Claude OAuth is proxied.
 
     When the shield is down, deny sets prevent phantom tokens from leaking
-    to Anthropic's hardcoded ``BASE_API_URL`` endpoint.  No-op for tiers 1/3.
+    to Anthropic's hardcoded ``BASE_API_URL`` endpoint.  No-op when Claude
+    OAuth is skipped or exposed.
     """
     from ..core.config import is_claude_oauth_proxied
 

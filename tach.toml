@@ -632,6 +632,7 @@ expose = [
     "get_claude_allow_oauth",
     "get_claude_expose_oauth_token",
     "is_claude_oauth_proxied",
+    "is_claude_oauth_exposed",
     "get_credential_proxy_bypass",
     "get_credential_proxy_transport",
     "get_shield_bypass_firewall_no_protection",

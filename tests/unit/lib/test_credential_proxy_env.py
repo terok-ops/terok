@@ -1,490 +1,132 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for credential proxy environment integration.
+"""Tests for terok-specific credential proxy overrides.
 
-These tests exercise the proxy-enabled path by overriding the autouse
-bypass fixture and mocking proxy/DB dependencies directly.
+Generic proxy plumbing (phantom tokens, socket transport, SSH agent) is
+tested in terok-executor (test_env_builder.py).  These tests cover the
+terok-only Claude OAuth mode overrides and leaked-credential scan with
+exposed-token filtering.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import logging
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from pytest import CaptureFixture
 
 
-@pytest.fixture()
-def _enable_proxy() -> Iterator[None]:
-    """Override the autouse bypass to test the proxy-enabled path."""
-    with (
-        patch("terok.lib.core.config.get_credential_proxy_bypass", return_value=False),
-        patch("terok_sandbox.credentials.lifecycle._wait_for_ready", return_value=True),
-        patch("terok_sandbox.credentials.lifecycle._wait_for_tcp_port", return_value=True),
-    ):
-        yield
+class TestClaudeOAuthOverrides:
+    """Verify _apply_claude_oauth_overrides mode selection."""
 
+    def test_proxied_removes_token_keeps_base_url(self) -> None:
+        """Claude OAuth proxied → remove phantom token, keep base URL."""
+        from terok.lib.orchestration.environment import _apply_claude_oauth_overrides
 
-class TestCredentialProxyEnv:
-    """Verify _credential_proxy_env_and_volumes."""
+        env = {
+            "CLAUDE_CODE_OAUTH_TOKEN": "terok-p-abc",
+            "ANTHROPIC_BASE_URL": "http://host.containers.internal:18731",
+            "ANTHROPIC_UNIX_SOCKET": "/tmp/terok-claude-proxy.sock",
+            "TEROK_PROXY_PORT": "18731",
+        }
+        with patch("terok.lib.core.config.is_claude_oauth_proxied", return_value=True):
+            _apply_claude_oauth_overrides(env)
 
-    def test_bypass_returns_empty(self) -> None:
-        """When bypass is set, returns empty env and volumes."""
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        project = MagicMock()
-        # The autouse fixture sets bypass=True, so this should return empty
-        env, volumes = _credential_proxy_env_and_volumes(project, "task-1")
-        assert env == {}
-        assert volumes == []
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_proxy_not_running_raises(self) -> None:
-        """When proxy is not running and bypass is off, raises SystemExit."""
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        project = MagicMock()
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_socket_active", return_value=False),
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=False),
-            pytest.raises(SystemExit, match="not reachable"),
-        ):
-            _credential_proxy_env_and_volumes(project, "task-1")
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_proxy_running_injects_phantom_tokens(self, tmp_path: Path) -> None:
-        """When proxy runs and API key credentials exist, injects phantom env vars."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        # Set up a real DB with a credential
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "api_key", "key": "sk-test"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, volumes = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Phantom token should be injected for Claude
-        assert "ANTHROPIC_API_KEY" in env
-        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")  # prefixed phantom token
-        # Base URL override — TCP via host.containers.internal
-        assert "ANTHROPIC_BASE_URL" in env
-        assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
-        # No socket mount (TCP transport)
-        assert volumes == []
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_only_stored_providers_get_phantom_tokens(self, tmp_path: Path) -> None:
-        """Providers without stored credentials don't get phantom tokens."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "vibe", {"type": "api_key", "key": "k"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _volumes = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Vibe credential stored → phantom token injected
-        assert "MISTRAL_API_KEY" in env
-        # Claude NOT stored → no phantom token
-        assert "ANTHROPIC_API_KEY" not in env
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_claude_oauth_only_base_url(self, tmp_path: Path) -> None:
-        """Claude OAuth (tier 2) → only ANTHROPIC_BASE_URL (no token env vars, no socket flag)."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "oauth", "access_token": "tok"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
-            patch("terok.lib.orchestration.environment._skip_claude_oauth", return_value=False),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Claude OAuth uses the static marker in .credentials.json — no env var token
         assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
-        assert "ANTHROPIC_API_KEY" not in env
-        assert "ANTHROPIC_UNIX_SOCKET" not in env
-        # Only base URL for HTTP routing to the proxy
         assert "ANTHROPIC_BASE_URL" in env
-        assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
+        # Socket and proxy port are unrelated to Claude tier — untouched
+        assert "ANTHROPIC_UNIX_SOCKET" in env
+        assert "TEROK_PROXY_PORT" in env
 
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_claude_oauth_skipped_by_default(self, tmp_path: Path) -> None:
-        """Claude OAuth (tier 1, default) → no ANTHROPIC env vars at all."""
-        from terok_sandbox import CredentialDB
+    def test_skipped_removes_all_claude_vars(self) -> None:
+        """Claude OAuth skipped (default) → remove all Claude proxy env vars."""
+        from terok.lib.orchestration.environment import _apply_claude_oauth_overrides
 
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
+        env = {
+            "CLAUDE_CODE_OAUTH_TOKEN": "terok-p-abc",
+            "ANTHROPIC_BASE_URL": "http://host.containers.internal:18731",
+            "ANTHROPIC_UNIX_SOCKET": "/tmp/terok-claude-proxy.sock",
+            "TEROK_PROXY_PORT": "18731",
+            "MISTRAL_API_KEY": "terok-p-vibe",
+        }
+        with patch("terok.lib.core.config.is_claude_oauth_proxied", return_value=False):
+            _apply_claude_oauth_overrides(env)
 
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "oauth", "access_token": "tok"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Tier 1 (default): Claude OAuth is skipped entirely
-        assert "ANTHROPIC_API_KEY" not in env
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
         assert "ANTHROPIC_BASE_URL" not in env
-        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_non_claude_oauth_still_uses_phantom_env(self, tmp_path: Path) -> None:
-        """Non-Claude OAuth provider still gets phantom token env vars."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "codex", {"type": "oauth", "access_token": "tok"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Codex OAuth still gets phantom token env var (static marker is Claude-only)
-        assert "OPENAI_API_KEY" in env
-        assert env["OPENAI_API_KEY"].startswith("terok-p-")
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_claude_oauth_socket_transport_still_only_base_url(self, tmp_path: Path) -> None:
-        """Claude OAuth (tier 2) + socket transport → still only ANTHROPIC_BASE_URL."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "oauth", "access_token": "tok"})
-        db.close()
-
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="socket"),
-            patch("terok.lib.orchestration.environment._skip_claude_oauth", return_value=False),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        # Claude OAuth bypasses socket/token env vars even with socket transport
-        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
         assert "ANTHROPIC_UNIX_SOCKET" not in env
-        assert "ANTHROPIC_API_KEY" not in env
-        assert "ANTHROPIC_BASE_URL" in env
+        # Non-Claude vars untouched
+        assert "MISTRAL_API_KEY" in env
+        assert "TEROK_PROXY_PORT" in env
 
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_api_key_socket_transport(self, tmp_path: Path) -> None:
-        """API key + socket → ANTHROPIC_API_KEY + ANTHROPIC_UNIX_SOCKET + ANTHROPIC_BASE_URL."""
-        from terok_sandbox import CredentialDB
+    def test_noop_when_no_claude_oauth(self) -> None:
+        """No-op when executor didn't inject Claude OAuth token (API key or no Claude)."""
+        from terok.lib.orchestration.environment import _apply_claude_oauth_overrides
 
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
+        env = {
+            "ANTHROPIC_API_KEY": "terok-p-abc",
+            "ANTHROPIC_BASE_URL": "http://host.containers.internal:18731",
+        }
+        original = dict(env)
+        _apply_claude_oauth_overrides(env)
+        assert env == original
 
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "api_key", "key": "sk-test"})
-        db.close()
 
-        sock_path = tmp_path / "proxy.sock"
-        sock_path.touch()
+class TestLeakedCredentialsScan:
+    """Verify _warn_leaked_credentials with exposed-token filtering."""
 
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="socket"),
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = sock_path
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        assert "ANTHROPIC_API_KEY" in env
-        assert env["ANTHROPIC_API_KEY"].startswith("terok-p-")
-        assert env["ANTHROPIC_UNIX_SOCKET"] == "/tmp/terok-claude-proxy.sock"
-        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
-        # Socket flag AND base URL — SDK needs base URL for HTTP, socket is a mode flag
-        assert "ANTHROPIC_BASE_URL" in env
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_leaked_credentials_warning(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
-        """Leaked credential files in shared mounts trigger a stderr warning."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "api_key", "key": "sk-test"})
-        db.close()
-
-        # Create a leaked credential file in the shared mount
-        from terok_executor import get_roster
-
-        roster = get_roster()
-        auth = roster.auth_providers["claude"]
-        route = roster.proxy_routes["claude"]
-        mounts_base = tmp_path / "mounts"
-        cred_dir = mounts_base / auth.host_dir_name
-        cred_dir.mkdir(parents=True)
-        (cred_dir / route.credential_file).write_text('{"leaked": true}')
-
-        project = MagicMock()
-        project.id = "test-project"
+    def test_warns_for_leaked_files(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Leaked credential files produce log warnings."""
+        from terok.lib.orchestration.environment import _warn_leaked_credentials
 
         with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
+            caplog.at_level(logging.WARNING, logger="terok.lib.orchestration.environment"),
             patch(
                 "terok.lib.orchestration.environment.sandbox_live_mounts_dir",
-                return_value=mounts_base,
+                return_value=Path("/tmp/terok-testing/mounts"),
             ),
-            patch("terok.lib.core.config.get_credential_proxy_transport", return_value="direct"),
+            patch(
+                "terok_executor.scan_leaked_credentials",
+                return_value=[("claude", Path("/tmp/terok-testing/m/.credentials.json"))],
+            ),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
         ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "ssh-keys.json"
+            _warn_leaked_credentials()
 
-            _credential_proxy_env_and_volumes(project, "task-1")
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("claude" in r.message for r in warnings)
+        # Full path must not leak at WARNING — only at DEBUG
+        assert not any(".credentials.json" in r.message for r in warnings)
 
+    def test_exposed_token_suppresses_claude_warning(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Exposed Claude OAuth token: Claude warning suppressed, other providers still warned."""
+        from terok.lib.orchestration.environment import _warn_leaked_credentials
+
+        with (
+            caplog.at_level(logging.WARNING, logger="terok.lib.orchestration.environment"),
+            patch(
+                "terok.lib.orchestration.environment.sandbox_live_mounts_dir",
+                return_value=Path("/tmp/terok-testing/mounts"),
+            ),
+            patch(
+                "terok_executor.scan_leaked_credentials",
+                return_value=[
+                    ("claude", Path("/tmp/terok-testing/m/.credentials.json")),
+                    ("vibe", Path("/tmp/terok-testing/m/config.toml")),
+                ],
+            ),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=True),
+        ):
+            _warn_leaked_credentials()
+
+        # Exposed-token warning printed to stderr
         err = capsys.readouterr().err
-        assert "WARNING" in err
-        assert "claude" in err
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_ssh_agent_token_when_keys_registered(self, tmp_path: Path) -> None:
-        """SSH agent token and port injected when project has keys in ssh-keys.json."""
-        import json
-
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "api_key", "key": "sk"})
-        db.close()
-
-        keys_json = tmp_path / "ssh-keys.json"
-        keys_json.write_text(
-            json.dumps({"test-project": [{"private_key": "/k/id", "public_key": "/k/id.pub"}]})
-        )
-
-        project = MagicMock()
-        project.id = "test-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = keys_json
-            mock_cfg.ssh_agent_port = 18732
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        assert "TEROK_SSH_AGENT_TOKEN" in env
-        assert env["TEROK_SSH_AGENT_TOKEN"].startswith("terok-p-")
-        assert env["TEROK_SSH_AGENT_PORT"] == "18732"
-
-    @pytest.mark.usefixtures("_enable_proxy")
-    def test_no_ssh_token_when_no_keys(self, tmp_path: Path) -> None:
-        """No SSH agent env vars when project has no keys registered."""
-        from terok_sandbox import CredentialDB
-
-        from terok.lib.orchestration.environment import _credential_proxy_env_and_volumes
-
-        db_path = tmp_path / "proxy" / "credentials.db"
-        db = CredentialDB(db_path)
-        db.store_credential("default", "claude", {"type": "api_key", "key": "sk"})
-        db.close()
-
-        project = MagicMock()
-        project.id = "no-ssh-project"
-
-        with (
-            patch("terok_sandbox.credentials.lifecycle.is_daemon_running", return_value=True),
-            patch("terok_sandbox.ensure_proxy_reachable"),
-            patch("terok.lib.orchestration.environment.make_sandbox_config") as mock_cfg_fn,
-        ):
-            mock_cfg = mock_cfg_fn.return_value
-            mock_cfg.proxy_db_path = db_path
-            mock_cfg.proxy_socket_path = tmp_path / "proxy.sock"
-            mock_cfg.proxy_port = 18731
-            mock_cfg.ssh_keys_json_path = tmp_path / "nonexistent.json"
-
-            env, _ = _credential_proxy_env_and_volumes(project, "task-1")
-
-        assert "TEROK_SSH_AGENT_TOKEN" not in env
-        assert "TEROK_SSH_AGENT_PORT" not in env
-
-
-class TestLoadSshKeysJson:
-    """Verify _load_ssh_keys_json edge cases."""
-
-    def test_missing_file_returns_empty(self, tmp_path: Path) -> None:
-        """Non-existent file returns empty dict."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        assert _load_ssh_keys_json(tmp_path / "nope.json") == {}
-
-    def test_corrupt_json_returns_empty(self, tmp_path: Path) -> None:
-        """Corrupt JSON returns empty dict."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        bad = tmp_path / "bad.json"
-        bad.write_text("{not valid")
-        assert _load_ssh_keys_json(bad) == {}
-
-    def test_valid_json_parsed(self, tmp_path: Path) -> None:
-        """Valid JSON is parsed correctly."""
-        import json
-
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        kf = tmp_path / "keys.json"
-        kf.write_text(json.dumps({"proj": {"private_key": "/a", "public_key": "/b"}}))
-        assert _load_ssh_keys_json(kf) == {"proj": {"private_key": "/a", "public_key": "/b"}}
-
-    def test_string_payload_returns_empty(self, tmp_path: Path) -> None:
-        """JSON string payload (e.g. a project name) returns empty dict."""
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        f = tmp_path / "keys.json"
-        f.write_text('"test-project"')
-        assert _load_ssh_keys_json(f) == {}
-
-    def test_list_payload_returns_empty(self, tmp_path: Path) -> None:
-        """JSON list payload returns empty dict."""
-        import json
-
-        from terok.lib.orchestration.environment import _load_ssh_keys_json
-
-        f = tmp_path / "keys.json"
-        f.write_text(json.dumps(["test-project"]))
-        assert _load_ssh_keys_json(f) == {}
+        assert "EXPOSED" in err
+        # Claude filtered out, vibe still warned via logger
+        log_messages = [r.message for r in caplog.records]
+        assert not any("claude" in m for m in log_messages)
+        assert any("vibe" in m for m in log_messages)
