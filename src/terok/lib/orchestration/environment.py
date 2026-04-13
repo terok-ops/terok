@@ -504,7 +504,7 @@ def build_task_env_and_volumes(
             envs_dir=sandbox_live_mounts_dir(),
         ),
         get_roster(),
-        proxy_bypass=True,  # terok uses richer proxy handling below
+        caller_manages_proxy=True,  # terok injects richer per-provider proxy tokens below
     )
 
     env = dict(result.env)
