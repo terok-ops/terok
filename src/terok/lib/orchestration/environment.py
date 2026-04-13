@@ -483,6 +483,8 @@ def build_task_env_and_volumes(
 
     from terok_executor import ContainerEnvSpec, assemble_container_env, get_roster
 
+    from ..core.config import get_credential_proxy_transport
+
     result = assemble_container_env(
         ContainerEnvSpec(
             task_id=task_id,
@@ -499,6 +501,9 @@ def build_task_env_and_volumes(
             human_name=project.human_name or "Nobody",
             human_email=project.human_email or "nobody@localhost",
             credential_scope=project.id,
+            proxy_transport=get_credential_proxy_transport(),
+            proxy_required=True,
+            scan_leaked_creds=True,
             unrestricted=False,  # task_runners resolves per-provider config
             shared_dir=None if sealed else project.shared_dir,
             envs_dir=sandbox_live_mounts_dir(),
