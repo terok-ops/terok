@@ -1566,7 +1566,7 @@ class TestTaskDeleteWarnings:
         assert any("Token revoke" in w for w in result.warnings)
 
     def test_container_rm_failure_produces_warning(self) -> None:
-        """Failed container removal adds a warning per failed container."""
+        """Failed container removal adds a warning and keeps port claimed."""
         result = self._delete_with_mocks(
             project_id="proj_warn3",
             container_results=[
@@ -1576,6 +1576,7 @@ class TestTaskDeleteWarnings:
         )
         assert any("proj-web-1" in w and "locked" in w for w in result.warnings)
         assert not any("proj-cli-1" in w for w in result.warnings)
+        assert any("Web port kept claimed" in w for w in result.warnings)
 
     def test_workspace_rm_failure_produces_warning(self) -> None:
         """Failed workspace rmtree adds a warning."""
@@ -1603,7 +1604,8 @@ class TestTaskDeleteWarnings:
             ],
             rmtree_side_effect=OSError("nfs stale"),
         )
-        assert len(result.warnings) >= 3
+        assert len(result.warnings) >= 4
         assert any("Token" in w for w in result.warnings)
         assert any("c1" in w for w in result.warnings)
         assert any("Workspace" in w for w in result.warnings)
+        assert any("Web port kept claimed" in w for w in result.warnings)

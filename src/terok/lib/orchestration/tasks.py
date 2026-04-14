@@ -760,16 +760,19 @@ def _task_delete(project: ProjectConfig, task_id: str) -> TaskDeleteResult:
 
     _log_debug("task_delete: calling _stop_task_containers")
     names = [container_name(project.id, mode, str(task_id)) for mode in CONTAINER_MODES]
+    containers_removed = True
     try:
         rm_results = stop_task_containers(names)
     except Exception as exc:
         _log_debug(f"task_delete: stop_task_containers raised: {exc}")
         warnings.append(f"Container removal failed: {exc}")
         rm_results = []
+        containers_removed = False
     for r in rm_results:
         if not r.removed:
             _log_debug(f"task_delete: container {r.name} not removed: {r.error}")
             warnings.append(f"Container {r.name}: {r.error}")
+            containers_removed = False
     _log_debug("task_delete: _stop_task_containers returned")
 
     if mode:
@@ -804,13 +807,16 @@ def _task_delete(project: ProjectConfig, task_id: str) -> TaskDeleteResult:
             _log_debug(f"task_delete: metadata removal failed: {exc}")
             warnings.append(f"Metadata removal failed: {exc}")
 
-    _log_debug("task_delete: releasing web port")
-    try:
-        from .ports import release_web_port
+    if containers_removed:
+        _log_debug("task_delete: releasing web port")
+        try:
+            from .ports import release_web_port
 
-        release_web_port(project.id, task_id)
-    except Exception as exc:  # noqa: BLE001 — best-effort cleanup
-        _log_debug(f"task_delete: web port release failed: {exc}")
+            release_web_port(project.id, task_id)
+        except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+            _log_debug(f"task_delete: web port release failed: {exc}")
+    else:
+        warnings.append("Web port kept claimed — containers may still be running")
 
     _log_debug("task_delete: finished")
     return TaskDeleteResult(task_id=task_id, warnings=warnings)
