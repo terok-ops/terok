@@ -525,10 +525,11 @@ def task_run_toad(
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id, "toad")
 
-    port = meta.get("web_port")
-    if not isinstance(port, int):
-        port = assign_web_port()
-        meta["web_port"] = port
+    port = assign_web_port(
+        project.id, task_id,
+        preferred=meta["web_port"] if isinstance(meta.get("web_port"), int) else None,
+    )
+    meta["web_port"] = port
 
     cname = container_name(project.id, "toad", task_id)
     container_state = get_container_state(cname)
@@ -1066,6 +1067,9 @@ def task_restart(project_id: str, task_id: str) -> None:
 
     if container_state is not None:
         # Container exists (stopped/exited, or just stopped above) - start it
+        web_port = meta.get("web_port")
+        if isinstance(web_port, int):
+            assign_web_port(project_id, task_id, preferred=web_port)
         task_dir = project.tasks_root / str(task_id)
         _podman_start(cname)
         _assert_running(cname)

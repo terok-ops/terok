@@ -3,68 +3,23 @@
 
 """Web port allocation for task containers.
 
-Scans existing task metadata to find used ports and allocates the next
-free port starting from the configured UI base port.
+All port allocation flows through the shared port registry in
+:mod:`terok_sandbox.port_registry` to prevent collisions between
+users on shared hosts.
 """
 
-import socket
-
-from ..core.config import get_ui_base_port, state_dir
-from ..util.yaml import load as _yaml_load
-
-_LOCALHOST = "127.0.0.1"
+from terok_sandbox import claim_port, release_port
 
 
-def _is_port_free(port: int) -> bool:
-    """Return True if *port* can be bound on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind((_LOCALHOST, port))
-        except OSError:
-            return False
-    return True
+def assign_web_port(project_id: str, task_id: str, preferred: int | None = None) -> int:
+    """Claim a web port for a task via the shared registry.
 
-
-def _collect_all_web_ports() -> set[int]:
-    """Scan all task metadata files and return the set of assigned web ports."""
-    # Scan all task metas for any project
-    root = state_dir() / "projects"
-    ports: set[int] = set()
-    if not root.is_dir():
-        return ports
-    for proj_dir in root.iterdir():
-        tdir = proj_dir / "tasks"
-        if not tdir.is_dir():
-            continue
-        for f in tdir.glob("*.yml"):
-            try:
-                meta = _yaml_load(f.read_text()) or {}
-            except Exception as exc:
-                from ..util.logging_utils import log_warning
-
-                log_warning(f"Skipping malformed task metadata during port scan: {f}: {exc}")
-                continue
-            port = meta.get("web_port")
-            if isinstance(port, int):
-                ports.add(port)
-    return ports
-
-
-def assign_web_port() -> int:
-    """Find a free web port starting from the configured UI base port.
-
-    Scans up to 200 successive ports (base_port through base_port + 199),
-    skipping ports already recorded in task metadata or currently bound.
-    Raises SystemExit if no free port is found.
+    When *preferred* is set (e.g. from persisted task metadata), tries
+    that port first before scanning.
     """
-    used = _collect_all_web_ports()
-    base = get_ui_base_port()
-    port = base
-    max_tries = 200
-    tries = 0
-    while tries < max_tries:
-        if port not in used and _is_port_free(port):
-            return port
-        port += 1
-        tries += 1
-    raise SystemExit("No free web ports available")
+    return claim_port(f"web:{project_id}/{task_id}", preferred=preferred)
+
+
+def release_web_port(project_id: str, task_id: str) -> None:
+    """Release a previously claimed web port for a task."""
+    release_port(f"web:{project_id}/{task_id}")

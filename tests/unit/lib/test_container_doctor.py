@@ -15,6 +15,7 @@ from terok.lib.orchestration.container_doctor import (
     _exec_in_container,
     _git_identity_check,
     _git_remote_check,
+    _port_drift_check,
     _read_desired_shield_state,
     run_container_doctor,
 )
@@ -96,17 +97,35 @@ class TestGitRemoteCheck:
         verdict = check.evaluate(1, "", "fatal: no remote")
         assert verdict.severity == "warn"
 
-    def test_warn_when_port_mismatch(self) -> None:
+    def test_error_when_port_mismatch(self) -> None:
         check = _git_remote_check("gatekeeping", 9418)
         verdict = check.evaluate(0, "http://abc@host.containers.internal:5555/proj.git\n", "")
-        assert verdict.severity == "warn"
+        assert verdict.severity == "error"
         assert "5555" in verdict.detail
-        assert "9418" in verdict.detail
+        assert "re-allocated" in verdict.detail
 
     def test_ok_when_gate_port_none(self) -> None:
         check = _git_remote_check("gatekeeping", None)
         verdict = check.evaluate(0, "http://abc@host.containers.internal:5555/proj.git\n", "")
         assert verdict.severity == "ok"
+
+
+class TestPortDriftCheck:
+    """Port drift detection for re-allocated ports."""
+
+    def test_ok_when_ports_match(self) -> None:
+        check = _port_drift_check("TEROK_PROXY_PORT", "Proxy", 18700)
+        assert check.evaluate(0, "18700\n", "").severity == "ok"
+
+    def test_error_when_ports_differ(self) -> None:
+        check = _port_drift_check("TEROK_PROXY_PORT", "Proxy", 18700)
+        verdict = check.evaluate(0, "18731\n", "")
+        assert verdict.severity == "error"
+        assert "re-allocated" in verdict.detail
+
+    def test_ok_when_env_not_set(self) -> None:
+        check = _port_drift_check("TEROK_PROXY_PORT", "Proxy", 18700)
+        assert check.evaluate(1, "", "").severity == "ok"
 
 
 class TestReadDesiredShieldState:

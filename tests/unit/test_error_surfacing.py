@@ -182,7 +182,7 @@ class TestLoadValidatedErrorPaths:
         assert str(bad_file) in captured.err
         # Returns defaults
         assert result.ui.base_port == 7860
-        assert result.gate_server.port == 9418
+        assert result.gate_server.port is None
 
     def test_invalid_schema_warns_with_field_errors_and_returns_defaults(
         self,
@@ -399,41 +399,6 @@ class TestImageCleanupWarning:
         assert result is None
         mock_warn.assert_called_once()
         assert "Project discovery failed" in mock_warn.call_args[0][0]
-
-
-# ===========================================================================
-# ports.py — malformed task metadata during port scan
-# ===========================================================================
-
-
-class TestPortScanWarning:
-    """Cover the exception branch in _collect_all_web_ports()."""
-
-    @pytest.fixture(autouse=True)
-    def _isolate_log(self, tmp_path: Path) -> None:
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
-            yield
-
-    def test_malformed_metadata_logged(self, tmp_path: Path) -> None:
-        """Corrupt task YAML is caught and logged during port scan."""
-        from terok.lib.orchestration.ports import _collect_all_web_ports
-
-        # Set up the state directory structure
-        proj_dir = tmp_path / "projects" / "myproj" / "tasks"
-        proj_dir.mkdir(parents=True)
-        (proj_dir / "bad.yml").write_text(": [broken yaml")
-        (proj_dir / "good.yml").write_text("web_port: 8080\n")
-
-        with (
-            patch("terok.lib.orchestration.ports.state_dir", return_value=tmp_path),
-            patch("terok.lib.util.logging_utils.log_warning") as mock_warn,
-        ):
-            ports = _collect_all_web_ports()
-
-        # Good port still collected, bad file warned
-        assert 8080 in ports
-        mock_warn.assert_called_once()
-        assert "port scan" in mock_warn.call_args[0][0].lower()
 
 
 # ===========================================================================

@@ -112,8 +112,11 @@ def _git_remote_check(security_class: str, gate_port: int | None) -> DoctorCheck
                 )
             if gate_port is not None and parsed.port != gate_port:
                 return CheckVerdict(
-                    "warn",
-                    f"git origin: port {parsed.port} does not match gate port {gate_port}",
+                    "error",
+                    f"git origin: port {parsed.port} does not match gate port {gate_port}"
+                    " — ports were re-allocated; re-create this task with"
+                    " 'terok task delete' + 'terok task run'",
+                    fixable=False,
                 )
             return CheckVerdict("ok", "git origin: routed through gate")
         # Online mode: any URL is acceptable
@@ -127,8 +130,40 @@ def _git_remote_check(security_class: str, gate_port: int | None) -> DoctorCheck
     )
 
 
+_PORT_DRIFT_HINT = (
+    " — ports were re-allocated since this container was created;"
+    " re-create with 'terok task delete' + 'terok task run'"
+)
+
+
+def _port_drift_check(env_var: str, label: str, expected: int) -> DoctorCheck:
+    """Check that a baked-in port env var still matches the resolved port."""
+
+    def _eval(rc: int, stdout: str, stderr: str) -> CheckVerdict:
+        baked = stdout.strip()
+        if rc != 0 or not baked:
+            return CheckVerdict("ok", f"{label}: env not set (pre-registry container)")
+        try:
+            baked_port = int(baked)
+        except ValueError:
+            return CheckVerdict("warn", f"{label}: {env_var}={baked!r} is not a port number")
+        if baked_port == expected:
+            return CheckVerdict("ok", f"{label}: port {expected} matches")
+        return CheckVerdict("error", f"{label}: container has {baked_port}, host has {expected}{_PORT_DRIFT_HINT}", fixable=False)
+
+    return DoctorCheck(
+        category="network",
+        label=label,
+        probe_cmd=["printenv", env_var],
+        evaluate=_eval,
+    )
+
+
 def _terok_doctor_checks(
     project_id: str,
+    gate_port: int,
+    proxy_port: int,
+    ssh_agent_port: int,
 ) -> list[DoctorCheck]:
     """Build terok-level health checks from project config."""
     project = load_project(project_id)
@@ -143,11 +178,9 @@ def _terok_doctor_checks(
     checks.append(_git_identity_check(human_name, human_email, "name"))
     checks.append(_git_identity_check(human_name, human_email, "email"))
 
-    # Git remote URL check
-    from ..core.config import get_gate_server_port as _get_gate_port
-
-    gate_port = _get_gate_port()
     checks.append(_git_remote_check(project.security_class, gate_port))
+    checks.append(_port_drift_check("TEROK_PROXY_PORT", "Proxy port drift", proxy_port))
+    checks.append(_port_drift_check("TEROK_SSH_AGENT_PORT", "SSH agent port drift", ssh_agent_port))
 
     return checks
 
@@ -212,7 +245,7 @@ def _collect_all_checks(
         )
     )
     checks.extend(agent_doctor_checks(get_roster(), proxy_port=proxy_port))
-    checks.extend(_terok_doctor_checks(project_id))
+    checks.extend(_terok_doctor_checks(project_id, cfg.gate_port, proxy_port, ssh_agent_port))
     return checks
 
 

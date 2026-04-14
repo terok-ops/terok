@@ -56,12 +56,20 @@ def make_mock_shield(
 @pytest.mark.parametrize(
     ("cfg_kwargs", "expected_profiles", "expected_port", "audit_enabled"),
     [
-        pytest.param({}, ("dev-standard",), GATE_PORT, True, id="defaults"),
+        pytest.param(
+            {"gate_port": GATE_PORT, "proxy_port": 18731, "ssh_agent_port": 18732},
+            ("dev-standard",),
+            GATE_PORT,
+            True,
+            id="defaults",
+        ),
         pytest.param(
             {
                 "shield_profiles": ("custom-a", "custom-b"),
                 "shield_audit": False,
                 "gate_port": CUSTOM_GATE_PORT,
+                "proxy_port": 18731,
+                "ssh_agent_port": 18732,
             },
             ("custom-a", "custom-b"),
             CUSTOM_GATE_PORT,
@@ -69,7 +77,12 @@ def make_mock_shield(
             id="custom-values",
         ),
         pytest.param(
-            {"shield_profiles": ("single-profile",)},
+            {
+                "shield_profiles": ("single-profile",),
+                "gate_port": GATE_PORT,
+                "proxy_port": 18731,
+                "ssh_agent_port": 18732,
+            },
             ("single-profile",),
             GATE_PORT,
             True,
@@ -160,7 +173,7 @@ def test_shield_down_allow_all(mock_make: MagicMock) -> None:
 
 def test_status_defaults() -> None:
     """Status reflects the default configured shield state."""
-    cfg = SandboxConfig()
+    cfg = SandboxConfig(gate_port=9418, proxy_port=18731, ssh_agent_port=18732)
     assert status(cfg=cfg) == {
         "mode": "hook",
         "profiles": ["dev-standard"],

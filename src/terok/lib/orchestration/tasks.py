@@ -758,6 +758,11 @@ def _task_delete(project: ProjectConfig, task_id: str) -> TaskDeleteResult:
         _log_debug(f"task_delete: token revoke failed: {exc}")
         warnings.append(f"Token revoke failed: {exc}")
 
+    _log_debug("task_delete: releasing web port")
+    from .ports import release_web_port
+
+    release_web_port(project.id, task_id)
+
     _log_debug("task_delete: calling _stop_task_containers")
     names = [container_name(project.id, mode, str(task_id)) for mode in CONTAINER_MODES]
     try:
@@ -915,6 +920,9 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
         raise SystemExit(f"Failed to stop container: {e}")
 
     from .hooks import run_hook
+    from .ports import release_web_port
+
+    release_web_port(project.id, task_id)
 
     run_hook(
         "post_stop",

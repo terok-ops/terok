@@ -10,6 +10,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from terok_sandbox import port_registry as reg
 
 from terok.lib.core import config as cfg
 
@@ -20,6 +21,7 @@ def reset_experimental() -> Iterator[None]:
     cfg.set_experimental(False)
     yield
     cfg.set_experimental(False)
+
 
 
 def write_config(tmp_path: Path, content: str) -> Path:
@@ -398,10 +400,57 @@ def test_get_credential_proxy_bypass(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert cfg.get_credential_proxy_bypass() is True
 
 
-def test_get_gate_server_port_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``get_gate_server_port()`` defaults to 9418."""
+def test_get_gate_server_port_default_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_gate_server_port()`` defaults to None (auto-allocate)."""
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
-    assert cfg.get_gate_server_port() == 9418
+    assert cfg.get_gate_server_port() is None
+
+
+def test_get_gate_server_port_explicit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_gate_server_port()`` returns explicit port from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "gate_server:\n  port: 9500\n")),
+    )
+    assert cfg.get_gate_server_port() == 9500
+
+
+def test_get_credential_proxy_port_default_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_credential_proxy_port()`` defaults to None (auto-allocate)."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_credential_proxy_port() is None
+
+
+def test_get_credential_proxy_port_explicit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_credential_proxy_port()`` returns explicit port from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "credential_proxy:\n  port: 19000\n")),
+    )
+    assert cfg.get_credential_proxy_port() == 19000
+
+
+def test_get_credential_proxy_ssh_agent_port_default_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_credential_proxy_ssh_agent_port()`` defaults to None (auto-allocate)."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_credential_proxy_ssh_agent_port() is None
+
+
+def test_get_credential_proxy_ssh_agent_port_explicit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``get_credential_proxy_ssh_agent_port()`` returns explicit port from config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "credential_proxy:\n  ssh_agent_port: 19001\n")),
+    )
+    assert cfg.get_credential_proxy_ssh_agent_port() == 19001
 
 
 def test_get_gate_server_suppress_warning(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -474,12 +523,49 @@ def test_make_sandbox_config_from_config_file(
 
 
 def test_make_sandbox_config_gate_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Factory propagates gate_server.port from global config."""
+    """Factory propagates explicit gate_server.port from global config."""
     monkeypatch.setenv(
         "TEROK_CONFIG_FILE",
         str(write_config(tmp_path, "gate_server:\n  port: 1234\n")),
     )
     assert cfg.make_sandbox_config().gate_port == 1234
+
+
+def test_make_sandbox_config_proxy_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Factory propagates explicit credential_proxy.port from global config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "credential_proxy:\n  port: 19000\n")),
+    )
+    assert cfg.make_sandbox_config().proxy_port == 19000
+
+
+def test_make_sandbox_config_ssh_agent_port(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Factory propagates explicit credential_proxy.ssh_agent_port from global config."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "credential_proxy:\n  ssh_agent_port: 19001\n")),
+    )
+    assert cfg.make_sandbox_config().ssh_agent_port == 19001
+
+
+def test_make_sandbox_config_auto_allocates_ports(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Factory auto-allocates distinct ports and reuses them on second call."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    sc = cfg.make_sandbox_config()
+    ports = {sc.gate_port, sc.proxy_port, sc.ssh_agent_port}
+    assert len(ports) == 3, "Auto-allocated ports must be distinct"
+    for p in ports:
+        assert p in reg.PORT_RANGE, f"Port {p} outside expected range"
+
+    sc2 = cfg.make_sandbox_config()
+    assert sc2.gate_port == sc.gate_port
+    assert sc2.proxy_port == sc.proxy_port
+    assert sc2.ssh_agent_port == sc.ssh_agent_port
 
 
 def test_make_sandbox_config_credentials_propagation(

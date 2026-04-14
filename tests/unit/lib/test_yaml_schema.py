@@ -232,7 +232,7 @@ class RawGlobalConfigTests(unittest.TestCase):
         self.assertFalse(cfg.shield.bypass_firewall_no_protection)
         self.assertTrue(cfg.shield.drop_on_task_run)
         self.assertEqual(cfg.shield.on_task_restart, "retain")
-        self.assertEqual(cfg.gate_server.port, 9418)
+        self.assertIsNone(cfg.gate_server.port)
         self.assertIsNone(cfg.default_agent)
         self.assertFalse(cfg.experimental)
 
@@ -266,6 +266,27 @@ class RawGlobalConfigTests(unittest.TestCase):
         self.assertEqual(cfg.gate_server.port, 1234)
         self.assertTrue(cfg.gate_server.suppress_systemd_warning)
         self.assertEqual(cfg.default_agent, "codex")
+
+    def test_port_validation_rejects_out_of_range(self) -> None:
+        """Port fields reject values outside 1–65535."""
+        for section, field in [
+            ("gate_server", "port"),
+            ("credential_proxy", "port"),
+            ("credential_proxy", "ssh_agent_port"),
+        ]:
+            for bad in (0, -1, 65536, 100000):
+                with self.assertRaises(ValidationError, msg=f"{section}.{field}={bad}"):
+                    RawGlobalConfig.model_validate({section: {field: bad}})
+
+    def test_port_validation_accepts_valid(self) -> None:
+        """Port fields accept valid values and None."""
+        cfg = RawGlobalConfig.model_validate({
+            "gate_server": {"port": 9418},
+            "credential_proxy": {"port": 1, "ssh_agent_port": 65535},
+        })
+        self.assertEqual(cfg.gate_server.port, 9418)
+        self.assertEqual(cfg.credential_proxy.port, 1)
+        self.assertEqual(cfg.credential_proxy.ssh_agent_port, 65535)
 
     def test_unknown_key_rejected(self) -> None:
         """Unknown top-level key raises ValidationError."""

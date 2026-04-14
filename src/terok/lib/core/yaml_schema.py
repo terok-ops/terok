@@ -342,6 +342,7 @@ class RawPathsSection(BaseModel):
     sandbox_live_dir: str | None = None
     user_projects_dir: str | None = None
     user_presets_dir: str | None = None
+    port_registry_dir: str | None = None
 
 
 class RawTUISection(BaseModel):
@@ -379,6 +380,8 @@ class RawCredentialProxySection(BaseModel):
 
     bypass_no_secret_protection: bool = False
     transport: Literal["direct", "socket"] = "socket"
+    port: int | None = Field(default=None, ge=1, le=65535)
+    ssh_agent_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class RawGateServerSection(BaseModel):
@@ -386,7 +389,7 @@ class RawGateServerSection(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    port: int = 9418
+    port: int | None = Field(default=None, ge=1, le=65535)
     repos_dir: str | None = None
     suppress_systemd_warning: bool = False
 
@@ -397,6 +400,15 @@ class RawTasksGlobalSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name_categories: NameCategories = None
+
+
+class RawNetworkSection(BaseModel):
+    """Global ``network:`` section — port range and future network settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port_range_start: int = Field(default=18700, ge=1024, le=65535)
+    port_range_end: int = Field(default=32767, ge=1024, le=65535)
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +429,7 @@ class RawGlobalConfig(BaseModel):
     shield: RawShieldGlobalSection = Field(default_factory=RawShieldGlobalSection)
     credential_proxy: RawCredentialProxySection = Field(default_factory=RawCredentialProxySection)
     gate_server: RawGateServerSection = Field(default_factory=RawGateServerSection)
+    network: RawNetworkSection = Field(default_factory=RawNetworkSection)
     tasks: RawTasksGlobalSection = Field(default_factory=RawTasksGlobalSection)
     git: RawGlobalGitSection = Field(default_factory=RawGlobalGitSection)
     hooks: RawHooksSection = Field(default_factory=RawHooksSection)
@@ -435,6 +448,7 @@ class RawGlobalConfig(BaseModel):
             "shield",
             "credential_proxy",
             "gate_server",
+            "network",
             "tasks",
             "git",
             "hooks",

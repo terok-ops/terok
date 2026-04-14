@@ -341,6 +341,10 @@ def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
     sandbox's plain dataclass.  Sandbox uses its own ``state_dir`` default
     (``~/.local/share/terok/sandbox/``) — terok no longer overrides it.
 
+    Port fields pass ``None`` (auto-allocate via sandbox's shared port
+    registry) or an explicit ``int`` from config.yml.  Resolution happens
+    in ``SandboxConfig.__post_init__``.
+
     This is the **single source of truth** for config bridging — every
     SandboxConfig field that terok controls must be set here.
     """
@@ -349,6 +353,8 @@ def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
     return SandboxConfig(
         credentials_dir=credentials_dir(),
         gate_port=get_gate_server_port(),
+        proxy_port=get_credential_proxy_port(),
+        ssh_agent_port=get_credential_proxy_ssh_agent_port(),
         shield_bypass=get_shield_bypass_firewall_no_protection(),
         shield_audit=get_shield_audit(),
     )
@@ -432,6 +438,28 @@ def get_credential_proxy_transport() -> str:
     return _load_validated().credential_proxy.transport
 
 
+def get_credential_proxy_port() -> int | None:
+    """Return the explicit credential proxy port, or ``None`` for auto-allocation.
+
+    Global config (config.yml)::
+
+        credential_proxy:
+          port: 18700   # omit for auto-allocation
+    """
+    return _load_validated().credential_proxy.port
+
+
+def get_credential_proxy_ssh_agent_port() -> int | None:
+    """Return the explicit SSH agent proxy port, or ``None`` for auto-allocation.
+
+    Global config (config.yml)::
+
+        credential_proxy:
+          ssh_agent_port: 18701   # omit for auto-allocation
+    """
+    return _load_validated().credential_proxy.ssh_agent_port
+
+
 def get_shield_bypass_firewall_no_protection() -> bool:
     """Return whether the shield firewall is globally bypassed.
 
@@ -470,8 +498,8 @@ def get_public_host() -> str:
     return os.environ.get("TEROK_PUBLIC_HOST", "").strip() or "127.0.0.1"
 
 
-def get_gate_server_port() -> int:
-    """Return the gate server port from global config (default 9418)."""
+def get_gate_server_port() -> int | None:
+    """Return the explicit gate server port, or ``None`` for auto-allocation."""
     return _load_validated().gate_server.port
 
 
