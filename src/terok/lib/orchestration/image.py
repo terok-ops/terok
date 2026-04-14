@@ -10,12 +10,15 @@ three layers together.
 """
 
 import hashlib
+import json
+import logging
 import shlex
 import shutil
 import subprocess
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from terok_executor import (
     BuildError,
@@ -165,25 +168,46 @@ def render_all_dockerfiles(project: ProjectConfig) -> dict[str, str]:
 # ---------- Build context hash ----------
 
 
+def _sha256(*parts: str) -> str:
+    """Compute SHA-256 from a sequence of string parts, null-separated."""
+    hasher = hashlib.sha256()
+    for i, part in enumerate(parts):
+        if i:
+            hasher.update(b"\0")
+        hasher.update(part.encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def l0_content_hash(base_image: str, rendered: dict[str, str]) -> str:
+    """Content hash for the L0 (base dev) layer."""
+    return _sha256(f"base_image={base_image}", rendered["L0.Dockerfile"])
+
+
+def l1_content_hash(rendered: dict[str, str]) -> str:
+    """Content hash for the L1 (agent CLI) layer."""
+    return _sha256(rendered["L1.cli.Dockerfile"], _scripts_hash(), _tmux_config_hash())
+
+
+def l2_content_hash(rendered: dict[str, str]) -> str:
+    """Content hash for the L2 (project customisation) layer."""
+    return _sha256(rendered["L2.Dockerfile"])
+
+
 def build_context_hash_from_rendered(project: ProjectConfig, rendered: dict[str, str]) -> str:
-    """Compute a SHA-256 digest from pre-rendered Dockerfiles.
+    """Compute a combined SHA-256 digest from pre-rendered Dockerfiles.
+
+    The combined hash is derived from the three per-layer hashes.  It is
+    stored on L2 images as the ``terok.build_context_hash`` label.
 
     Args:
         project: The resolved project configuration.
         rendered: name→content mapping returned by :func:`render_all_dockerfiles`.
     """
-    hasher = hashlib.sha256()
-    hasher.update(f"base_image={project.base_image}".encode())
-    hasher.update(b"\0")
-    for name in sorted(rendered):
-        hasher.update(name.encode("utf-8"))
-        hasher.update(b"\0")
-        hasher.update(rendered[name].encode("utf-8"))
-        hasher.update(b"\0")
-    hasher.update(_scripts_hash().encode("utf-8"))
-    hasher.update(b"\0")
-    hasher.update(_tmux_config_hash().encode("utf-8"))
-    return hasher.hexdigest()
+    return _sha256(
+        l0_content_hash(project.base_image, rendered),
+        l1_content_hash(rendered),
+        l2_content_hash(rendered),
+    )
 
 
 def build_context_hash(project_id: str) -> str:
@@ -191,6 +215,35 @@ def build_context_hash(project_id: str) -> str:
     project = load_project(project_id)
     rendered = render_all_dockerfiles(project)
     return build_context_hash_from_rendered(project, rendered)
+
+
+# ---------- Build manifest ----------
+
+_MANIFEST_SCHEMA = 1
+_logger = logging.getLogger(__name__)
+
+
+def _manifest_path(project_id: str) -> Path:
+    """Return the path to the build manifest for *project_id*."""
+    return build_dir() / project_id / "build_manifest.json"
+
+
+def read_build_manifest(project_id: str) -> dict[str, Any] | None:
+    """Load the build manifest for *project_id*, or ``None`` if absent/corrupt."""
+    path = _manifest_path(project_id)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) and data.get("schema") == _MANIFEST_SCHEMA else None
+
+
+def _write_build_manifest(project_id: str, manifest: dict[str, Any]) -> None:
+    """Atomically write the build manifest for *project_id*."""
+    path = _manifest_path(project_id)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
 
 
 # ---------- Dockerfile generation ----------
@@ -251,6 +304,7 @@ def build_images(
     project = load_project(project_id)
     base_image = project.base_image
     stage_dir = build_dir() / project.id
+    rebuilt_base = rebuild_agents or full_rebuild
 
     # Delegate L0+L1 to terok-executor (uses its own temp dir for build context)
     try:
@@ -271,8 +325,21 @@ def build_images(
     generate_dockerfiles(project_id)
     l2_path = stage_dir / "L2.Dockerfile"
 
-    context_hash = build_context_hash(project_id)
+    rendered = render_all_dockerfiles(project)
+    l0_hash = l0_content_hash(base_image, rendered)
+    l1_hash = l1_content_hash(rendered)
+    l2_hash = l2_content_hash(rendered)
+    context_hash = _sha256(l0_hash, l1_hash, l2_hash)
     context_dir = str(stage_dir)
+
+    # Resolve manifest L0/L1 hashes: use current hashes if rebuilt,
+    # carry forward from previous manifest if skipped.
+    if rebuilt_base:
+        manifest_l0_hash, manifest_l1_hash = l0_hash, l1_hash
+    else:
+        prev = read_build_manifest(project_id)
+        manifest_l0_hash = prev["l0"]["content_hash"] if prev else l0_hash
+        manifest_l1_hash = prev["l1"]["content_hash"] if prev else l1_hash
 
     def _build_l2(base_arg: str, target: str) -> None:
         """Build one L2 image variant."""
@@ -297,3 +364,17 @@ def build_images(
     # Optionally build L2 dev image (project layer on top of L0)
     if include_dev:
         _build_l2(l0_image, l2_dev_image)
+
+    # Write build manifest so staleness detection knows what each
+    # layer was actually built from.
+    _write_build_manifest(
+        project_id,
+        {
+            "schema": _MANIFEST_SCHEMA,
+            "base_image": base_image,
+            "l0": {"tag": l0_image, "content_hash": manifest_l0_hash},
+            "l1": {"tag": l1_cli_image, "content_hash": manifest_l1_hash},
+            "l2_cli": {"tag": l2_cli_image, "content_hash": l2_hash},
+            "combined_hash": context_hash,
+        },
+    )

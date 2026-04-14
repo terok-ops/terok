@@ -10,7 +10,7 @@ for overview displays.
 
 import subprocess
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -100,46 +100,14 @@ def get_project_state(
                 dockerfiles_old = False
 
     images_old = False
+    stale_layers: list[str] = []
     if has_images and has_dockerfiles:
         if dockerfiles_old:
             images_old = True
+            stale_layers = ["l0", "l1", "l2"]
         else:
-            docker_mtime = None
-            try:
-                docker_mtime = max(p.stat().st_mtime for p in dockerfiles if p.is_file())
-            except Exception:
-                docker_mtime = None
-
-            context_hash = None
-            if rendered:
-                try:
-                    from ..orchestration.image import build_context_hash_from_rendered
-
-                    context_hash = build_context_hash_from_rendered(project, rendered)
-                except (OSError, ValueError, KeyError, ImportError) as exc:
-                    from ..util.logging_utils import _log_debug
-
-                    _log_debug(f"Build context hash failed for {project_id}: {exc}")
-                    context_hash = None
-
-            if docker_mtime is not None or context_hash is not None:
-                docker_dt = (
-                    datetime.fromtimestamp(docker_mtime, tz=UTC)
-                    if docker_mtime is not None
-                    else None
-                )
-                for tag in required_tags:
-                    created, label = _get_image_metadata(tag, "terok.build_context_hash")
-                    if created is None and label is None:
-                        images_old = True
-                        break
-                    if docker_dt is not None and created is not None and created < docker_dt:
-                        images_old = True
-                        break
-                    if context_hash is not None:
-                        if label is None or label != context_hash:
-                            images_old = True
-                            break
+            stale_layers = _detect_stale_layers(project, rendered)
+            images_old = bool(stale_layers)
 
     # SSH: consider SSH "ready" when the key directory and its config file exist.
     # Falls back to the managed ssh-keys store (same as SSHManager / git gate).
@@ -168,10 +136,52 @@ def get_project_state(
         "dockerfiles_old": dockerfiles_old,
         "images": has_images,
         "images_old": images_old,
+        "stale_layers": stale_layers,
         "ssh": has_ssh,
         "gate": has_gate,
         "gate_last_commit": gate_last_commit,
     }
+
+
+def _detect_stale_layers(project: "ProjectConfig", rendered: dict[str, str] | None) -> list[str]:
+    """Compare per-layer content hashes against the build manifest.
+
+    Returns a list of stale layer names (``"l0"``, ``"l1"``, ``"l2"``).
+    Missing manifest → all layers stale.
+    """
+    if not rendered:
+        return ["l0", "l1", "l2"]
+
+    try:
+        from ..orchestration.image import (
+            l0_content_hash,
+            l1_content_hash,
+            l2_content_hash,
+            read_build_manifest,
+        )
+
+        current = {
+            "l0": l0_content_hash(project.base_image, rendered),
+            "l1": l1_content_hash(rendered),
+            "l2": l2_content_hash(rendered),
+        }
+        manifest = read_build_manifest(project.id)
+    except (ImportError, OSError, ValueError, KeyError):
+        return ["l0", "l1", "l2"]
+
+    if manifest is None:
+        return ["l0", "l1", "l2"]
+
+    stale: list[str] = []
+    for layer in ("l0", "l1"):
+        entry = manifest.get(layer)
+        if not isinstance(entry, dict) or entry.get("content_hash") != current[layer]:
+            stale.append(layer)
+    # L2 uses "l2_cli" key in the manifest
+    l2_entry = manifest.get("l2_cli")
+    if not isinstance(l2_entry, dict) or l2_entry.get("content_hash") != current["l2"]:
+        stale.append("l2")
+    return stale
 
 
 def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str | None]:
@@ -278,32 +288,22 @@ def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
         return None
 
     try:
-        from ..orchestration.image import build_context_hash
+        from ..orchestration.image import render_all_dockerfiles
 
-        current_hash = build_context_hash(project_id)
+        project = load_project(project_id)
+        rendered = render_all_dockerfiles(project)
+        stale = _detect_stale_layers(project, rendered)
     except Exception:
-        return None
+        # Fall back to L2 label check if manifest approach fails
+        try:
+            from ..orchestration.image import build_context_hash
 
-    try:
-        label_result = subprocess.run(
-            [
-                "podman",
-                "image",
-                "inspect",
-                "--format",
-                '{{index .Config.Labels "terok.build_context_hash"}}',
-                image_id,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return None
-    if label_result.returncode != 0:
-        return None
+            current_hash = build_context_hash(project_id)
+        except Exception:
+            return None
+        _, label = _get_image_metadata(image_id, "terok.build_context_hash")
+        if label is None:
+            return True
+        return label != current_hash
 
-    label = label_result.stdout.strip()
-    if not label or label == "<no value>":
-        return True
-    return label != current_hash
+    return bool(stale) or None

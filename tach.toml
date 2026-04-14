@@ -575,6 +575,10 @@ expose = [
     "build_images",
     "build_context_hash",
     "build_context_hash_from_rendered",
+    "l0_content_hash",
+    "l1_content_hash",
+    "l2_content_hash",
+    "read_build_manifest",
     "render_all_dockerfiles",
 ]
 from = ["terok.lib.orchestration.image"]

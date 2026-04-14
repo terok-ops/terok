@@ -280,6 +280,7 @@ class TestProject:
             "dockerfiles_old": True,
             "images": True,
             "images_old": True,
+            "stale_layers": ["l0", "l1", "l2"],
             "ssh": True,
             "gate": True,
             "gate_last_commit": None,

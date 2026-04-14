@@ -240,3 +240,156 @@ def test_build_images_full_rebuild_passes_no_cache() -> None:
         commands = build_commands("proj_build_full", full_rebuild=True)
 
     assert any("--no-cache" in cmd for cmd in commands[0])
+
+
+# ---------- Per-layer hashing ----------
+
+
+class TestPerLayerHashes:
+    """Verify per-layer content hashes are stable and independent."""
+
+    def test_per_layer_hashes_are_deterministic(self) -> None:
+        """Same inputs produce the same per-layer hashes."""
+        from terok.lib.orchestration.image import (
+            l0_content_hash,
+            l1_content_hash,
+            l2_content_hash,
+        )
+
+        rendered = {
+            "L0.Dockerfile": "FROM ubuntu:24.04",
+            "L1.cli.Dockerfile": "FROM terok-l0:ubuntu-24-04",
+            "L2.Dockerfile": "FROM terok-l1-cli:ubuntu-24-04",
+        }
+        assert l0_content_hash("ubuntu:24.04", rendered) == l0_content_hash(
+            "ubuntu:24.04", rendered
+        )
+        assert l1_content_hash(rendered) == l1_content_hash(rendered)
+        assert l2_content_hash(rendered) == l2_content_hash(rendered)
+
+    def test_l0_changes_dont_affect_l1_hash(self) -> None:
+        """Changing L0 Dockerfile does not change L1 hash."""
+        from terok.lib.orchestration.image import l0_content_hash, l1_content_hash
+
+        rendered_a = {
+            "L0.Dockerfile": "FROM ubuntu:24.04",
+            "L1.cli.Dockerfile": "FROM l0-tag",
+            "L2.Dockerfile": "FROM l1-tag",
+        }
+        rendered_b = {**rendered_a, "L0.Dockerfile": "FROM ubuntu:26.04"}
+
+        assert l0_content_hash("ubuntu:24.04", rendered_a) != l0_content_hash(
+            "ubuntu:26.04", rendered_b
+        )
+        assert l1_content_hash(rendered_a) == l1_content_hash(rendered_b)
+
+    def test_combined_hash_derives_from_per_layer(self) -> None:
+        """Combined hash changes when any per-layer hash changes."""
+        from terok.lib.orchestration.image import (
+            build_context_hash_from_rendered,
+        )
+
+        with image_project("proj_hash_comb"):
+            from terok.lib.core.projects import load_project
+            from terok.lib.orchestration.image import render_all_dockerfiles
+
+            project = load_project("proj_hash_comb")
+            rendered = render_all_dockerfiles(project)
+            h1 = build_context_hash_from_rendered(project, rendered)
+
+            # Tweak L2 only
+            rendered["L2.Dockerfile"] += "\nRUN echo hello"
+            h2 = build_context_hash_from_rendered(project, rendered)
+            assert h1 != h2
+
+
+# ---------- Build manifest ----------
+
+
+class TestBuildManifest:
+    """Verify manifest read/write round-tripping."""
+
+    def test_write_and_read_manifest(self) -> None:
+        """Manifest round-trips through JSON on disk."""
+        from terok.lib.orchestration.image import (
+            _write_build_manifest,
+            read_build_manifest,
+        )
+
+        manifest = {
+            "schema": 1,
+            "base_image": "ubuntu:24.04",
+            "l0": {"tag": "terok-l0:ubuntu-24-04", "content_hash": "aaa"},
+            "l1": {"tag": "terok-l1-cli:ubuntu-24-04", "content_hash": "bbb"},
+            "l2_cli": {"tag": "test:l2-cli", "content_hash": "ccc"},
+            "combined_hash": "ddd",
+        }
+        with image_project("proj_manifest"):
+            generate_dockerfiles("proj_manifest")
+            _write_build_manifest("proj_manifest", manifest)
+            loaded = read_build_manifest("proj_manifest")
+
+        assert loaded == manifest
+
+    def test_missing_manifest_returns_none(self) -> None:
+        """read_build_manifest returns None when no manifest exists."""
+        from terok.lib.orchestration.image import read_build_manifest
+
+        with image_project("proj_no_manifest"):
+            assert read_build_manifest("proj_no_manifest") is None
+
+    def test_corrupt_manifest_returns_none(self) -> None:
+        """Corrupt JSON manifest returns None."""
+        from terok.lib.orchestration.image import _manifest_path, read_build_manifest
+
+        with image_project("proj_corrupt"):
+            generate_dockerfiles("proj_corrupt")
+            path = _manifest_path("proj_corrupt")
+            path.write_text("not json", encoding="utf-8")
+            assert read_build_manifest("proj_corrupt") is None
+
+    def test_build_images_writes_manifest(self) -> None:
+        """build_images writes a build manifest after successful build."""
+        from terok.lib.orchestration.image import read_build_manifest
+
+        with image_project("proj_build_manifest"):
+            generate_dockerfiles("proj_build_manifest")
+            build_commands("proj_build_manifest", rebuild_agents=True)
+            manifest = read_build_manifest("proj_build_manifest")
+
+        assert manifest is not None
+        assert manifest["schema"] == 1
+        assert "l0" in manifest and "l1" in manifest and "l2_cli" in manifest
+        assert all(manifest[k]["content_hash"] for k in ("l0", "l1"))
+
+    def test_skipped_base_carries_forward_manifest_hashes(self) -> None:
+        """When L0/L1 are skipped, manifest preserves previous hashes."""
+        from terok.lib.orchestration.image import (
+            _write_build_manifest,
+            read_build_manifest,
+        )
+
+        with image_project("proj_skip"):
+            generate_dockerfiles("proj_skip")
+            # Simulate a previous build with known L0/L1 hashes
+            _write_build_manifest(
+                "proj_skip",
+                {
+                    "schema": 1,
+                    "base_image": "ubuntu:24.04",
+                    "l0": {"tag": "terok-l0:ubuntu-24-04", "content_hash": "old-l0"},
+                    "l1": {"tag": "terok-l1-cli:ubuntu-24-04", "content_hash": "old-l1"},
+                    "l2_cli": {"tag": "proj_skip:l2-cli", "content_hash": "old-l2"},
+                    "combined_hash": "old-combined",
+                },
+            )
+            # Default build (rebuild_agents=False) → L0/L1 skipped
+            build_commands("proj_skip")
+            manifest = read_build_manifest("proj_skip")
+
+        assert manifest is not None
+        # L0/L1 hashes carried forward from previous manifest
+        assert manifest["l0"]["content_hash"] == "old-l0"
+        assert manifest["l1"]["content_hash"] == "old-l1"
+        # L2 hash is freshly computed (not "old-l2")
+        assert manifest["l2_cli"]["content_hash"] != "old-l2"

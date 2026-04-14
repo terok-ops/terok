@@ -17,6 +17,23 @@ from ...lib.core.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gp
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 
+_STALE_LAYER_HINTS = {
+    "l0": "build --full-rebuild",
+    "l1": "build --agents",
+    "l2": "build",
+}
+
+
+def _stale_layer_hint(stale_layers: list[str]) -> str:
+    """Return an actionable hint for the deepest stale layer.
+
+    Deepest layer first — rebuilding L0 cascades through L1 and L2.
+    """
+    for layer in ("l0", "l1", "l2"):
+        if layer in stale_layers:
+            return _STALE_LAYER_HINTS[layer]
+    return ""
+
 
 def render_project_loading(
     project: ProjectConfig | None,
@@ -83,6 +100,13 @@ def render_project_details(
     if images_value == "yes" and state.get("images_old"):
         images_value = "old"
     images_s = _status_text(images_value)
+
+    # Append actionable hint when specific layers are stale
+    stale = state.get("stale_layers", [])
+    if images_value == "old" and stale:
+        hint = _stale_layer_hint(stale)
+        if hint:
+            images_s.append(f" ({hint})", style=Style(color=warning_color, dim=True))
     ssh_s = _status_text("yes" if state.get("ssh") else "no")
 
     # Gate line: server status overrides repo status when server is down
