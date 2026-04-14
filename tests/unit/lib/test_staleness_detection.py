@@ -124,32 +124,32 @@ class TestDetectStaleLayers:
 class TestStaleLayerHint:
     """Verify TUI hint selection for stale layers."""
 
-    def test_all_stale_shows_l0_command(self) -> None:
-        """All layers stale → shows L0/L1/L2 with deepest rebuild command."""
+    def test_all_stale(self) -> None:
+        """All layers stale → L0/L1/L2."""
         from terok.tui.widgets.project_state import _stale_layer_hint
 
-        assert _stale_layer_hint(["l0", "l1", "l2"]) == "L0/L1/L2 (build --full-rebuild)"
+        assert _stale_layer_hint(["l0", "l1", "l2"]) == "L0/L1/L2"
 
-    def test_l1_only_shows_agents(self) -> None:
-        """L1-only stale → L1 with --agents hint."""
+    def test_l1_only(self) -> None:
+        """L1-only stale → L1."""
         from terok.tui.widgets.project_state import _stale_layer_hint
 
-        assert _stale_layer_hint(["l1"]) == "L1 (build --agents)"
+        assert _stale_layer_hint(["l1"]) == "L1"
 
-    def test_l2_only_shows_build(self) -> None:
-        """L2-only stale → L2 with plain build hint."""
+    def test_l2_only(self) -> None:
+        """L2-only stale → L2."""
         from terok.tui.widgets.project_state import _stale_layer_hint
 
-        assert _stale_layer_hint(["l2"]) == "L2 (build)"
+        assert _stale_layer_hint(["l2"]) == "L2"
 
-    def test_l0_and_l2_shows_both_labels(self) -> None:
-        """L0+L2 stale → L0/L2 with --full-rebuild (deepest)."""
+    def test_l0_and_l2(self) -> None:
+        """L0+L2 stale → L0/L2."""
         from terok.tui.widgets.project_state import _stale_layer_hint
 
-        assert _stale_layer_hint(["l0", "l2"]) == "L0/L2 (build --full-rebuild)"
+        assert _stale_layer_hint(["l0", "l2"]) == "L0/L2"
 
     def test_empty_returns_empty(self) -> None:
-        """No stale layers → empty hint."""
+        """No stale layers → empty string."""
         from terok.tui.widgets.project_state import _stale_layer_hint
 
         assert _stale_layer_hint([]) == ""
