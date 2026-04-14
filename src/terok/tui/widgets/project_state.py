@@ -17,7 +17,8 @@ from ...lib.core.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gp
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 
-_STALE_LAYER_HINTS = {
+_LAYER_LABELS = {"l0": "L0", "l1": "L1", "l2": "L2"}
+_REBUILD_COMMANDS = {
     "l0": "build --full-rebuild",
     "l1": "build --agents",
     "l2": "build",
@@ -25,14 +26,15 @@ _STALE_LAYER_HINTS = {
 
 
 def _stale_layer_hint(stale_layers: list[str]) -> str:
-    """Return an actionable hint for the deepest stale layer.
+    """Format a concise ``old L0/L1 (build --agents)`` hint.
 
-    Deepest layer first — rebuilding L0 cascades through L1 and L2.
+    Shows which layers are stale and the rebuild command for the deepest
+    one (since rebuilding L0 cascades through L1 and L2).
     """
-    for layer in ("l0", "l1", "l2"):
-        if layer in stale_layers:
-            return _STALE_LAYER_HINTS[layer]
-    return ""
+    layer_order = ("l0", "l1", "l2")
+    labels = "/".join(_LAYER_LABELS[ly] for ly in layer_order if ly in stale_layers)
+    cmd = next((_REBUILD_COMMANDS[ly] for ly in layer_order if ly in stale_layers), "")
+    return f"{labels} ({cmd})" if labels else ""
 
 
 def render_project_loading(
