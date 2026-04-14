@@ -665,9 +665,7 @@ def test_is_claude_oauth_not_exposed_by_default(
 class TestLayeredConfig:
     """Tests for system + user config deep-merge via ConfigStack."""
 
-    def _write_layers(
-        self, tmp_path: Path, system: str, user: str
-    ) -> tuple[Path, Path]:
+    def _write_layers(self, tmp_path: Path, system: str, user: str) -> tuple[Path, Path]:
         """Write system and user config files and return their paths."""
         sys_dir = tmp_path / "etc" / "terok"
         sys_dir.mkdir(parents=True)
@@ -689,9 +687,14 @@ class TestLayeredConfig:
         )
         from unittest.mock import patch
 
-        with patch.object(cfg, "_config_layers", return_value=[
-            ("system", sys_cfg), ("user", usr_cfg),
-        ]):
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[
+                ("system", sys_cfg),
+                ("user", usr_cfg),
+            ],
+        ):
             result = cfg._load_validated()
             assert result.ui.base_port == 7860  # inherited from system
             assert result.gate_server.port == 1234  # overridden by user
@@ -705,9 +708,14 @@ class TestLayeredConfig:
         missing_usr = tmp_path / "missing.yml"
         from unittest.mock import patch
 
-        with patch.object(cfg, "_config_layers", return_value=[
-            ("system", sys_cfg), ("user", missing_usr),
-        ]):
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[
+                ("system", sys_cfg),
+                ("user", missing_usr),
+            ],
+        ):
             assert cfg._load_validated().ui.base_port == 9999
 
     def test_user_can_delete_via_null(self, tmp_path: Path) -> None:
@@ -719,9 +727,14 @@ class TestLayeredConfig:
         )
         from unittest.mock import patch
 
-        with patch.object(cfg, "_config_layers", return_value=[
-            ("system", sys_cfg), ("user", usr_cfg),
-        ]):
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[
+                ("system", sys_cfg),
+                ("user", usr_cfg),
+            ],
+        ):
             result = cfg._load_validated()
             assert result.git.human_name is None  # deleted by user
             assert result.git.human_email == "admin@co"  # inherited
@@ -742,9 +755,14 @@ class TestLayeredConfig:
 
         from unittest.mock import patch as mock_patch
 
-        with mock_patch.object(cfg, "_config_layers", return_value=[
-            ("system", bad_sys), ("user", good_usr),
-        ]):
+        with mock_patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[
+                ("system", bad_sys),
+                ("user", good_usr),
+            ],
+        ):
             result = cfg._load_validated()
             assert result.ui.base_port == 5555
             captured = capsys.readouterr()
@@ -759,9 +777,14 @@ class TestLayeredConfig:
         )
         from unittest.mock import patch
 
-        with patch.object(cfg, "_config_layers", return_value=[
-            ("system", sys_cfg), ("user", usr_cfg),
-        ]):
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[
+                ("system", sys_cfg),
+                ("user", usr_cfg),
+            ],
+        ):
             merged = cfg.load_global_config()
             assert merged["ui"]["base_port"] == 7860
             assert merged["gate_server"]["port"] == 2222
