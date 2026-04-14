@@ -9,10 +9,13 @@ script (tools/terok-release-chain.sh) with structured state and the
 "release from PR" workflow for chained feature branches.
 
 Usage:
+    python3 tools/terok-release-chain.py quick sandbox              # single package
+    python3 tools/terok-release-chain.py quick sandbox..terok        # chain
+    python3 tools/terok-release-chain.py quick sandbox..terok --open-top  # chain, top=deps-only
+    python3 tools/terok-release-chain.py quick --from-prs sandbox:42,executor:55
+    python3 tools/terok-release-chain.py quick --from-prs s:42,e:55,t:706 --open-top
     python3 tools/terok-release-chain.py open feat/comms dbus
-    python3 tools/terok-release-chain.py quick dbus terok
-    python3 tools/terok-release-chain.py quick --from-prs sandbox:42,agent:55
-    python3 tools/terok-release-chain.py plan dbus -o plan.json
+    python3 tools/terok-release-chain.py plan sandbox..terok -o plan.json
     python3 tools/terok-release-chain.py simulate plan.json
     python3 tools/terok-release-chain.py execute plan.json
 """
@@ -335,6 +338,26 @@ def pr_state(url: str, gh_repo: str) -> str:
     return r.stdout.strip()
 
 
+_MIN_GH_VERSION = (2, 73, 0)
+"""Minimum ``gh`` version for ``gh pr checks --json``."""
+
+
+def _check_gh_version() -> None:
+    """Abort early if ``gh`` is too old for the JSON flags we rely on."""
+    try:
+        r = subprocess.run(["gh", "--version"], capture_output=True, text=True, timeout=5)
+    except FileNotFoundError:
+        die("'gh' (GitHub CLI) not found on PATH")
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", r.stdout)
+    if not m:
+        die(f"Cannot parse gh version from: {r.stdout.strip()}")
+    installed = tuple(int(x) for x in m.groups())
+    if installed < _MIN_GH_VERSION:
+        need = ".".join(str(x) for x in _MIN_GH_VERSION)
+        have = ".".join(str(x) for x in installed)
+        die(f"gh >= {need} required (found {have}). Upgrade: https://github.com/cli/cli/releases")
+
+
 def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
     """Wait for CI. Returns 'passed' or 'merged'."""
     if ctx.skip_checks:
@@ -474,15 +497,18 @@ def _step(pkg: str, seq: int, kind: StepKind, **params: Any) -> Step:
 def plan_steps(pkg: PackagePlan, org: str, fork: str, name: str) -> list[Step]:
     """Generate the step sequence for one package based on its action."""
     r, s = pkg.repo, 0
-    from_pr = pkg.action == Action.RELEASE_PR
+    has_pr = bool(pkg.pr_branch)
     do_release = pkg.action in (Action.RELEASE_MASTER, Action.RELEASE_PR)
-    do_create_pr = pkg.action == Action.RELEASE_MASTER
+    needs_new_pr = pkg.action == Action.RELEASE_MASTER or (
+        pkg.action == Action.DEPS_ONLY and not has_pr
+    )
 
     title = f"{pkg.new_version} {name}".strip() if pkg.new_version else ""
-    if from_pr:
+
+    if has_pr:
         branch = pkg.pr_branch
         base_params = {"branch": branch, "source": "pr"}
-    elif do_create_pr:
+    elif do_release:
         branch = f"chore/release-{pkg.new_version}"
         base_params = {"branch": branch, "base": "upstream/master"}
     else:
@@ -507,17 +533,14 @@ def plan_steps(pkg: PackagePlan, org: str, fork: str, name: str) -> list[Step]:
     s += 1
     steps.append(_step(r, s, StepKind.GIT_PUSH, branch=branch, fork=fork))
     s += 1
-    if do_create_pr:
-        steps.append(
-            _step(
-                r,
-                s,
-                StepKind.PR_CREATE,
-                branch=branch,
-                title=f"chore: release {title}",
-                body=f"Automated release bump to v{pkg.new_version}.",
-            )
+    if needs_new_pr:
+        pr_title = f"chore: release {title}" if do_release else "chore: bump sibling deps"
+        pr_body = (
+            f"Automated release bump to v{pkg.new_version}."
+            if do_release
+            else "Automated dependency update."
         )
+        steps.append(_step(r, s, StepKind.PR_CREATE, branch=branch, title=pr_title, body=pr_body))
         s += 1
     if do_release:
         steps.append(_step(r, s, StepKind.PR_MERGE))
@@ -553,21 +576,23 @@ def generate_plan(
         gh_repo = f"{org}/{repo}"
         repo_dir = cache_dir / repo
 
-        # Determine action
+        # Determine action — stop_at wins over pr_specs (deps-only, no release)
+        pr_num: int | None = None
+        pr_branch: str | None = None
         if pr_specs and repo in pr_specs:
             info = pr_info(pr_specs[repo], gh_repo)
             if info.get("state") != "OPEN":
                 die(
                     f"PR #{pr_specs[repo]} for {repo} is {info.get('state', 'unknown')} — must be OPEN"
                 )
-            action = Action.RELEASE_PR
             pr_num, pr_branch = pr_specs[repo], info["headRefName"]
-        elif repo == stop_at:
+
+        if repo == stop_at:
             action = Action.DEPS_ONLY
-            pr_num = pr_branch = None
+        elif pr_num is not None:
+            action = Action.RELEASE_PR
         else:
             action = Action.RELEASE_MASTER
-            pr_num = pr_branch = None
 
         # Version
         level = version_step if (i == 0 or uniform) else "patch"
@@ -927,22 +952,49 @@ def _parse_pr_specs(specs: str) -> dict[str, int]:
 def _resolve_chain(
     repos: tuple[str, ...],
     from_prs: str | None,
+    *,
+    open_top: bool = False,
 ) -> tuple[list[str], str | None, dict[str, int] | None]:
-    """Parse CLI args into (chain, stop_at, pr_specs)."""
+    """Parse CLI args into (chain, stop_at, pr_specs).
+
+    Syntax:
+        sandbox             → release a single package
+        sandbox..terok      → chain from sandbox to terok
+        --from-prs s:42     → single PR release
+        --from-prs s:42,e:5 → PR chain
+
+    With ``--open-top``, the last package in the chain gets DEPS_ONLY
+    (deps updated, no version bump or merge).
+    """
     if from_prs:
         pr_specs = _parse_pr_specs(from_prs)
         chain_repos = [r for r in CHAIN if r in pr_specs]
-        return build_chain(chain_repos[0], chain_repos[-1]), None, pr_specs
-    if repos:
-        start = normalise(repos[0])
-        stop = normalise(repos[1]) if len(repos) > 1 else None
-        return build_chain(start, stop), stop, None
-    die("Specify repos or --from-prs")
+        if not chain_repos:
+            die("No known repos in --from-prs")
+        chain = build_chain(chain_repos[0], chain_repos[-1])
+        return chain, chain[-1] if open_top else None, pr_specs
+
+    if not repos:
+        die("Specify a repo, a range (sandbox..terok), or --from-prs")
+
+    if len(repos) > 1:
+        die("Use 'sandbox..terok' range syntax instead of two separate arguments")
+
+    spec = repos[0]
+    if ".." in spec:
+        start_s, end_s = spec.split("..", 1)
+        chain = build_chain(normalise(start_s), normalise(end_s))
+        return chain, chain[-1] if open_top else None, None
+
+    # Single package — release just this one
+    repo = normalise(spec)
+    return [repo], None, None
 
 
 @click.group()
 def cli():
     """Cascading release chain for the terok package family."""
+    _check_gh_version()
 
 
 @cli.command()
@@ -955,7 +1007,8 @@ def cli():
 @click.option("--skip-checks", is_flag=True)
 @click.option("--check-timeout", default=1800, type=int)
 @click.option("--upgrade-pinned", is_flag=True)
-@click.option("--from-prs", default=None, help="repo:PR pairs (e.g. sandbox:42,agent:55)")
+@click.option("--from-prs", default=None, help="repo:PR pairs (e.g. sandbox:42,executor:55)")
+@click.option("--open-top", is_flag=True, help="Top package: update deps only, no release")
 @click.option("--org", default=_env("TEROK_GH_ORG", "terok-ai"))
 @click.option("--fork", default=_env("TEROK_GH_FORK"))
 @click.option(
@@ -972,14 +1025,25 @@ def quick(
     check_timeout,
     upgrade_pinned,
     from_prs,
+    open_top,
     org,
     fork,
     cache_dir,
 ):
-    """Plan and execute a release chain in one shot."""
+    """Plan and execute a release chain in one shot.
+
+    \b
+    Examples:
+      quick sandbox                    Release a single package
+      quick sandbox..terok             Chain from sandbox to terok
+      quick sandbox..terok --open-top  Chain, terok gets deps-only PR
+      quick --from-prs sandbox:155     Release from a PR
+      quick --from-prs s:155,e:167,t:706 --open-top
+                                       PR chain, terok gets deps updated only
+    """
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, pretend, yes, skip_checks, check_timeout)
 
-    chain, stop_at, pr_specs = _resolve_chain(repos, from_prs)
+    chain, stop_at, pr_specs = _resolve_chain(repos, from_prs, open_top=open_top)
 
     # Prompt for release name if not given
     if not release_name and not pretend:
@@ -1165,6 +1229,7 @@ def open_chain(branch, repos, pretend, org, fork, cache_dir):
 @click.option("-n", "--name", "release_name", default="")
 @click.option("--upgrade-pinned", is_flag=True)
 @click.option("--from-prs", default=None)
+@click.option("--open-top", is_flag=True, help="Top package: update deps only, no release")
 @click.option("--org", default=_env("TEROK_GH_ORG", "terok-ai"))
 @click.option("--fork", default=_env("TEROK_GH_FORK"))
 @click.option(
@@ -1178,13 +1243,14 @@ def plan_cmd(
     release_name,
     upgrade_pinned,
     from_prs,
+    open_top,
     org,
     fork,
     cache_dir,
 ):
     """Generate a release plan without executing it."""
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, True, True, True, 0)
-    chain, stop_at, pr_specs = _resolve_chain(repos, from_prs)
+    chain, stop_at, pr_specs = _resolve_chain(repos, from_prs, open_top=open_top)
     if not release_name:
         console.print(
             "[yellow]Warning: no release name (-n). Release titles will be version-only.[/]"
