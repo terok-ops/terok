@@ -789,6 +789,45 @@ class TestLayeredConfig:
             assert merged["ui"]["base_port"] == 7860
             assert merged["gate_server"]["port"] == 2222
 
+    def test_non_dict_yaml_skipped_with_warning(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A config file that parses to a non-dict is skipped with a warning."""
+        bad = tmp_path / "list.yml"
+        bad.write_text("- item1\n- item2\n", encoding="utf-8")
+        good = tmp_path / "good.yml"
+        good.write_text("ui:\n  base_port: 4444\n", encoding="utf-8")
+        from unittest.mock import patch
+
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[("bad", bad), ("good", good)],
+        ):
+            result = cfg._load_validated()
+            assert result.ui.base_port == 4444
+            captured = capsys.readouterr()
+            assert "expected mapping" in captured.err
+
+    def test_load_global_config_cache_hit(self, tmp_path: Path) -> None:
+        """Second call to ``load_global_config()`` returns the cached result."""
+        sys_cfg, usr_cfg = self._write_layers(
+            tmp_path,
+            system="ui:\n  base_port: 7860\n",
+            user="gate_server:\n  port: 3333\n",
+        )
+        from unittest.mock import patch
+
+        with patch.object(
+            cfg,
+            "_config_layers",
+            return_value=[("system", sys_cfg), ("user", usr_cfg)],
+        ):
+            first = cfg.load_global_config()
+            second = cfg.load_global_config()
+            assert first is second
+            assert first["gate_server"]["port"] == 3333
+
     def test_config_layers_env_override_bypasses_layering(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
