@@ -110,9 +110,14 @@ def _git_remote_check(security_class: str, gate_port: int | None) -> DoctorCheck
             return CheckVerdict("warn", "git origin: no remote configured")
 
         parsed = urlparse(url)
-        safe_url = urlunparse(parsed._replace(netloc=parsed.hostname or parsed.netloc))
-        if parsed.port:
-            safe_url = urlunparse(parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}"))
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        netloc = parsed.hostname or parsed.netloc
+        if port is not None and parsed.hostname:
+            netloc = f"{parsed.hostname}:{port}"
+        safe_url = urlunparse(parsed._replace(netloc=netloc))
 
         if security_class == "gatekeeping":
             # Gate URL: http://<token>@host.containers.internal:<port>/<name>
@@ -122,10 +127,10 @@ def _git_remote_check(security_class: str, gate_port: int | None) -> DoctorCheck
                     f"git origin: {safe_url!r} bypasses gate — should use host.containers.internal",
                     fixable=False,
                 )
-            if gate_port is not None and parsed.port != gate_port:
+            if gate_port is not None and port != gate_port:
                 return CheckVerdict(
                     "error",
-                    f"git origin: port {parsed.port} does not match gate port {gate_port}"
+                    f"git origin: port {port} does not match gate port {gate_port}"
                     + _PORT_DRIFT_HINT,
                     fixable=False,
                 )
