@@ -208,7 +208,3 @@ class TestStorySSHAgentTokenRevocation:
         finally:
             server.close()
             await server.wait_closed()
-
-
-# TestStorySSHAgentEnvWiring was removed: it tested _credential_proxy_env_and_volumes()
-# which was deleted in #688/#689 (proxy injection delegated to terok-executor).

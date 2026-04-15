@@ -228,7 +228,3 @@ class TestStoryTokenRevocation:
                 await proxy_server.close()
         finally:
             await upstream.close()
-
-
-# TestStoryEnvWiring was removed: it tested _credential_proxy_env_and_volumes()
-# which was deleted in #688/#689 (proxy injection delegated to terok-executor).
