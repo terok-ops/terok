@@ -1,11 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Infrastructure setup commands: generate, build, ssh-init, gate-sync, auth."""
+"""Infrastructure setup commands: global bootstrap plus per-project init.
+
+``terok setup`` — non-interactive, idempotent global bootstrap that installs
+shield hooks, credential proxy, and gate server (user-local, no root).
+
+Per-project commands (generate, build, ssh-init, gate-sync, auth) live
+alongside for backward compatibility.
+"""
 
 from __future__ import annotations
 
 import argparse
+import shutil
+import sys
 
 from terok_executor import AUTH_PROVIDERS
 
@@ -18,6 +27,7 @@ from ...lib.domain.facade import (
     register_ssh_key,
 )
 from ...lib.domain.project import make_git_gate, make_ssh_manager
+from ...lib.util.ansi import bold, green, red, supports_color, yellow
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
@@ -28,6 +38,22 @@ def _add_project_arg(parser: argparse.ArgumentParser, **kwargs: object) -> None:
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register infrastructure setup subcommands."""
+    # setup (global bootstrap)
+    p_setup = subparsers.add_parser(
+        "setup",
+        help="Global bootstrap: install shield, credential proxy, and gate server",
+        description=(
+            "Non-interactive, idempotent host-level setup.  Installs mandatory "
+            "services (shield hooks, credential proxy, gate server) to user-local "
+            "directories — no root needed.  Safe to re-run."
+        ),
+    )
+    p_setup.add_argument(
+        "--check",
+        action="store_true",
+        help="Dry-run: report status without installing anything",
+    )
+
     # generate
     p_gen = subparsers.add_parser("generate", help="Generate Dockerfiles for a project")
     _add_project_arg(p_gen)
@@ -107,6 +133,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle infrastructure setup commands.  Returns True if handled."""
+    if args.cmd == "setup":
+        cmd_setup(check_only=getattr(args, "check", False))
+        return True
     if args.cmd == "generate":
         generate_dockerfiles(args.project_id)
         return True
@@ -146,6 +175,182 @@ def dispatch(args: argparse.Namespace) -> bool:
         authenticate(args.project_id, args.provider)
         return True
     return False
+
+
+# ── Global bootstrap (terok setup) ──────────────────────────────────────
+
+
+_MANDATORY_BINARIES = ("podman", "git", "ssh-keygen")
+_RECOMMENDED_BINARIES = ("nft", "dnsmasq", "dig")
+
+
+def _status_label(ok: bool, color: bool) -> str:
+    """Return a coloured status marker."""
+    return green("ok", color) if ok else red("FAIL", color)
+
+
+def _warn_label(color: bool) -> str:
+    """Return a coloured warning marker."""
+    return yellow("WARN", color)
+
+
+def _check_host_binaries(color: bool) -> bool:
+    """Verify mandatory and recommended host binaries.  Returns True if all mandatory found."""
+    all_ok = True
+
+    for name in _MANDATORY_BINARIES:
+        found = shutil.which(name) is not None
+        status = _status_label(found, color)
+        print(f"  {name:<16} {status}")
+        if not found:
+            all_ok = False
+
+    for name in _RECOMMENDED_BINARIES:
+        found = shutil.which(name) is not None
+        if found:
+            print(f"  {name:<16} {_status_label(True, color)}")
+        else:
+            print(f"  {name:<16} {_warn_label(color)} (recommended but not required)")
+
+    return all_ok
+
+
+def _ensure_shield(*, check_only: bool, color: bool) -> bool:
+    """Install shield OCI hooks (user-local).  Returns True on success."""
+    from terok_sandbox import check_environment, setup_hooks_direct
+
+    ec = check_environment()
+    if ec.health == "ok":
+        print(f"  Shield hooks     {_status_label(True, color)} (already installed)")
+        return True
+    if ec.health == "bypass":
+        print(f"  Shield hooks     {_warn_label(color)} (bypass_firewall_no_protection is active)")
+        return True
+    if check_only:
+        hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else "needs setup"
+        print(f"  Shield hooks     {_status_label(False, color)} ({hint})")
+        return False
+
+    try:
+        setup_hooks_direct(root=False)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        print(f"  Shield hooks     {_status_label(False, color)} ({exc})")
+        return False
+
+    print(f"  Shield hooks     {_status_label(True, color)} (installed)")
+    return True
+
+
+def _ensure_proxy(*, check_only: bool, color: bool) -> bool:
+    """Install credential proxy via systemd socket activation.  Returns True on success."""
+    from terok_sandbox import (
+        get_proxy_status,
+        install_proxy_systemd,
+        is_proxy_socket_active,
+    )
+
+    from ...lib.core.config import make_sandbox_config
+
+    status = get_proxy_status()
+    if status.running or is_proxy_socket_active():
+        mode = status.mode or "active"
+        print(f"  Credential proxy {_status_label(True, color)} ({mode})")
+        return True
+    if check_only:
+        print(f"  Credential proxy {_status_label(False, color)} (not installed)")
+        return False
+
+    try:
+        from terok_executor import ensure_proxy_routes
+
+        cfg = make_sandbox_config()
+        ensure_proxy_routes(cfg=cfg)
+        install_proxy_systemd(cfg=cfg)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        print(f"  Credential proxy {_status_label(False, color)} ({exc})")
+        return False
+
+    print(f"  Credential proxy {_status_label(True, color)} (installed)")
+    return True
+
+
+def _ensure_gate(*, check_only: bool, color: bool) -> bool:
+    """Install gate server via systemd socket activation.  Returns True on success."""
+    from terok_sandbox import get_server_status, install_systemd_units, is_systemd_available
+
+    from ...lib.core.config import make_sandbox_config
+
+    cfg = make_sandbox_config()
+    status = get_server_status(cfg)
+    if status.running or status.mode == "systemd":
+        print(f"  Gate server      {_status_label(True, color)} ({status.mode})")
+        return True
+    if check_only:
+        print(f"  Gate server      {_status_label(False, color)} (not installed)")
+        return False
+    if not is_systemd_available():
+        print(f"  Gate server      {_warn_label(color)} (systemd not available, skipping)")
+        return True
+
+    try:
+        install_systemd_units(cfg=cfg)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        print(f"  Gate server      {_status_label(False, color)} ({exc})")
+        return False
+
+    print(f"  Gate server      {_status_label(True, color)} (installed)")
+    return True
+
+
+def cmd_setup(*, check_only: bool = False) -> None:
+    """Global bootstrap: install shield, credential proxy, and gate server.
+
+    Non-interactive and idempotent — safe to re-run.  Installs to user-local
+    directories (no root needed).  With ``--check``, only reports status.
+    """
+    color = supports_color()
+    action = "Checking" if check_only else "Setting up"
+    print(bold(f"\n{action} terok host services\n", color))
+
+    # Step 1: Host binary prerequisites
+    print(bold("Host binaries:", color))
+    binaries_ok = _check_host_binaries(color)
+    print()
+
+    # Step 2: Shield hooks
+    print(bold("Services:", color))
+    shield_ok = _ensure_shield(check_only=check_only, color=color)
+
+    # Step 3: Credential proxy
+    proxy_ok = _ensure_proxy(check_only=check_only, color=color)
+
+    # Step 4: Gate server
+    gate_ok = _ensure_gate(check_only=check_only, color=color)
+    print()
+
+    # Summary + next steps
+    all_ok = binaries_ok and shield_ok and proxy_ok and gate_ok
+    if all_ok:
+        print(bold("Setup complete.", color))
+    elif not binaries_ok:
+        print(bold(red("Missing mandatory binaries — install them first.", color), color))
+    else:
+        print(bold(yellow("Some services could not be installed (see above).", color), color))
+
+    providers = ", ".join(AUTH_PROVIDERS)
+    print(
+        f"\nNext steps:\n"
+        f"  terok auth <provider> <project>    Authenticate agents ({providers})\n"
+        f"  terok project-wizard               Create your first project\n"
+    )
+
+    if not binaries_ok:
+        sys.exit(2)
+    if not (shield_ok and proxy_ok and gate_ok):
+        sys.exit(1)
+
+
+# ── Per-project setup ──────────────────────────────────────────────────
 
 
 def cmd_project_init(project_id: str) -> None:
