@@ -432,9 +432,6 @@ class TestEnvironmentWarnings:
 
         with (
             patch(
-                "terok.lib.orchestration.environment.make_sandbox_config",
-            ),
-            patch(
                 "terok.lib.orchestration.environment.get_gate_base_path",
                 return_value=Path("/fake/gate"),
             ),
@@ -443,7 +440,7 @@ class TestEnvironmentWarnings:
                 side_effect=SystemExit("unreachable"),
             ),
         ):
-            env, _vols = _security_mode_env_and_volumes(mock_project, "task-1")
+            env, _vols = _security_mode_env_and_volumes(mock_project, "task-1", MagicMock())
 
         err = capsys.readouterr().err
         assert "Gate server unreachable" in err

@@ -12,7 +12,8 @@ container env vars and volumes.
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+import types
+from unittest.mock import MagicMock, patch
 
 import pytest
 from terok_sandbox import CredentialDB
@@ -42,7 +43,7 @@ git:
 pytestmark = pytest.mark.needs_credential_proxy
 
 
-def _setup_credentials(ctx, cfg) -> None:
+def _setup_credentials(ctx: types.SimpleNamespace, cfg: MagicMock) -> None:
     """Populate a mock SandboxConfig with a real credential DB and SSH keys."""
     cfg.proxy_db_path = ctx.state_dir / "proxy" / "credentials.db"
     cfg.proxy_socket_path = ctx.state_dir / "proxy.sock"

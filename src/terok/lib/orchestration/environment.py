@@ -67,10 +67,13 @@ def _gate_url(
 
 
 def _security_mode_env_and_volumes(
-    project: ProjectConfig, task_id: str, *, use_socket: bool = False
+    project: ProjectConfig,
+    task_id: str,
+    cfg: object,
+    *,
+    use_socket: bool = False,
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
-    cfg = make_sandbox_config()
     env: dict[str, str] = {}
     volumes: list[str] = []
 
@@ -349,10 +352,13 @@ def build_task_env_and_volumes(
 
     from ..core.config import get_credential_proxy_bypass, get_services_mode
 
+    cfg = make_sandbox_config()
     use_socket = get_services_mode() == "socket"
 
     # Pre-resolve gate server URLs → CODE_REPO / CLONE_FROM / GIT_BRANCH
-    sec_env, _sec_volumes = _security_mode_env_and_volumes(project, task_id, use_socket=use_socket)
+    sec_env, _sec_volumes = _security_mode_env_and_volumes(
+        project, task_id, cfg, use_socket=use_socket
+    )
 
     # Seed workspace from clone cache (fast-start optimisation).
     # Only for new tasks (marker present, no .git yet).  The in-container
@@ -420,7 +426,6 @@ def build_task_env_and_volumes(
 
     # Socket mode: mount host runtime dir so socat bridges can reach sockets
     if use_socket:
-        cfg = make_sandbox_config()
         from terok_sandbox import Sharing
 
         volumes.append(VolumeSpec(cfg.runtime_dir, _CONTAINER_RUNTIME_DIR, sharing=Sharing.SHARED))

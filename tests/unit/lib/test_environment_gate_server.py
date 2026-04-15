@@ -61,8 +61,10 @@ def resolve_security_env(
         ),
         patch("terok.lib.orchestration.environment.create_token", return_value=token),
     ):
+        from unittest.mock import MagicMock
+
         project = load_project(project_id)
-        env, volumes = _security_mode_env_and_volumes(project, "1")
+        env, volumes = _security_mode_env_and_volumes(project, "1", MagicMock())
     return project, env, volumes
 
 
@@ -98,10 +100,12 @@ def test_gate_projects_use_http_urls_with_tokens(
 
 def test_gatekeeping_missing_gate_raises() -> None:
     """Gatekeeping mode requires a synced gate mirror before task startup."""
+    from unittest.mock import MagicMock
+
     with mock_git_config(), project_env(_GATEKEEPING_YAML, project_id="gk-proj", with_gate=False):
         project = load_project("gk-proj")
         with pytest.raises(SystemExit, match="gate-sync"):
-            _security_mode_env_and_volumes(project, "1")
+            _security_mode_env_and_volumes(project, "1", MagicMock())
 
 
 def test_gatekeeping_server_not_running_raises() -> None:
