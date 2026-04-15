@@ -9,6 +9,7 @@ project and task actions.
 """
 
 import os
+import runpy
 import shlex
 import subprocess
 import sys
@@ -446,12 +447,11 @@ class ProjectActionsMixin:
         """Launch the CLI project wizard in a suspended terminal."""
         with self.suspend():
             try:
-                result = subprocess.run(
-                    [sys.executable, "-m", "terok.cli.main", "project-wizard"],
-                    check=False,
-                )
-                if result.returncode != 0:
-                    print(f"Wizard exited with code {result.returncode}")
+                sys.argv = ["terok.cli.main", "project-wizard"]
+                runpy.run_module("terok.cli.main", run_name="__main__")
+            except SystemExit as e:
+                if e.code != 0:
+                    print(f"Wizard exited with code {e.code}")
             except Exception as e:
                 print(f"Error: {e}")
             input("\n[Press Enter to return to TerokTUI] ")
