@@ -62,7 +62,7 @@ def test_shield_already_installed(mock_env: MagicMock, capsys: pytest.CaptureFix
     mock_env.return_value = MagicMock(health="ok")
     assert _ensure_shield(check_only=False, color=False) is True
     out = capsys.readouterr().out
-    assert "already installed" in out
+    assert "active" in out
 
 
 @patch("terok_sandbox.check_environment")
@@ -78,11 +78,15 @@ def test_shield_check_only_missing(mock_env: MagicMock, capsys: pytest.CaptureFi
 
 @patch("terok_sandbox.setup_hooks_direct")
 @patch("terok_sandbox.check_environment")
-def test_shield_install_success(
+def test_shield_install_and_verify(
     mock_env: MagicMock, mock_setup: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
-    """Shield missing → install succeeds."""
-    mock_env.return_value = MagicMock(health="setup-needed", issues=[], setup_hint="")
+    """Shield missing → install → verify health = ok."""
+    # First call: setup-needed; second call (verify): ok
+    mock_env.side_effect = [
+        MagicMock(health="setup-needed", issues=[], setup_hint=""),
+        MagicMock(health="ok"),
+    ]
     assert _ensure_shield(check_only=False, color=False) is True
     mock_setup.assert_called_once_with(root=False)
     out = capsys.readouterr().out
@@ -108,88 +112,107 @@ def _make_proxy_status(*, running: bool = True, mode: str = "systemd") -> MagicM
     return s
 
 
-@patch("terok_sandbox.is_proxy_socket_active", return_value=False)
 @patch("terok_sandbox.get_proxy_status")
-def test_proxy_already_running(
-    mock_status: MagicMock, _sock: MagicMock, capsys: pytest.CaptureFixture
+@patch("terok_sandbox.ensure_proxy_reachable")
+@patch("terok_sandbox.is_proxy_socket_active", return_value=True)
+def test_proxy_check_reachable(
+    _sock: MagicMock, _reach: MagicMock, mock_status: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
-    """Proxy running → skip."""
+    """check_only mode: proxy reachable → ok."""
     mock_status.return_value = _make_proxy_status(running=True)
-    assert _ensure_proxy(check_only=False, color=False) is True
+    assert _ensure_proxy(check_only=True, color=False) is True
+    out = capsys.readouterr().out
+    assert "reachable" in out
 
 
-@patch("terok_sandbox.is_proxy_socket_active", return_value=False)
-@patch("terok_sandbox.get_proxy_status")
-def test_proxy_check_only_missing(
-    mock_status: MagicMock, _sock: MagicMock, capsys: pytest.CaptureFixture
+@patch("terok_sandbox.ensure_proxy_reachable", side_effect=SystemExit("unreachable"))
+@patch("terok_sandbox.is_proxy_socket_active", return_value=True)
+def test_proxy_check_unreachable(
+    _sock: MagicMock, _reach: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
-    """Proxy not running + check_only → report False."""
-    mock_status.return_value = _make_proxy_status(running=False, mode="none")
+    """check_only mode: proxy installed but unreachable → FAIL."""
     assert _ensure_proxy(check_only=True, color=False) is False
     out = capsys.readouterr().out
-    assert "FAIL" in out
+    assert "NOT reachable" in out
 
 
+@patch("terok_sandbox.get_proxy_status")
+@patch("terok_sandbox.ensure_proxy_reachable")
 @patch("terok_sandbox.install_proxy_systemd")
 @patch("terok_executor.ensure_proxy_routes")
 @patch("terok.lib.core.config.make_sandbox_config")
-@patch("terok_sandbox.is_proxy_socket_active", return_value=False)
-@patch("terok_sandbox.get_proxy_status")
-def test_proxy_install_success(
-    mock_status: MagicMock,
-    _sock: MagicMock,
+@patch("terok_sandbox.uninstall_proxy_systemd")
+@patch("terok_sandbox.stop_proxy")
+def test_proxy_reinstall_and_verify(
+    _stop: MagicMock,
+    _uninstall: MagicMock,
     _cfg: MagicMock,
-    mock_routes: MagicMock,
-    mock_install: MagicMock,
+    _routes: MagicMock,
+    _install: MagicMock,
+    _reach: MagicMock,
+    mock_status: MagicMock,
 ) -> None:
-    """Proxy missing → install succeeds."""
-    mock_status.return_value = _make_proxy_status(running=False, mode="none")
+    """Install mode: clean reinstall → verify reachable → ok."""
+    mock_status.return_value = _make_proxy_status(running=True)
     assert _ensure_proxy(check_only=False, color=False) is True
-    mock_routes.assert_called_once()
-    mock_install.assert_called_once()
+    _stop.assert_called_once()
+    _uninstall.assert_called_once()
+    _install.assert_called_once()
+    _reach.assert_called_once()
 
 
 # ── Gate server ──────────────────────────────────────────────────────────
 
 
+@patch("terok_sandbox.ensure_server_reachable")
 @patch("terok.lib.core.config.make_sandbox_config")
 @patch("terok_sandbox.get_server_status")
-def test_gate_already_installed(
-    mock_status: MagicMock, _cfg: MagicMock, capsys: pytest.CaptureFixture
+def test_gate_check_running(
+    mock_status: MagicMock, _cfg: MagicMock, _reach: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
-    """Gate running → skip."""
+    """check_only: gate running → ok."""
     mock_status.return_value = make_gate_server_status("systemd", running=True)
-    assert _ensure_gate(check_only=False, color=False) is True
+    assert _ensure_gate(check_only=True, color=False) is True
     out = capsys.readouterr().out
-    assert "systemd" in out
+    assert "running" in out
 
 
 @patch("terok.lib.core.config.make_sandbox_config")
 @patch("terok_sandbox.get_server_status")
-def test_gate_check_only_missing(
+def test_gate_check_not_installed(
     mock_status: MagicMock, _cfg: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
-    """Gate not installed + check_only → report False."""
+    """check_only: gate not installed → FAIL."""
     mock_status.return_value = make_gate_server_status("none")
     assert _ensure_gate(check_only=True, color=False) is False
     out = capsys.readouterr().out
-    assert "FAIL" in out
+    assert "not installed" in out
 
 
+@patch("terok_sandbox.ensure_server_reachable")
 @patch("terok_sandbox.install_systemd_units")
+@patch("terok_sandbox.uninstall_systemd_units")
+@patch("terok_sandbox.stop_daemon")
 @patch("terok_sandbox.is_systemd_available", return_value=True)
 @patch("terok.lib.core.config.make_sandbox_config")
 @patch("terok_sandbox.get_server_status")
-def test_gate_install_success(
+def test_gate_reinstall_and_verify(
     mock_status: MagicMock,
     _cfg: MagicMock,
     _systemd: MagicMock,
-    mock_install: MagicMock,
+    _stop: MagicMock,
+    _uninstall: MagicMock,
+    _install: MagicMock,
+    _reach: MagicMock,
+    capsys: pytest.CaptureFixture,
 ) -> None:
-    """Gate missing + systemd available → install succeeds."""
+    """Install mode: clean reinstall → verify reachable → ok."""
     mock_status.return_value = make_gate_server_status("none")
     assert _ensure_gate(check_only=False, color=False) is True
-    mock_install.assert_called_once()
+    _stop.assert_called_once()
+    _uninstall.assert_called_once()
+    _install.assert_called_once()
+    _reach.assert_called_once()
 
 
 @patch("terok_sandbox.is_systemd_available", return_value=False)

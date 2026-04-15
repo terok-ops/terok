@@ -221,7 +221,7 @@ def _ensure_shield(*, check_only: bool, color: bool) -> bool:
 
     ec = check_environment()
     if ec.health == "ok":
-        print(f"  Shield hooks     {_status_label(True, color)} (already installed)")
+        print(f"  Shield hooks     {_status_label(True, color)} (active)")
         return True
     if ec.health == "bypass":
         print(f"  Shield hooks     {_warn_label(color)} (bypass_firewall_no_protection is active)")
@@ -231,75 +231,149 @@ def _ensure_shield(*, check_only: bool, color: bool) -> bool:
         print(f"  Shield hooks     {_status_label(False, color)} ({hint})")
         return False
 
+    # Force-reinstall to ensure hooks match the current package version
     try:
         setup_hooks_direct(root=False)
     except Exception as exc:  # noqa: BLE001 — best-effort
         print(f"  Shield hooks     {_status_label(False, color)} ({exc})")
         return False
 
-    print(f"  Shield hooks     {_status_label(True, color)} (installed)")
-    return True
+    # Verify installation took effect
+    ec = check_environment()
+    if ec.health == "ok":
+        print(f"  Shield hooks     {_status_label(True, color)} (installed)")
+        return True
+
+    print(
+        f"  Shield hooks     {_status_label(False, color)} (install succeeded but health: {ec.health})"
+    )
+    return False
 
 
 def _ensure_proxy(*, check_only: bool, color: bool) -> bool:
-    """Install credential proxy via systemd socket activation.  Returns True on success."""
+    """Install credential proxy and verify it is reachable.  Returns True on success."""
     from terok_sandbox import (
+        ProxyUnreachableError,
+        ensure_proxy_reachable,
         get_proxy_status,
         install_proxy_systemd,
         is_proxy_socket_active,
+        stop_proxy,
+        uninstall_proxy_systemd,
     )
 
     from ...lib.core.config import make_sandbox_config
 
-    status = get_proxy_status()
-    if status.running or is_proxy_socket_active():
-        mode = status.mode or "active"
-        print(f"  Credential proxy {_status_label(True, color)} ({mode})")
-        return True
+    cfg = make_sandbox_config()
+
     if check_only:
-        print(f"  Credential proxy {_status_label(False, color)} (not installed)")
-        return False
+        # Check-only: just probe reachability
+        try:
+            ensure_proxy_reachable(cfg)
+            mode = get_proxy_status().mode or "active"
+            print(f"  Credential proxy {_status_label(True, color)} ({mode}, reachable)")
+            return True
+        except (ProxyUnreachableError, SystemExit):
+            installed = is_proxy_socket_active()
+            state = "installed but NOT reachable" if installed else "not installed"
+            print(f"  Credential proxy {_status_label(False, color)} ({state})")
+            return False
+
+    # Clean reinstall: stop → uninstall → install → verify reachability
+    try:
+        stop_proxy(cfg=cfg)
+    except Exception:  # noqa: BLE001 — best-effort, may not be running
+        pass
+    try:
+        uninstall_proxy_systemd(cfg=cfg)
+    except Exception:  # noqa: BLE001 — best-effort, may not be installed
+        pass
 
     try:
         from terok_executor import ensure_proxy_routes
 
-        cfg = make_sandbox_config()
         ensure_proxy_routes(cfg=cfg)
         install_proxy_systemd(cfg=cfg)
     except Exception as exc:  # noqa: BLE001 — best-effort
-        print(f"  Credential proxy {_status_label(False, color)} ({exc})")
+        print(f"  Credential proxy {_status_label(False, color)} (install failed: {exc})")
         return False
 
-    print(f"  Credential proxy {_status_label(True, color)} (installed)")
-    return True
+    # Verify actual TCP reachability (triggers systemd start)
+    try:
+        ensure_proxy_reachable(cfg)
+        mode = get_proxy_status().mode or "active"
+        print(f"  Credential proxy {_status_label(True, color)} ({mode}, reachable)")
+        return True
+    except (ProxyUnreachableError, SystemExit) as exc:
+        print(f"  Credential proxy {_status_label(False, color)} (installed but NOT reachable)")
+        print(f"                   {exc}")
+        print("                   Check: journalctl --user -u terok-credential-proxy")
+        return False
 
 
 def _ensure_gate(*, check_only: bool, color: bool) -> bool:
     """Install gate server via systemd socket activation.  Returns True on success."""
-    from terok_sandbox import get_server_status, install_systemd_units, is_systemd_available
+    from terok_sandbox import (
+        ensure_server_reachable,
+        get_server_status,
+        install_systemd_units,
+        is_systemd_available,
+        stop_daemon,
+        uninstall_systemd_units,
+    )
 
     from ...lib.core.config import make_sandbox_config
 
     cfg = make_sandbox_config()
-    status = get_server_status(cfg)
-    if status.running or status.mode == "systemd":
-        print(f"  Gate server      {_status_label(True, color)} ({status.mode})")
-        return True
+
     if check_only:
+        status = get_server_status(cfg)
+        if status.running:
+            print(f"  Gate server      {_status_label(True, color)} ({status.mode}, running)")
+            return True
+        if status.mode == "systemd":
+            # Socket installed but not yet activated — try to reach it
+            try:
+                ensure_server_reachable(cfg)
+                print(f"  Gate server      {_status_label(True, color)} (systemd, reachable)")
+                return True
+            except SystemExit:
+                print(
+                    f"  Gate server      {_status_label(False, color)} (installed but NOT reachable)"
+                )
+                return False
         print(f"  Gate server      {_status_label(False, color)} (not installed)")
         return False
+
     if not is_systemd_available():
         print(f"  Gate server      {_warn_label(color)} (systemd not available, skipping)")
         return True
 
+    # Clean reinstall: stop → uninstall → install → verify
+    try:
+        stop_daemon(cfg=cfg)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        uninstall_systemd_units(cfg=cfg)
+    except Exception:  # noqa: BLE001
+        pass
+
     try:
         install_systemd_units(cfg=cfg)
     except Exception as exc:  # noqa: BLE001 — best-effort
-        print(f"  Gate server      {_status_label(False, color)} ({exc})")
+        print(f"  Gate server      {_status_label(False, color)} (install failed: {exc})")
         return False
 
-    print(f"  Gate server      {_status_label(True, color)} (installed)")
-    return True
+    # Verify reachability (triggers socket activation)
+    try:
+        ensure_server_reachable(cfg)
+        print(f"  Gate server      {_status_label(True, color)} (systemd, reachable)")
+        return True
+    except SystemExit as exc:
+        print(f"  Gate server      {_status_label(False, color)} (installed but NOT reachable)")
+        print(f"                   {exc}")
+        return False
 
 
 def cmd_setup(*, check_only: bool = False) -> None:
