@@ -398,16 +398,19 @@ def _check_containers(
 def _check_selinux_policy() -> _CheckResult:
     """Check SELinux policy and libselinux binding for socket-mode services.
 
-    Two failure modes matter on an enforcing host: the policy module is
-    not installed (``sudo terok setup selinux`` fixes it), or the policy
-    is installed but ``libselinux.so.1`` cannot be loaded — a silent
-    failure where sockets bind as ``unconfined_t`` and containers are
-    denied ``connectto`` despite everything appearing set up.
+    Three failure modes matter on an enforcing host: policy-compilation
+    tools are missing (``selinux-policy-devel`` / ``policycoreutils``
+    must be installed before the policy can be compiled); the policy
+    module is not installed; or the policy is installed but
+    ``libselinux.so.1`` cannot be loaded — a silent failure where
+    sockets bind as ``unconfined_t`` and containers are denied
+    ``connectto`` despite everything appearing set up.
     """
     from terok_sandbox import (
         is_libselinux_available,
         is_selinux_enforcing,
         is_selinux_policy_installed,
+        missing_selinux_policy_tools,
     )
 
     label = "SELinux policy"
@@ -416,11 +419,20 @@ def _check_selinux_policy() -> _CheckResult:
     if not is_selinux_enforcing():
         return ("ok", label, "not needed (SELinux not enforcing)")
     if not is_selinux_policy_installed():
+        sudo_cmd = _sudo_setup_selinux_cmd()
+        missing = missing_selinux_policy_tools()
+        if missing:
+            return (
+                "warn",
+                label,
+                f"terok_socket_t NOT installed; policy tools missing ({', '.join(missing)}). "
+                "Fix: sudo dnf install selinux-policy-devel policycoreutils, "
+                f"then {sudo_cmd}",
+            )
         return (
             "warn",
             label,
-            "terok_socket_t NOT installed — containers cannot connect to sockets. "
-            "Fix: sudo terok setup selinux",
+            f"terok_socket_t NOT installed — containers cannot connect to sockets. Fix: {sudo_cmd}",
         )
     if not is_libselinux_available():
         return (
@@ -431,6 +443,17 @@ def _check_selinux_policy() -> _CheckResult:
             "Fix: sudo dnf install libselinux",
         )
     return ("ok", label, "terok_socket_t installed, binding functional")
+
+
+def _sudo_setup_selinux_cmd() -> str:
+    """Build the ``sudo`` invocation that runs ``setup selinux`` as root.
+
+    Uses the absolute path of the currently running ``terok`` entry
+    point (``sys.argv[0]``) so the hint works regardless of install
+    method — ``pipx``, ``pip install --user``, or a Poetry venv — where
+    the ``terok`` binary lives outside root's default ``PATH``.
+    """
+    return f"sudo {os.path.abspath(sys.argv[0])} setup selinux"
 
 
 _GLOBAL_CHECKS = [

@@ -400,15 +400,18 @@ def _ensure_gate(*, check_only: bool, color: bool) -> bool:
 def _check_selinux_policy(*, color: bool) -> None:
     """Print SELinux policy + binding status for socket mode on an SELinux host.
 
-    Surfaces two failure modes: the policy is not installed (fix with
-    ``sudo terok setup selinux``), or the policy is installed but
-    ``libselinux.so.1`` cannot be loaded — a silent failure where sockets
-    bind as ``unconfined_t`` and containers are denied despite the policy.
+    Surfaces three failure modes: policy-compilation tools are missing
+    (``selinux-policy-devel`` / ``policycoreutils`` needed before the
+    policy can be compiled); the policy is not installed; or the policy
+    is installed but ``libselinux.so.1`` cannot be loaded — a silent
+    failure where sockets bind as ``unconfined_t`` and containers are
+    denied despite the policy.
     """
     from terok_sandbox import (
         is_libselinux_available,
         is_selinux_enforcing,
         is_selinux_policy_installed,
+        missing_selinux_policy_tools,
     )
 
     from ...lib.core.config import get_services_mode
@@ -419,15 +422,39 @@ def _check_selinux_policy(*, color: bool) -> None:
     print()
     print(bold("SELinux:", color))
     if not is_selinux_policy_installed():
-        print(f"  terok_socket_t   {_warn_label(color)} (policy NOT installed)")
-        print("                   Containers cannot connect to service sockets.")
-        print(f"                   Fix: {bold('sudo terok setup selinux', color)}")
+        sudo_cmd = _sudo_setup_selinux_cmd()
+        missing = missing_selinux_policy_tools()
+        if missing:
+            print(f"  terok_socket_t   {_warn_label(color)} (policy NOT installed)")
+            print(f"                   Policy tools missing: {', '.join(missing)}")
+            print(
+                f"                   Fix: "
+                f"{bold('sudo dnf install selinux-policy-devel policycoreutils', color)}, "
+                f"then {bold(sudo_cmd, color)}"
+            )
+        else:
+            print(f"  terok_socket_t   {_warn_label(color)} (policy NOT installed)")
+            print("                   Containers cannot connect to service sockets.")
+            print(f"                   Fix: {bold(sudo_cmd, color)}")
     elif not is_libselinux_available():
         print(f"  terok_socket_t   {_warn_label(color)} (libselinux.so.1 not loadable)")
         print("                   Sockets will bind as unconfined_t — containers denied.")
         print(f"                   Fix: {bold('sudo dnf install libselinux', color)}")
     else:
         print(f"  terok_socket_t   {_status_label(True, color)} (policy installed)")
+
+
+def _sudo_setup_selinux_cmd() -> str:
+    """Build the ``sudo`` invocation that runs ``setup selinux`` as root.
+
+    Uses the absolute path of the currently running ``terok`` entry
+    point (``sys.argv[0]``) so the hint works regardless of install
+    method — ``pipx``, ``pip install --user``, or a Poetry venv — where
+    the ``terok`` binary lives outside root's default ``PATH``.
+    """
+    import os
+
+    return f"sudo {os.path.abspath(sys.argv[0])} setup selinux"
 
 
 def cmd_setup_selinux() -> None:
