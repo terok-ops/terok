@@ -88,7 +88,7 @@ class TaskList(ListView):
         return label
 
     def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
-        """Populate the list from ``TaskMeta`` instances."""
+        """Populate the list from ``TaskMeta`` instances, newest first."""
         existing_states: dict[str, str | None] = {}
         if self.project_id == project_id:
             for task in self.tasks:
@@ -99,7 +99,7 @@ class TaskList(ListView):
         self._generation += 1
         self.clear()
 
-        for tm in tasks_meta:
+        for tm in sorted(tasks_meta, key=lambda t: t.created_at or "", reverse=True):
             if tm.task_id in existing_states:
                 tm.container_state = existing_states[tm.task_id]
             self.tasks.append(tm)

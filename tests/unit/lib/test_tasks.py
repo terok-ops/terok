@@ -8,6 +8,7 @@ import re
 import subprocess
 import unittest.mock
 from contextlib import redirect_stdout
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from terok.lib.orchestration.environment import build_task_env_and_volumes
 from terok.lib.orchestration.task_runners import task_run_cli, task_run_toad
 from terok.lib.orchestration.tasks import (
     TaskDeleteResult,
+    get_tasks,
     get_workspace_git_diff,
     task_delete,
     task_list,
@@ -110,6 +112,27 @@ class TestTask:
             assert isinstance(result, TaskDeleteResult)
             assert not meta_path.exists()
             assert not workspace.exists()
+
+    def test_task_new_records_created_at(self) -> None:
+        """task_new writes an ISO 8601 created_at timestamp that round-trips via get_tasks.
+
+        The TUI uses this field to sort tasks newest-first; task_id is random hex
+        and carries no temporal information.
+        """
+        project_id = "proj_created_at"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            tid = task_new(project_id)
+            meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{tid}.yml"
+            meta = yaml_load(meta_path.read_text())
+
+            assert "created_at" in meta
+            datetime.fromisoformat(meta["created_at"])  # parses → valid ISO 8601
+
+            [task] = [t for t in get_tasks(project_id) if t.task_id == tid]
+            assert task.created_at == meta["created_at"]
 
     def test_task_new_creates_marker_file(self) -> None:
         """Verify that task_new() creates the .new-task-marker file.
