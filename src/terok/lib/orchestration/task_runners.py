@@ -41,7 +41,7 @@ from ..core.config import (
     make_sandbox_config,
     sandbox_live_mounts_dir,
 )
-from ..core.images import agent_cli_image, installed_agents, is_installed, project_cli_image
+from ..core.images import project_cli_image, require_agent_installed
 from ..core.projects import load_project
 from ..core.task_display import has_gpu
 from ..util.ansi import (
@@ -73,26 +73,6 @@ _TOAD_CONTAINER_PORT = 8080
 _ANTHROPIC_API_HOST = "api.anthropic.com"
 _FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
 _CONTAINER_TEROK_CONFIG = "/home/dev/.terok"
-
-
-def _require_agent_in_image(project: ProjectConfig, agent_name: str) -> None:
-    """Fail fast if *agent_name* is not baked into the project's L1 image.
-
-    Reads the ``ai.terok.agents`` label written at build time.  Treats
-    unlabeled (legacy) images as unrestricted, so older builds keep
-    working until the user rebuilds.
-    """
-    image = agent_cli_image(project.base_image)
-    if is_installed(agent_name, image):
-        return
-    installed = ", ".join(sorted(installed_agents(image))) or "(none)"
-    raise SystemExit(
-        f"Agent {agent_name!r} is not installed in the L1 image for "
-        f"project {project.id!r} ({image}).\n"
-        f"Installed: {installed}\n"
-        f"Add it to image.agents and rebuild: "
-        f"terok build --agents {agent_name} {project.id}"
-    )
 
 
 def _str_to_bool(value: object) -> bool:
@@ -742,7 +722,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     project = load_project(request.project_id)
     resolved = get_provider(request.provider, default_agent=project.default_agent)
-    _require_agent_in_image(project, resolved.name)
+    require_agent_installed(project, resolved.name)
 
     # Build CLI overrides from --config file and explicit flags
     cli_overrides: dict = {}

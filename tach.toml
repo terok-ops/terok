@@ -659,7 +659,9 @@ expose = [
     "project_cli_image",
     "project_dev_image",
     "installed_agents",
+    "installed_agents_for_project",
     "is_installed",
+    "require_agent_installed",
 ]
 from = ["terok.lib.core.images"]
 

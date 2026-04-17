@@ -68,6 +68,7 @@ allowed_importers =
     terok.cli.commands.task
     terok.cli.main
     terok.cli.wiring
+    terok.lib.core.images
     terok.lib.domain.facade
     terok.lib.domain.project
     terok.lib.domain.storage

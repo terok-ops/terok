@@ -108,6 +108,20 @@ def _disable_options(actions: OptionList, option_ids: frozenset[str]) -> None:
             actions.disable_option_at_index(idx)
 
 
+def _visible_providers(installed: frozenset[str] | None) -> list[str]:
+    """Provider names visible to the user given an *installed* filter.
+
+    Empty/``None`` *installed* (legacy or unlabeled image) → no filtering;
+    every known provider is shown.  Otherwise the registry is intersected
+    with the install set, preserving registry order.
+    """
+    from terok_executor import AGENT_PROVIDERS
+
+    if not installed:
+        return list(AGENT_PROVIDERS)
+    return [name for name in AGENT_PROVIDERS if name in installed]
+
+
 # ---------------------------------------------------------------------------
 # Gate Server helpers
 # ---------------------------------------------------------------------------
@@ -823,19 +837,12 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
         from terok_executor import AGENT_PROVIDERS
 
+        visible = _visible_providers(installed)
         if default_agent in AGENT_PROVIDERS and (not installed or default_agent in installed):
             self._default_agent = default_agent
         else:
-            self._default_agent = next(iter(self._visible_provider_names()))
+            self._default_agent = next(iter(visible))
         self._selected_agent: str = self._default_agent
-
-    def _visible_provider_names(self) -> list[str]:
-        """Return provider names visible in this screen (filtered by *installed*)."""
-        from terok_executor import AGENT_PROVIDERS
-
-        if not self._installed:
-            return list(AGENT_PROVIDERS)
-        return [n for n in AGENT_PROVIDERS if n in self._installed]
 
     def compose(self) -> ComposeResult:
         """Build the agent list, optional sub-agent checkboxes, and buttons."""
@@ -843,7 +850,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
         with Vertical(id="agent-dialog") as dialog:
             options = []
-            visible = self._visible_provider_names()
+            visible = _visible_providers(self._installed)
             for i, name in enumerate(visible, 1):
                 provider = AGENT_PROVIDERS[name]
                 marker = " *" if provider.name == self._default_agent else ""
@@ -871,7 +878,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
         """Focus the agent list and highlight the default entry."""
         agent_list = self.query_one("#agent-list", OptionList)
 
-        for idx, name in enumerate(self._visible_provider_names()):
+        for idx, name in enumerate(_visible_providers(self._installed)):
             if name == self._default_agent:
                 agent_list.highlighted = idx
                 break
@@ -1243,12 +1250,11 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
         with Vertical(id="launch-dialog") as dialog:
             yield Static("Status: Starting container\u2026", id="launch-status")
 
-            # Build agent choices: bash + all registered headless providers
-            # (filtered by what's actually installed in this project's L1 image).
+            # bash is always offered (login shell); the rest are filtered by
+            # what's installed in the project's L1 image.
             choices: list[tuple[str, str]] = [("bash", "bash")]
-            for p in AGENT_PROVIDERS.values():
-                if self._installed and p.name not in self._installed:
-                    continue
+            for name in _visible_providers(self._installed):
+                p = AGENT_PROVIDERS[name]
                 choices.append((p.label, p.name))
 
             # Validate default_login against available choices; fall back to "bash"

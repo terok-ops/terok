@@ -11,9 +11,12 @@ import json
 import re
 import subprocess
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
-_AGENTS_LABEL = "ai.terok.agents"
-"""OCI label written by L1 build naming the installed roster entries."""
+from terok_executor import AGENTS_LABEL
+
+if TYPE_CHECKING:
+    from terok.lib.core.project_model import ProjectConfig
 
 
 def _base_tag(base_image: str) -> str:
@@ -78,10 +81,19 @@ def installed_agents(image_tag: str) -> frozenset[str]:
     except json.JSONDecodeError:
         return frozenset()
 
-    csv = (labels.get(_AGENTS_LABEL) or "").strip()
+    csv = (labels.get(AGENTS_LABEL) or "").strip()
     if not csv:
         return frozenset()
     return frozenset(name.strip() for name in csv.split(",") if name.strip())
+
+
+def installed_agents_for_project(project: ProjectConfig) -> frozenset[str]:
+    """Return the agents installed in *project*'s L1 image.
+
+    Convenience over :func:`installed_agents` for the very common
+    ``installed_agents(agent_cli_image(project.base_image))`` pattern.
+    """
+    return installed_agents(agent_cli_image(project.base_image))
 
 
 def is_installed(name: str, image_tag: str) -> bool:
@@ -93,3 +105,24 @@ def is_installed(name: str, image_tag: str) -> bool:
     """
     installed = installed_agents(image_tag)
     return not installed or name in installed
+
+
+def require_agent_installed(project: ProjectConfig, name: str, *, noun: str = "Agent") -> None:
+    """Fail fast if *name* is not baked into *project*'s L1 image.
+
+    Used at CLI / TUI / runtime entry points so the user sees a clear,
+    actionable message instead of a deep ``command not found`` later.
+    Unlabeled (legacy) images are treated as unrestricted via
+    :func:`is_installed`.
+    """
+    image = agent_cli_image(project.base_image)
+    if is_installed(name, image):
+        return
+    available = ", ".join(sorted(installed_agents(image))) or "(none)"
+    raise SystemExit(
+        f"{noun} {name!r} is not installed in the L1 image for "
+        f"project {project.id!r} ({image}).\n"
+        f"Installed: {available}\n"
+        f"Add it to image.agents and rebuild: "
+        f"terok build --agents {name} {project.id}"
+    )

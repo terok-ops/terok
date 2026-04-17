@@ -219,9 +219,12 @@ class TaskActionsMixin:
         try:
             project = load_project(pid)
             default_login = project.default_login or "bash"
-            from terok.lib.core.images import agent_cli_image, installed_agents
+            # podman inspect would block the event loop; offload it.
+            import asyncio
 
-            installed = installed_agents(agent_cli_image(project.base_image))
+            from terok.lib.core.images import installed_agents_for_project
+
+            installed = await asyncio.to_thread(installed_agents_for_project, project)
         except (SystemExit, Exception):
             pass
 
@@ -353,9 +356,12 @@ class TaskActionsMixin:
         raw_subagents = project.agent_config.get("subagents", [])
         subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
 
-        from terok.lib.core.images import agent_cli_image, installed_agents
+        # podman inspect would block the event loop; offload it.
+        import asyncio
 
-        installed = installed_agents(agent_cli_image(project.base_image))
+        from terok.lib.core.images import installed_agents_for_project
+
+        installed = await asyncio.to_thread(installed_agents_for_project, project)
 
         await self.push_screen(
             AgentSelectionScreen(

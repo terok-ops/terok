@@ -194,6 +194,7 @@ class ProjectActionsMixin:
             lambda: build_images(pid, refresh_agents=True),
             success_msg=f"Rebuilt from L0 with fresh agents for {pid}",
         )
+        self._invalidate_image_caches()
 
     async def _action_build_full(self) -> None:
         """Rebuild from L0 (no cache)."""
@@ -205,6 +206,19 @@ class ProjectActionsMixin:
             lambda: build_images(pid, full_rebuild=True),
             success_msg=f"Rebuilt from L0 (no cache) for {pid}",
         )
+        self._invalidate_image_caches()
+
+    @staticmethod
+    def _invalidate_image_caches() -> None:
+        """Drop cached image-label lookups after an in-TUI rebuild.
+
+        The :func:`installed_agents` lru_cache is keyed on the L1 tag,
+        which a rebuild reuses — so without this, the picker would keep
+        showing the previous agent set until the TUI restarts.
+        """
+        from terok.lib.core.images import installed_agents
+
+        installed_agents.cache_clear()
 
     async def _action_project_init(self) -> None:
         """Full project setup: ssh-init, generate, build, gate-sync."""

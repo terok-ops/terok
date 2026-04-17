@@ -18,7 +18,7 @@ import sys
 
 from terok_executor import AUTH_PROVIDERS
 
-from ...lib.core.images import agent_cli_image, installed_agents, is_installed
+from ...lib.core.images import require_agent_installed
 from ...lib.core.projects import load_project
 from ...lib.domain.facade import (
     authenticate,
@@ -185,31 +185,10 @@ def dispatch(args: argparse.Namespace) -> bool:
         cmd_project_init(args.project_id)
         return True
     if args.cmd == "auth":
-        _verify_provider_installed(args.project_id, args.provider)
+        require_agent_installed(load_project(args.project_id), args.provider, noun="Provider")
         authenticate(args.project_id, args.provider)
         return True
     return False
-
-
-def _verify_provider_installed(project_id: str, provider: str) -> None:
-    """Refuse ``setup auth`` for a provider that's not in this project's L1 image.
-
-    Pre-empts a confusing ``command not found`` deep inside the auth flow
-    when the user hasn't included the provider in their ``image.agents``
-    selection.  Unlabeled / legacy images are treated as unrestricted
-    (see :func:`terok.lib.core.images.is_installed`).
-    """
-    project = load_project(project_id)
-    image = agent_cli_image(project.base_image)
-    if not is_installed(provider, image):
-        installed = ", ".join(sorted(installed_agents(image))) or "(none)"
-        raise SystemExit(
-            f"Provider {provider!r} is not installed in the L1 image for "
-            f"project {project_id!r} ({image}).\n"
-            f"Installed: {installed}\n"
-            f"Add it to image.agents in the project (or global config) "
-            f"and run: terok build --agents {provider} {project_id}"
-        )
 
 
 # ── Global bootstrap (terok setup) ──────────────────────────────────────
