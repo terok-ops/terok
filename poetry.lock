@@ -3105,7 +3105,7 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/selinux-lean-mode"
-resolved_reference = "dc0c92681d24076f655819651443536e03dea9dc"
+resolved_reference = "781c0958d81dda3db44a198254da7b29416bf264"
 
 [[package]]
 name = "terok-shield"
