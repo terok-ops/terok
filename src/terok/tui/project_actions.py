@@ -445,10 +445,15 @@ class ProjectActionsMixin:
     async def action_new_project_wizard(self) -> None:
         """Launch the CLI project wizard in a suspended terminal."""
         with self.suspend():
+            import os
+            import sys
+            env = os.environ.copy()
+            env["PYTHONPATH"] = os.pathsep.join(sys.path)
             try:
                 result = subprocess.run(
                     [sys.executable, "-m", "terok.cli.main", "project-wizard"],
                     check=False,
+                    env=env,
                 )
                 if result.returncode != 0:
                     print(f"Wizard exited with code {result.returncode}")
