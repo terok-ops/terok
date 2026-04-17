@@ -23,6 +23,7 @@ from typing import Any
 from terok_executor import (
     BuildError,
     build_base_images,
+    detect_family,
     l0_image_tag,
     stage_scripts,
     stage_tmux_config,
@@ -150,17 +151,22 @@ def _render_l2(project: ProjectConfig) -> str:
     return template
 
 
-def render_all_dockerfiles(project: ProjectConfig) -> dict[str, str]:
+def render_all_dockerfiles(project: ProjectConfig, *, family: str | None = None) -> dict[str, str]:
     """Render all Dockerfile templates for *project*.
 
     L0 and L1 are rendered by terok-executor; L2 is rendered locally.
     Returns name→content mapping for the build context.
+
+    Pass *family* to reuse a value already resolved by the caller; when
+    omitted it is detected from ``project.base_image`` (with
+    ``project.family`` as override).
     """
     from terok_executor.container.build import render_l0, render_l1
 
+    fam = family or detect_family(project.base_image, override=project.family)
     return {
-        "L0.Dockerfile": render_l0(project.base_image),
-        "L1.cli.Dockerfile": render_l1(l0_image_tag(project.base_image)),
+        "L0.Dockerfile": render_l0(project.base_image, family=fam),
+        "L1.cli.Dockerfile": render_l1(l0_image_tag(project.base_image), family=fam),
         "L2.Dockerfile": _render_l2(project),
     }
 
@@ -249,13 +255,17 @@ def _write_build_manifest(project_id: str, manifest: dict[str, Any]) -> None:
 # ---------- Dockerfile generation ----------
 
 
-def generate_dockerfiles(project_id: str) -> None:
-    """Render and write Dockerfiles and auxiliary scripts for *project_id*."""
+def generate_dockerfiles(project_id: str, *, family: str | None = None) -> None:
+    """Render and write Dockerfiles and auxiliary scripts for *project_id*.
+
+    Pass *family* to skip a redundant :func:`detect_family` call when the
+    caller has already resolved it (typically from inside :func:`build_images`).
+    """
     project = load_project(project_id)
     out_dir = build_dir() / project.id
     ensure_dir(out_dir)
 
-    rendered = render_all_dockerfiles(project)
+    rendered = render_all_dockerfiles(project, family=family)
     for name, content in rendered.items():
         (out_dir / name).write_text(content)
 
@@ -310,11 +320,18 @@ def build_images(
     try:
         base_images = build_base_images(
             base_image,
+            family=project.family,
             rebuild=rebuild_agents,
             full_rebuild=full_rebuild,
         )
     except BuildError as e:
         raise SystemExit(str(e)) from e
+
+    # If we got here without an override, the build either reused a cached
+    # image (no detection needed) or completed a full build (detection
+    # already happened inside the executor).  Either way it's now safe to
+    # resolve once and thread the result through subsequent renders.
+    fam = detect_family(base_image, override=project.family)
 
     l1_cli_image = base_images.l1
     l0_image = base_images.l0
@@ -322,10 +339,10 @@ def build_images(
     l2_dev_image = project_dev_image(project.id)
 
     # Generate L2 build context (Dockerfile + staged resources)
-    generate_dockerfiles(project_id)
+    generate_dockerfiles(project_id, family=fam)
     l2_path = stage_dir / "L2.Dockerfile"
 
-    rendered = render_all_dockerfiles(project)
+    rendered = render_all_dockerfiles(project, family=fam)
     l0_hash = l0_content_hash(base_image, rendered)
     l1_hash = l1_content_hash(rendered)
     l2_hash = l2_content_hash(rendered)

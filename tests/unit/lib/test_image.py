@@ -345,6 +345,108 @@ class TestPerLayerHashes:
             assert h1 != h2
 
 
+# ---------- Package family (deb/rpm) plumbing ----------
+
+
+@contextmanager
+def image_project_with(
+    project_id: str,
+    *,
+    base_image: str = "ubuntu:24.04",
+    family: str | None = None,
+) -> Iterator[object]:
+    """Variant of :func:`image_project` that sets ``image.base_image`` (and ``image.family``)."""
+    lines = [
+        f"project:\n  id: {project_id}\n",
+        "git:\n",
+        f"  upstream_url: {UPSTREAM_URL}\n",
+        f"  default_branch: {DEFAULT_BRANCH}\n",
+        "image:\n",
+        f"  base_image: {base_image}\n",
+    ]
+    if family is not None:
+        lines.append(f"  family: {family}\n")
+    with project_env("".join(lines), project_id=project_id) as env:
+        yield env
+
+
+class TestPackageFamily:
+    """Verify that the family field flows from project.yml to L0/L1 rendering."""
+
+    def test_fedora_renders_dnf_dockerfiles(self) -> None:
+        """A fedora base image yields dnf-flavoured L0/L1 (no apt-get)."""
+        from terok.lib.core.projects import load_project
+        from terok.lib.orchestration.image import render_all_dockerfiles
+
+        with image_project_with("proj_fedora", base_image="fedora:43"):
+            project = load_project("proj_fedora")
+            rendered = render_all_dockerfiles(project)
+
+        assert "dnf install" in rendered["L0.Dockerfile"]
+        assert "apt-get" not in rendered["L0.Dockerfile"]
+        assert "dnf install" in rendered["L1.cli.Dockerfile"]
+        assert "apt-get" not in rendered["L1.cli.Dockerfile"]
+
+    def test_explicit_family_unblocks_unknown_image(self) -> None:
+        """Setting image.family lets unknown images through detection."""
+        from terok.lib.core.projects import load_project
+        from terok.lib.orchestration.image import render_all_dockerfiles
+
+        with image_project_with("proj_rocky", base_image="rockylinux:9", family="rpm"):
+            project = load_project("proj_rocky")
+            rendered = render_all_dockerfiles(project)
+
+        assert "dnf install" in rendered["L0.Dockerfile"]
+
+    def test_unknown_image_without_override_raises(self) -> None:
+        """Unknown image with no family override raises BuildError."""
+        import pytest
+        from terok_executor import BuildError
+
+        from terok.lib.core.projects import load_project
+        from terok.lib.orchestration.image import render_all_dockerfiles
+
+        with image_project_with("proj_unknown", base_image="rockylinux:9"):
+            project = load_project("proj_unknown")
+            with pytest.raises(BuildError, match="Cannot infer package family"):
+                render_all_dockerfiles(project)
+
+    def test_build_images_forwards_family_to_executor(self) -> None:
+        """build_images passes project.family through to build_base_images."""
+        with image_project_with("proj_rocky", base_image="rockylinux:9", family="rpm"):
+            with (
+                patch("subprocess.run", return_value=Mock(returncode=0)),
+                patch("terok.lib.orchestration.image._check_podman_available"),
+                patch("terok.lib.orchestration.image._image_exists", return_value=True),
+                patch(
+                    "terok.lib.orchestration.image.build_base_images",
+                    return_value=_mock_base_images("rockylinux:9"),
+                ) as mock_build,
+                mock_git_config(),
+            ):
+                build_images("proj_rocky")
+
+            mock_build.assert_called_once()
+            assert mock_build.call_args.kwargs["family"] == "rpm"
+
+    def test_build_images_forwards_none_family_when_unset(self) -> None:
+        """An absent project.family flows through as ``None`` (auto-detect)."""
+        with image_project_with("proj_ubuntu", base_image="ubuntu:24.04"):
+            with (
+                patch("subprocess.run", return_value=Mock(returncode=0)),
+                patch("terok.lib.orchestration.image._check_podman_available"),
+                patch("terok.lib.orchestration.image._image_exists", return_value=True),
+                patch(
+                    "terok.lib.orchestration.image.build_base_images",
+                    return_value=_mock_base_images(),
+                ) as mock_build,
+                mock_git_config(),
+            ):
+                build_images("proj_ubuntu")
+
+            assert mock_build.call_args.kwargs["family"] is None
+
+
 # ---------- Build manifest ----------
 
 

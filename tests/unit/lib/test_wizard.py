@@ -12,7 +12,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from terok.lib.domain.wizards.new_project import (
-    TEMPLATES,
+    BASES,
+    SECURITY_CLASSES,
     _validate_project_id,
     collect_wizard_inputs,
     generate_config,
@@ -23,7 +24,8 @@ from tests.testfs import mock_wizard_project_file
 
 def wizard_values(
     *,
-    template_index: int = 0,
+    security_class: str = "online",
+    base: str = "ubuntu",
     project_id: str = "test-proj",
     upstream_url: str = "https://github.com/user/repo.git",
     default_branch: str = "main",
@@ -31,7 +33,8 @@ def wizard_values(
 ) -> dict[str, object]:
     """Build a wizard value dict with sensible defaults."""
     return {
-        "template_index": template_index,
+        "security_class": security_class,
+        "base": base,
         "project_id": project_id,
         "upstream_url": upstream_url,
         "default_branch": default_branch,
@@ -65,24 +68,24 @@ def test_validate_project_id(project_id: str, valid: bool) -> None:
     ("inputs", "expected"),
     [
         pytest.param(
-            ["1", "myproj", "https://example.com/r.git", "main", "n"],
+            ["1", "1", "myproj", "https://example.com/r.git", "main", "n"],
             wizard_values(project_id="myproj", upstream_url="https://example.com/r.git"),
             id="collect-all-values",
         ),
         pytest.param(
-            ["3", "gkproj", "git@host:r.git", "", "n"],
+            ["2", "1", "gkproj", "git@host:r.git", "", "n"],
             wizard_values(
-                template_index=2,
+                security_class="gatekeeping",
                 project_id="gkproj",
                 upstream_url="git@host:r.git",
                 default_branch="",
             ),
-            id="gatekeeping-template-selection",
+            id="gatekeeping-selection",
         ),
         pytest.param(
-            ["2", "proj", "https://x.com/r.git", "", "n"],
+            ["1", "2", "proj", "https://x.com/r.git", "", "n"],
             wizard_values(
-                template_index=1,
+                base="fedora",
                 project_id="proj",
                 upstream_url="https://x.com/r.git",
                 default_branch="",
@@ -90,9 +93,9 @@ def test_validate_project_id(project_id: str, valid: bool) -> None:
             id="empty-default-branch",
         ),
         pytest.param(
-            ["2", "proj", "https://x.com/r.git", "dev", "n"],
+            ["1", "2", "proj", "https://x.com/r.git", "dev", "n"],
             wizard_values(
-                template_index=1,
+                base="fedora",
                 project_id="proj",
                 upstream_url="https://x.com/r.git",
                 default_branch="dev",
@@ -100,12 +103,12 @@ def test_validate_project_id(project_id: str, valid: bool) -> None:
             id="custom-branch",
         ),
         pytest.param(
-            ["1", "bad project", "good-id", "https://x.com/r.git", "main", "n"],
+            ["1", "1", "bad project", "good-id", "https://x.com/r.git", "main", "n"],
             wizard_values(project_id="good-id", upstream_url="https://x.com/r.git"),
             id="retry-invalid-project-id",
         ),
         pytest.param(
-            ["1", "proj", "", "https://x.com/r.git", "main", "n"],
+            ["1", "1", "proj", "", "https://x.com/r.git", "main", "n"],
             wizard_values(project_id="proj", upstream_url="https://x.com/r.git"),
             id="retry-empty-upstream-url",
         ),
@@ -123,9 +126,11 @@ def test_collect_wizard_inputs_success(
 @pytest.mark.parametrize(
     "side_effect",
     [
-        pytest.param(["invalid"], id="invalid-template"),
-        pytest.param(["0"], id="template-below-range"),
-        pytest.param(["5"], id="template-above-range"),
+        pytest.param(["invalid"], id="invalid-mode"),
+        pytest.param(["0"], id="mode-below-range"),
+        pytest.param(["9"], id="mode-above-range"),
+        pytest.param(["1", "invalid"], id="invalid-base"),
+        pytest.param(["1", "9"], id="base-above-range"),
         pytest.param(KeyboardInterrupt, id="ctrl-c"),
         pytest.param(EOFError, id="eof"),
     ],
@@ -133,7 +138,7 @@ def test_collect_wizard_inputs_success(
 def test_collect_wizard_inputs_cancellation_paths(
     side_effect: list[str] | type[BaseException],
 ) -> None:
-    """Invalid template selection or user cancellation returns ``None``."""
+    """Invalid menu selection or user cancellation returns ``None``."""
     with patch("builtins.input", side_effect=side_effect):
         assert collect_wizard_inputs() is None
 
@@ -143,7 +148,7 @@ def test_collect_wizard_inputs_lowercases_project_id() -> None:
     with (
         patch(
             "builtins.input",
-            side_effect=["1", "MyProject", "https://x.com/r.git", "main", "n"],
+            side_effect=["1", "1", "MyProject", "https://x.com/r.git", "main", "n"],
         ),
         patch("builtins.print") as mock_print,
     ):
@@ -177,11 +182,11 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
                 'default_branch: "main"',
                 'security_class: "online"',
             ],
-            id="online-template",
+            id="online-ubuntu",
         ),
         pytest.param(
             wizard_values(
-                template_index=2,
+                security_class="gatekeeping",
                 project_id="gk-proj",
                 upstream_url="git@github.com:user/repo.git",
                 default_branch="dev",
@@ -193,16 +198,34 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
                 "RUN apt-get update",
                 "gatekeeping:",
             ],
-            id="gatekeeping-template",
+            id="gatekeeping-ubuntu",
         ),
         pytest.param(
             wizard_values(
-                template_index=1,
+                base="nvidia",
                 project_id="gpu-proj",
                 upstream_url="https://x.com/r.git",
             ),
             ["gpus: all", "nvcr.io/nvidia/"],
-            id="nvidia-template",
+            id="online-nvidia",
+        ),
+        pytest.param(
+            wizard_values(
+                base="fedora",
+                project_id="fedora-proj",
+                upstream_url="https://x.com/r.git",
+            ),
+            ['base_image: "fedora:43"', 'security_class: "online"'],
+            id="online-fedora",
+        ),
+        pytest.param(
+            wizard_values(
+                base="podman",
+                project_id="podman-proj",
+                upstream_url="https://x.com/r.git",
+            ),
+            ['base_image: "quay.io/containers/podman:latest"'],
+            id="online-podman",
         ),
     ],
 )
@@ -216,23 +239,25 @@ def test_generate_config_templates(values: dict[str, object], expected_snippets:
 
 
 def test_generate_config_replaces_all_placeholders() -> None:
-    """All template placeholders are rendered away for every template variant."""
-    for index in range(len(TEMPLATES)):
-        _, _, content = generate_into_tmp(
-            wizard_values(
-                template_index=index,
-                project_id=f"proj{index}",
-                upstream_url="https://x.com/r.git",
-                user_snippet="RUN echo hi",
+    """All template placeholders are rendered away for every (mode, base) pair."""
+    for sec_slug, _ in SECURITY_CLASSES:
+        for base_slug, _ in BASES:
+            _, _, content = generate_into_tmp(
+                wizard_values(
+                    security_class=sec_slug,
+                    base=base_slug,
+                    project_id=f"proj-{sec_slug}-{base_slug}",
+                    upstream_url="https://x.com/r.git",
+                    user_snippet="RUN echo hi",
+                )
             )
-        )
-        for placeholder in (
-            "{{PROJECT_ID}}",
-            "{{UPSTREAM_URL}}",
-            "{{DEFAULT_BRANCH}}",
-            "{{USER_SNIPPET}}",
-        ):
-            assert placeholder not in content
+            for placeholder in (
+                "{{PROJECT_ID}}",
+                "{{UPSTREAM_URL}}",
+                "{{DEFAULT_BRANCH}}",
+                "{{USER_SNIPPET}}",
+            ):
+                assert placeholder not in content, f"{sec_slug}-{base_slug}: {placeholder}"
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,19 @@
+# Online project template (official Podman container, Fedora-based)
+# Security class "online": the agent can push directly to upstream.
+# Useful for projects that exercise podman-in-podman or container tooling.
+
+project:
+  id: "{{PROJECT_ID}}"
+  security_class: "online"
+
+git:
+  upstream_url: "{{UPSTREAM_URL}}"
+  default_branch: "{{DEFAULT_BRANCH}}"
+
+image:
+  base_image: "quay.io/containers/podman:latest"
+  # Optional: extra Dockerfile commands injected into the project image.
+  # Use user_snippet_file to point to an external .dockerinclude file.
+  # Both can be set — file is included first, inline appended.
+  user_snippet_inline: |
+    {{USER_SNIPPET}}

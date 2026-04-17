@@ -8,11 +8,13 @@ from importlib.resources.abc import Traversable
 
 import pytest
 
-from terok.lib.domain.wizards.new_project import TEMPLATES as WIZARD_TEMPLATES
+from terok.lib.domain.wizards.new_project import BASES, SECURITY_CLASSES
 from terok.lib.util.template_utils import render_template
 
 TEMPLATE_DIR: Traversable = resources.files("terok") / "resources" / "templates" / "projects"
-EXPECTED_TEMPLATES: list[str] = [filename for _label, filename in WIZARD_TEMPLATES]
+EXPECTED_TEMPLATES: list[str] = [
+    f"{sec_slug}-{base_slug}.yml" for sec_slug, _ in SECURITY_CLASSES for base_slug, _ in BASES
+]
 REQUIRED_PLACEHOLDERS: list[str] = [
     "{{PROJECT_ID}}",
     "{{UPSTREAM_URL}}",

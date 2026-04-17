@@ -17,12 +17,18 @@ from ...core.project_model import validate_project_id
 from ...util.fs import ensure_dir_writable
 from ...util.template_utils import render_template
 
-# Template variants: (label, filename)
-TEMPLATES: list[tuple[str, str]] = [
-    ("Online – Ubuntu 24.04", "online-ubuntu.yml"),
-    ("Online – NVIDIA CUDA (GPU)", "online-nvidia.yml"),
-    ("Gatekeeping – Ubuntu 24.04", "gatekeeping-ubuntu.yml"),
-    ("Gatekeeping – NVIDIA CUDA (GPU)", "gatekeeping-nvidia.yml"),
+# The wizard picks a project template by asking two independent
+# questions (security mode + base image) instead of one combinatorial
+# menu.  Template files on disk follow ``{security}-{base}.yml``.
+SECURITY_CLASSES: list[tuple[str, str]] = [
+    ("online", "Online (agent pushes directly to upstream)"),
+    ("gatekeeping", "Gatekeeping (changes staged for human review)"),
+]
+BASES: list[tuple[str, str]] = [
+    ("ubuntu", "Ubuntu 24.04"),
+    ("fedora", "Fedora 43"),
+    ("podman", "Podman (Fedora-based)"),
+    ("nvidia", "NVIDIA CUDA (GPU)"),
 ]
 
 _TEMPLATE_DIR: Traversable = resources.files("terok") / "resources" / "templates" / "projects"
@@ -46,23 +52,18 @@ def _prompt(message: str, default: str = "") -> str:
     return value or default
 
 
-def _prompt_template() -> int | None:
-    """Show numbered template menu and return the 0-based index, or ``None`` on bad input."""
-    if not TEMPLATES:
-        print("No templates available.", file=sys.stderr)
-        return None
-
-    print("\nSelect a project template:")
-    for i, (label, _filename) in enumerate(TEMPLATES, 1):
+def _prompt_choice(title: str, options: list[tuple[str, str]]) -> str | None:
+    """Show a numbered menu and return the selected slug, or ``None`` on bad input."""
+    print(f"\n{title}")
+    for i, (_slug, label) in enumerate(options, 1):
         print(f"  {i}) {label}")
 
-    max_choice = len(TEMPLATES)
-    choice = input(f"\nChoice [1-{max_choice}]: ").strip()
+    choice = input(f"\nChoice [1-{len(options)}]: ").strip()
     if not choice.isdigit():
         return None
     idx = int(choice) - 1
-    if 0 <= idx < max_choice:
-        return idx
+    if 0 <= idx < len(options):
+        return options[idx][0]
     return None
 
 
@@ -113,15 +114,19 @@ def _prompt_image_snippet() -> str:
 def collect_wizard_inputs() -> dict | None:
     """Run the interactive prompt flow and return collected values.
 
-    Returns a dict with keys: ``template_index``, ``project_id``,
+    Returns a dict with keys: ``security_class``, ``base``, ``project_id``,
     ``upstream_url``, ``default_branch``, ``user_snippet``.
-    Returns ``None`` if the user cancels (Ctrl+C).
+    Returns ``None`` if the user cancels (Ctrl+C) or makes an invalid selection.
     """
     try:
-        # Template selection
-        template_idx = _prompt_template()
-        if template_idx is None:
-            print("Invalid template selection.", file=sys.stderr)
+        security_class = _prompt_choice("Select security mode:", SECURITY_CLASSES)
+        if security_class is None:
+            print("Invalid mode selection.", file=sys.stderr)
+            return None
+
+        base = _prompt_choice("Select base image:", BASES)
+        if base is None:
+            print("Invalid base image selection.", file=sys.stderr)
             return None
 
         # Project ID
@@ -150,7 +155,8 @@ def collect_wizard_inputs() -> dict | None:
         user_snippet = _prompt_image_snippet()
 
         return {
-            "template_index": template_idx,
+            "security_class": security_class,
+            "base": base,
             "project_id": project_id,
             "upstream_url": upstream_url,
             "default_branch": default_branch,
@@ -167,7 +173,7 @@ def generate_config(values: dict) -> Path:
     *values* is the dict returned by :func:`collect_wizard_inputs`.
     Returns the path to the created ``project.yml`` file.
     """
-    _label, filename = TEMPLATES[values["template_index"]]
+    filename = f"{values['security_class']}-{values['base']}.yml"
     traversable = _TEMPLATE_DIR / filename
 
     with resources.as_file(traversable) as template_path:
