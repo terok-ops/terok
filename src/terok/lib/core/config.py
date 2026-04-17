@@ -8,13 +8,16 @@ import sys
 from collections.abc import Callable
 from importlib import resources as _pkg_resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
 from ..util.yaml import YAMLError, load as _yaml_load
 from .paths import config_root as _config_root_base
 from .yaml_schema import RawGlobalConfig
+
+ServicesMode = Literal["tcp", "socket"]
+"""Mirror of the pydantic schema's ``services.mode`` literal (see ``yaml_schema.py``)."""
 
 # ---------- Prefix & roots ----------
 
@@ -452,7 +455,7 @@ def get_credential_proxy_bypass() -> bool:
     return _load_validated().credential_proxy.bypass_no_secret_protection
 
 
-def get_services_mode() -> str:
+def get_services_mode() -> ServicesMode:
     """Return the service transport mode (``"tcp"`` or ``"socket"``).
 
     Global config (config.yml)::
