@@ -446,7 +446,6 @@ class ProjectActionsMixin:
     async def action_new_project_wizard(self) -> None:
         """Launch the CLI project wizard in a suspended terminal."""
         with self.suspend():
-            old_argv = sys.argv[:]
             try:
                 sys.argv = ["terok.cli.main", "project-wizard"]
                 runpy.run_module("terok.cli.main", run_name="__main__")
@@ -455,8 +454,6 @@ class ProjectActionsMixin:
                     print(f"Wizard exited with code {e.code}")
             except Exception as e:
                 print(f"Error: {e}")
-            finally:
-                sys.argv = old_argv
             input("\n[Press Enter to return to TerokTUI] ")
         await self.refresh_projects()
         self.notify("Project list refreshed.")
