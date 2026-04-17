@@ -396,6 +396,8 @@ def _check_selinux_policy(*, color: bool) -> None:
         is_selinux_enforcing,
         is_selinux_policy_installed,
         missing_selinux_policy_tools,
+        selinux_install_command,
+        selinux_install_script,
     )
 
     from ...lib.core.config import get_services_mode
@@ -403,9 +405,7 @@ def _check_selinux_policy(*, color: bool) -> None:
     if get_services_mode() != "socket" or not is_selinux_enforcing():
         return
 
-    from terok_sandbox import selinux_install_script
-
-    install_cmd = f"sudo bash {selinux_install_script()}"
+    install_cmd = selinux_install_command()
 
     print()
     print(bold("SELinux:", color))

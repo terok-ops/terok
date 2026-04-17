@@ -411,6 +411,7 @@ def _check_selinux_policy() -> _CheckResult:
         is_selinux_enforcing,
         is_selinux_policy_installed,
         missing_selinux_policy_tools,
+        selinux_install_command,
         selinux_install_script,
     )
 
@@ -420,7 +421,7 @@ def _check_selinux_policy() -> _CheckResult:
     if not is_selinux_enforcing():
         return ("ok", label, "not needed (SELinux not enforcing)")
     if not is_selinux_policy_installed():
-        install_cmd = f"sudo bash {selinux_install_script()}"
+        install_cmd = selinux_install_command()
         missing = missing_selinux_policy_tools()
         if missing:
             return (

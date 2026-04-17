@@ -349,15 +349,16 @@ def list_projects() -> list[ProjectConfig]:
 
     projects: list[ProjectConfig] = []
     for pid in sorted(ids):
-        # load_project will automatically prefer user over system config
+        # ``_parse_project_yaml`` wraps every config error (bad YAML,
+        # schema drift, filesystem issues) in ``SystemExit`` with a
+        # human-readable message — that's the one exception type
+        # ``load_project`` can surface here.  Skip + surface it so the
+        # broken project is visible (silently hiding turns "No projects
+        # found" into a mystery for users upgrading across schema
+        # renames).  Genuinely unexpected exceptions propagate.
         try:
             projects.append(load_project(pid))
-        except (SystemExit, Exception) as exc:
-            # A broken project (malformed YAML, outdated schema, missing
-            # fields) must not crash the listing or the TUI — but silently
-            # hiding it is worse than the crash: users just see "No
-            # projects found" and no trail of why.  Log a warning and
-            # print a terse stderr line so CLI and TUI users notice.
+        except SystemExit as exc:
             logger.warning("Skipping broken project '%s': %s", pid, exc)
             print(f"warning: skipping broken project '{pid}': {exc}", file=sys.stderr)
             continue
