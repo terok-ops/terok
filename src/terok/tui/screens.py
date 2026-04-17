@@ -840,8 +840,12 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
         visible = _visible_providers(installed)
         if default_agent in AGENT_PROVIDERS and (not installed or default_agent in installed):
             self._default_agent = default_agent
+        elif visible:
+            self._default_agent = visible[0]
         else:
-            self._default_agent = next(iter(visible))
+            # Misconfigured selection (e.g. only tool-kind entries installed):
+            # the modal will render an empty list and the user can only cancel.
+            self._default_agent = ""
         self._selected_agent: str = self._default_agent
 
     def compose(self) -> ComposeResult:
@@ -916,13 +920,11 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
     def on_key(self, event: events.Key) -> None:
         """Handle number-key shortcuts (1-9) to select an agent."""
-        from terok_executor import AGENT_PROVIDERS
-
         if event.character and event.character.isdigit():
             idx = int(event.character) - 1
-            providers = list(AGENT_PROVIDERS.values())
-            if 0 <= idx < len(providers):
-                self._selected_agent = providers[idx].name
+            visible = _visible_providers(self._installed)
+            if 0 <= idx < len(visible):
+                self._selected_agent = visible[idx]
                 agent_list = self.query_one("#agent-list", OptionList)
                 agent_list.highlighted = idx
                 event.stop()

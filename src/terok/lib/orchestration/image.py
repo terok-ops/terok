@@ -320,10 +320,10 @@ def build_images(
     stage_dir = build_dir() / project.id
     rebuilt_base = refresh_agents or full_rebuild
 
-    selection = agents if agents is not None else project.agents
-    agents_arg: str | tuple[str, ...] = "all"
-    if selection != "all":
-        agents_arg = tuple(name.strip() for name in selection.split(",") if name.strip())
+    selection = (agents if agents is not None else project.agents).strip().lower()
+    names = tuple(n.strip() for n in selection.split(",") if n.strip())
+    # Empty / whitespace-only / " all " all collapse to the magic value.
+    agents_arg: str | tuple[str, ...] = "all" if selection == "all" or not names else names
 
     # Delegate L0+L1 to terok-executor (uses its own temp dir for build context)
     try:
