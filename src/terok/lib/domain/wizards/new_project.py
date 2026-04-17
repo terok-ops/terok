@@ -20,8 +20,12 @@ from ...util.template_utils import render_template
 # Template variants: (label, filename)
 TEMPLATES: list[tuple[str, str]] = [
     ("Online – Ubuntu 24.04", "online-ubuntu.yml"),
+    ("Online – Fedora 43", "online-fedora.yml"),
+    ("Online – Podman (Fedora-based)", "online-podman.yml"),
     ("Online – NVIDIA CUDA (GPU)", "online-nvidia.yml"),
     ("Gatekeeping – Ubuntu 24.04", "gatekeeping-ubuntu.yml"),
+    ("Gatekeeping – Fedora 43", "gatekeeping-fedora.yml"),
+    ("Gatekeeping – Podman (Fedora-based)", "gatekeeping-podman.yml"),
     ("Gatekeeping – NVIDIA CUDA (GPU)", "gatekeeping-nvidia.yml"),
 ]
 

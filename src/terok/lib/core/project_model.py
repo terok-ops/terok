@@ -71,6 +71,13 @@ class ProjectConfig(BaseModel):
     hook_post_stop: str | None = None
     # Image configuration (flattened from image: section)
     base_image: str = "ubuntu:24.04"
+    family: str | None = None
+    """Package family override for L0/L1 builds (``"deb"`` or ``"rpm"``).
+
+    ``None`` lets terok-executor auto-detect from *base_image*; set
+    explicitly when the auto-detect allowlist doesn't recognise the
+    image (rocky, alma, suse, …).
+    """
     snippet_inline: str | None = None
     snippet_file: str | None = None
     # Shared task directory (multi-agent IPC)

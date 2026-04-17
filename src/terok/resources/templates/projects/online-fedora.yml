@@ -1,0 +1,18 @@
+# Online project template (Fedora base)
+# Security class "online": the agent can push directly to upstream.
+
+project:
+  id: "{{PROJECT_ID}}"
+  security_class: "online"
+
+git:
+  upstream_url: "{{UPSTREAM_URL}}"
+  default_branch: "{{DEFAULT_BRANCH}}"
+
+image:
+  base_image: "fedora:43"
+  # Optional: extra Dockerfile commands injected into the project image.
+  # Use user_snippet_file to point to an external .dockerinclude file.
+  # Both can be set — file is included first, inline appended.
+  user_snippet_inline: |
+    {{USER_SNIPPET}}

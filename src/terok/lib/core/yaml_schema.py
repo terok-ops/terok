@@ -313,6 +313,14 @@ class RawImageSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     base_image: str = Field(default="ubuntu:24.04", description="Base container image for builds")
+    family: Literal["deb", "rpm"] | None = Field(
+        default=None,
+        description=(
+            "Package family for the L0/L1 build (``deb`` or ``rpm``). "
+            "Leave unset to auto-detect from *base_image*; set explicitly "
+            "when the image is outside the known allowlist."
+        ),
+    )
     user_snippet_inline: str | None = Field(
         default=None, description="Inline Dockerfile snippet injected into the project image"
     )

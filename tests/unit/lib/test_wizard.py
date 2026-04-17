@@ -125,7 +125,7 @@ def test_collect_wizard_inputs_success(
     [
         pytest.param(["invalid"], id="invalid-template"),
         pytest.param(["0"], id="template-below-range"),
-        pytest.param(["5"], id="template-above-range"),
+        pytest.param(["9"], id="template-above-range"),
         pytest.param(KeyboardInterrupt, id="ctrl-c"),
         pytest.param(EOFError, id="eof"),
     ],
@@ -181,7 +181,7 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
         ),
         pytest.param(
             wizard_values(
-                template_index=2,
+                template_index=4,
                 project_id="gk-proj",
                 upstream_url="git@github.com:user/repo.git",
                 default_branch="dev",
@@ -197,12 +197,30 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
         ),
         pytest.param(
             wizard_values(
-                template_index=1,
+                template_index=3,
                 project_id="gpu-proj",
                 upstream_url="https://x.com/r.git",
             ),
             ["gpus: all", "nvcr.io/nvidia/"],
             id="nvidia-template",
+        ),
+        pytest.param(
+            wizard_values(
+                template_index=1,
+                project_id="fedora-proj",
+                upstream_url="https://x.com/r.git",
+            ),
+            ['base_image: "fedora:43"', 'security_class: "online"'],
+            id="fedora-template",
+        ),
+        pytest.param(
+            wizard_values(
+                template_index=2,
+                project_id="podman-proj",
+                upstream_url="https://x.com/r.git",
+            ),
+            ['base_image: "quay.io/containers/podman:latest"'],
+            id="podman-template",
         ),
     ],
 )

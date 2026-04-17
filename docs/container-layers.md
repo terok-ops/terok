@@ -15,6 +15,16 @@ terok builds project containers in three logical layers. L0 (dev) and L1 (agent)
 - Stages `init-ssh-and-repo.sh` at `/usr/local/bin` and makes it the default `CMD`.
 - Environment defaults: `REPO_ROOT=/workspace`, `GIT_RESET_MODE=none`.
 
+#### Base image families
+
+Officially tested base images: `ubuntu:24.04`, `fedora:43`, `quay.io/containers/podman`, `nvcr.io/nvidia/nvhpc`. The package-manager branch (`apt`/`dnf`) is auto-detected from the image name. For images outside the allowlist, set `image.family: deb` or `image.family: rpm` explicitly:
+
+```yaml
+image:
+  base_image: rockylinux:9
+  family: rpm
+```
+
 ### L1 — Agent Image (`terok-l1-cli:<base-tag>`)
 
 Built `FROM` L0.

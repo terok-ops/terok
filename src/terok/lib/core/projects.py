@@ -214,6 +214,7 @@ def _build_project_config(
         hook_post_ready=hook_ready,
         hook_post_stop=hook_stop,
         base_image=raw.image.base_image,
+        family=raw.image.family,
         snippet_inline=raw.image.user_snippet_inline,
         snippet_file=raw.image.user_snippet_file,
         shared_dir=shared_dir,

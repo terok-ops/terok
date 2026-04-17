@@ -1,0 +1,25 @@
+# Gatekeeping project template (Fedora base)
+# Security class "gatekeeping": tasks push to a host-side staging repo;
+# a human must review and promote changes to upstream.
+
+project:
+  id: "{{PROJECT_ID}}"
+  security_class: "gatekeeping"
+
+git:
+  upstream_url: "{{UPSTREAM_URL}}"
+  default_branch: "{{DEFAULT_BRANCH}}"
+
+image:
+  base_image: "fedora:43"
+  # Optional: extra Dockerfile commands injected into the project image.
+  # Use user_snippet_file to point to an external .dockerinclude file.
+  # Both can be set — file is included first, inline appended.
+  user_snippet_inline: |
+    {{USER_SNIPPET}}
+
+gatekeeping:
+  expose_external_remote: true
+  upstream_polling:
+    enabled: true
+    interval_minutes: 5

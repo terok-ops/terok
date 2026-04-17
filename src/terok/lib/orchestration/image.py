@@ -156,11 +156,12 @@ def render_all_dockerfiles(project: ProjectConfig) -> dict[str, str]:
     L0 and L1 are rendered by terok-executor; L2 is rendered locally.
     Returns name→content mapping for the build context.
     """
-    from terok_executor.container.build import render_l0, render_l1
+    from terok_executor.container.build import detect_family, render_l0, render_l1
 
+    fam = detect_family(project.base_image, override=project.family)
     return {
-        "L0.Dockerfile": render_l0(project.base_image),
-        "L1.cli.Dockerfile": render_l1(l0_image_tag(project.base_image)),
+        "L0.Dockerfile": render_l0(project.base_image, family=fam),
+        "L1.cli.Dockerfile": render_l1(l0_image_tag(project.base_image), family=fam),
         "L2.Dockerfile": _render_l2(project),
     }
 
@@ -310,6 +311,7 @@ def build_images(
     try:
         base_images = build_base_images(
             base_image,
+            family=project.family,
             rebuild=rebuild_agents,
             full_rebuild=full_rebuild,
         )
