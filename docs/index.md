@@ -11,14 +11,16 @@ provisioning.
 
 ## Features
 
-- **Multiple Agents**: Claude Code, Codex, GitHub Copilot, Mistral Vibe, Blablador, and OpenCode
+- **Multiple Agents**: Claude Code, Codex, GitHub Copilot, Mistral Vibe, Blablador, Kisski, and OpenCode
+- **Selectable Agents**: Pick which agents bake into your image via `image.agents` in `project.yml` or `--agents claude,codex` on the command line — different selections coexist as separate L1 images
 - **Headless Autopilot**: Run agents non-interactively with a prompt — useful for CI/CD and scripted workflows
 - **Presets**: Bundled and custom reusable agent configurations (`solo`, `review`, `team`)
 - **Multi-Agent Teams**: Run multiple specialized sub-agents in a single task
 - **Task Lifecycle**: Create, run, stop, restart, follow up, and archive tasks
 - **Security Modes**: Online and gatekeeping modes for different trust levels
 - **Container Layers**: Efficient three-layer container image architecture (L0/L1/L2)
-- **Hardened Runtime**: Defence-in-depth via [terok-sandbox](https://github.com/terok-ai/terok-sandbox) — egress firewall, gated git access, SSH isolation, GPU passthrough
+- **Distro-Agnostic Base Images**: Ubuntu/Debian (apt) and Fedora/RPM (dnf) base images supported out of the box; `image.family` override for anything outside the allowlist
+- **Hardened Runtime**: Defence-in-depth via [terok-sandbox](https://github.com/terok-ai/terok-sandbox) — egress firewall, gated git access, SSH isolation, GPU passthrough, socket-based credential and SSH transport with SELinux support
 - **Agent Instructions**: Layered, inheritable instruction system delivered to every task
 - **Interactive TUI**: Full-featured Textual interface with project/task management, log viewing, and login sessions
 

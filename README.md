@@ -146,7 +146,12 @@ Location: `~/.config/terok/config.yml`
 git:
   human_name: "Your Name"
   human_email: "your@email.com"
+
+image:
+  agents: "all"   # default roster selection for every project
 ```
+
+Per-project overrides live in `project.yml` under `image:` — `base_image`, `family` (`deb`/`rpm`, auto-detected for ubuntu/fedora/podman/nvcr.io/nvidia), and `agents` (which roster entries to bake into L1). See [docs/usage.md](docs/usage.md#choosing-which-agents-to-bake-in) for the full precedence and selection mechanics.
 
 ### Environment Overrides
 

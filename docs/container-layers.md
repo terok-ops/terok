@@ -46,15 +46,18 @@ Built `FROM` the L1 image.
 | Command | Layers Built | When to Use |
 |---------|-------------|-------------|
 | `terok build <project>` | L2 only | Project config changes |
-| `terok build --agents <project>` | L0 + L1 + L2 | Rebuild from L0 with fresh agents |
-| `terok build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Rebuild from L0 (no cache) with fresh base image + apt packages |
-| `terok build --dev <project>` | + L2-dev image | Manual debugging container |
+| `terok build <project> --refresh-agents` | L0 + L1 + L2 | Bust the agent-install cache |
+| `terok build <project> --full-rebuild` | L0 + L1 + L2 (no cache) | Refresh base image + system packages |
+| `terok build <project> --agents <list>\|all` | L0 + L1 + L2 | One-shot override of which agents bake into L1 |
+| `terok build <project> --dev` | + L2-dev image | Manual debugging container |
 
-The `--agents` flag rebuilds from L0 and passes a unique `AGENT_CACHE_BUST` build arg to L1, invalidating the cache for agent install layers while preserving cache for apt packages where possible.
+`--refresh-agents` rebuilds from L0 with a fresh `AGENT_CACHE_BUST` build-arg; the per-agent install layers below the cache-bust point are re-executed, the system-package layer above it is reused.
 
-The `--full-rebuild` flag rebuilds from L0 with `--no-cache` and `--pull=always`, forcing a fresh base-image pull and fresh apt-package layers.
+`--full-rebuild` passes `--no-cache --pull=always`, forcing a fresh base-image pull and re-running system-package installs.
 
-`<base-tag>` is derived from `image.base_image` (sanitized), e.g. `ubuntu:24.04` becomes `ubuntu-24.04`.
+`--agents <list>\|all` selects which roster entries get baked into L1 for this build only. Defaults come from `image.agents` in `project.yml` (or the global `config.yml`). Different selections produce different L1 tag suffixes (`…-claude-codex`, `…-gh-glab`) and coexist in the local image store.
+
+`<base-tag>` is derived from `image.base_image` (sanitized), e.g. `ubuntu:24.04` becomes `ubuntu-24.04`. When the selection suffix would push the tag past the OCI 128-char limit, the agent portion is replaced with a SHA1 digest of the sorted selection.
 
 ## Runtime Behavior
 

@@ -207,21 +207,45 @@ terok generate myproj
 # Build only L2 project images (fast, reuses existing L0/L1 layers)
 terok build myproj
 
-# Rebuild from L0 with fresh agents (codex, claude, opencode, vibe)
-terok build --agents myproj
+# Refresh just the agent-install layers (cache bust from the AGENT_CACHE_BUST point)
+terok build myproj --refresh-agents
 
-# Rebuild from L0 (no cache) (includes base image pull and apt packages)
-terok build --full-rebuild myproj
+# Rebuild from L0 (no cache) (includes base image pull and system packages)
+terok build myproj --full-rebuild
+
+# Pick which agents get baked into L1 for this build (one-shot override)
+terok build myproj --agents claude,codex
+terok build myproj --agents all
 
 # Optional: build a dev image from L0 as well
 terok build myproj --dev
-terok build --agents myproj --dev
 ```
 
 Build modes:
 - **Default** (`build`): Only rebuilds L2 project images, reuses existing L0/L1. Use for project config changes.
-- **Rebuild from L0 with fresh agents** (`--agents`): Rebuilds L0+L1+L2 and refreshes agent installs. Affects new containers only.
-- **Rebuild from L0 (no cache)** (`--full-rebuild`): Rebuilds L0+L1+L2 with `--no-cache` and `--pull=always`. Use when base image or apt packages need updating. Affects new containers only.
+- **`--refresh-agents`**: Rebuilds L0+L1+L2 and cache-busts the per-agent install layers, leaving the system-package layer intact. Use when an agent CLI has a new release.
+- **`--full-rebuild`**: Rebuilds L0+L1+L2 with `--no-cache --pull=always`. Use when the base image or system packages need updating.
+- **`--agents <list>|all`**: One-shot override of the agent selection for this build. Does not modify `project.yml`.
+
+### Choosing which agents to bake in
+
+The L1 (agent) image can be built with a subset of the roster instead of "everything". The selection flows from (narrowest wins):
+
+1. **Per-build CLI override** — `terok build --agents claude,codex` (above).
+2. **Per-project default** — `project.yml`:
+   ```yaml
+   image:
+     agents: "claude,codex,gh"   # or "all"
+   ```
+3. **Global default** — `~/.config/terok/config.yml`:
+   ```yaml
+   image:
+     agents: "all"   # default for every project that doesn't set its own
+   ```
+
+Different selections produce different L1 image tags (`terok-l1-cli:<base>-claude-codex`, `...-gh-glab`, ...) so multiple selections can coexist in the local image store. The OCI label `ai.terok.agents` on each L1 image records the exact selection for introspection; inside the container the same list is in `/etc/terok/installed.env` and the `hilfe` banner filters its output to match.
+
+Transitive dependencies are expanded automatically — picking `blablador` or `kisski` also pulls in `opencode`.
 
 ### Step 6: Initialize SSH (for private repos)
 
