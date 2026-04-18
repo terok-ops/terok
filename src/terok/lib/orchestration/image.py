@@ -25,6 +25,7 @@ from terok_executor import (
     build_base_images,
     detect_family,
     l0_image_tag,
+    parse_agent_selection,
     stage_scripts,
     stage_tmux_config,
     stage_toad_agents,
@@ -320,10 +321,7 @@ def build_images(
     stage_dir = build_dir() / project.id
     rebuilt_base = refresh_agents or full_rebuild
 
-    selection = (agents if agents is not None else project.agents).strip().lower()
-    names = tuple(n.strip() for n in selection.split(",") if n.strip())
-    # Empty / whitespace-only / " all " all collapse to the magic value.
-    agents_arg: str | tuple[str, ...] = "all" if selection == "all" or not names else names
+    agents_arg = parse_agent_selection(agents if agents is not None else project.agents)
 
     # Delegate L0+L1 to terok-executor (uses its own temp dir for build context)
     try:
