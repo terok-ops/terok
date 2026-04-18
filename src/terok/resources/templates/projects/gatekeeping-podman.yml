@@ -12,7 +12,7 @@ git:
   default_branch: "{{DEFAULT_BRANCH}}"
 
 image:
-  base_image: "quay.io/containers/podman:latest"
+  base_image: "quay.io/podman/stable:latest"
   # Optional: extra Dockerfile commands injected into the project image.
   # Use user_snippet_file to point to an external .dockerinclude file.
   # Both can be set — file is included first, inline appended.

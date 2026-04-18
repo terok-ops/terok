@@ -224,7 +224,7 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
                 project_id="podman-proj",
                 upstream_url="https://x.com/r.git",
             ),
-            ['base_image: "quay.io/containers/podman:latest"'],
+            ['base_image: "quay.io/podman/stable:latest"'],
             id="online-podman",
         ),
     ],

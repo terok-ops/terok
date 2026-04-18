@@ -17,7 +17,7 @@ terok builds project containers in three logical layers. L0 (dev) and L1 (agent)
 
 #### Base image families
 
-Officially tested base images: `ubuntu:24.04`, `fedora:43`, `quay.io/containers/podman`, `nvcr.io/nvidia/nvhpc`. The package-manager branch (`apt`/`dnf`) is auto-detected from the image name. For images outside the allowlist, set `image.family: deb` or `image.family: rpm` explicitly:
+Officially tested base images: `ubuntu:24.04`, `fedora:43`, `quay.io/podman/stable`, `nvcr.io/nvidia/nvhpc`. The package-manager branch (`apt`/`dnf`) is auto-detected from the image name. For images outside the allowlist, set `image.family: deb` or `image.family: rpm` explicitly:
 
 ```yaml
 image:
