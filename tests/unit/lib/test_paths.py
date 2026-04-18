@@ -59,6 +59,46 @@ class TestVaultRoot:
         assert paths.vault_root() == Path.home() / ".local" / "share" / "terok" / "vault"
 
 
+class TestVaultLegacyEnvVar:
+    """Verify ``TEROK_CREDENTIALS_DIR`` is honoured as a deprecated fallback."""
+
+    def test_legacy_env_var_returns_its_value(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Without TEROK_VAULT_DIR, TEROK_CREDENTIALS_DIR is read — eases migration."""
+        legacy = tmp_path / "old-credentials"
+        monkeypatch.delenv("TEROK_VAULT_DIR", raising=False)
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(legacy))
+        with pytest.warns(DeprecationWarning, match="TEROK_CREDENTIALS_DIR is deprecated"):
+            result = paths.vault_root()
+        assert result == legacy
+
+    def test_legacy_env_var_expands_tilde(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Tilde in the legacy env var is expanded too."""
+        monkeypatch.delenv("TEROK_VAULT_DIR", raising=False)
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", "~/legacy-creds")
+        with pytest.warns(DeprecationWarning):
+            result = paths.vault_root()
+        assert "~" not in str(result)
+        assert result == Path.home() / "legacy-creds"
+
+    def test_new_env_var_takes_precedence_over_legacy(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """When both are set, TEROK_VAULT_DIR wins and no warning is emitted."""
+        new_path = tmp_path / "new-vault"
+        legacy = tmp_path / "old-credentials"
+        monkeypatch.setenv("TEROK_VAULT_DIR", str(new_path))
+        monkeypatch.setenv("TEROK_CREDENTIALS_DIR", str(legacy))
+        # pytest.warns with match=None + empty list confirms no warning was raised.
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # any warning → raises
+            result = paths.vault_root()
+        assert result == new_path
+
+
 class TestVaultNamespace:
     """Verify vault root lives under the terok/ namespace."""
 

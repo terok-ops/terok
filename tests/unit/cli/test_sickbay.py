@@ -17,6 +17,7 @@ from terok.cli.commands.sickbay import (
     _check_ssh_signer,
     _check_task_hook,
     _check_vault,
+    _check_vault_migration,
     _reconcile_post_stop,
     _update_worst,
 )
@@ -536,3 +537,61 @@ class TestCheckSelinuxPolicy:
         assert sev == "ok"
         assert "terok_socket_t installed" in detail
         assert "install_policy.sh" in detail
+
+
+class TestCheckVaultMigration:
+    """``_check_vault_migration`` detects a lingering pre-vault ``credentials/`` dir."""
+
+    def test_ok_when_no_legacy_dir(self, tmp_path: Path) -> None:
+        """No legacy ``credentials/`` dir → ok."""
+
+        def fake_ns(name: str) -> Path:
+            return tmp_path / name  # neither exists
+
+        with unittest.mock.patch("terok_sandbox.paths.namespace_state_dir", side_effect=fake_ns):
+            sev, label, detail = _check_vault_migration()
+        assert sev == "ok"
+        assert label == "Vault migration"
+        assert "no legacy" in detail
+
+    def test_warn_when_only_legacy_exists(self, tmp_path: Path) -> None:
+        """Legacy dir without new vault dir → warn pointing at the migration script."""
+        legacy = tmp_path / "credentials"
+        legacy.mkdir()  # exists
+        vault = tmp_path / "vault"  # does not exist
+
+        def fake_ns(name: str) -> Path:
+            return legacy if name == "credentials" else vault
+
+        with unittest.mock.patch("terok_sandbox.paths.namespace_state_dir", side_effect=fake_ns):
+            sev, _, detail = _check_vault_migration()
+        assert sev == "warn"
+        assert str(legacy) in detail
+        assert "terok-migrate-vault.py" in detail
+
+    def test_info_when_both_exist(self, tmp_path: Path) -> None:
+        """Both dirs present → info (migration ran but old dir survived for safety)."""
+        legacy = tmp_path / "credentials"
+        legacy.mkdir()
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        def fake_ns(name: str) -> Path:
+            return legacy if name == "credentials" else vault
+
+        with unittest.mock.patch("terok_sandbox.paths.namespace_state_dir", side_effect=fake_ns):
+            sev, _, detail = _check_vault_migration()
+        assert sev == "info"
+        assert "still present" in detail
+        assert "safe to remove" in detail
+
+    def test_warn_when_probe_raises(self) -> None:
+        """An exception inside the probe is surfaced as a warn result."""
+        with unittest.mock.patch(
+            "terok_sandbox.paths.namespace_state_dir",
+            side_effect=RuntimeError("boom"),
+        ):
+            sev, label, detail = _check_vault_migration()
+        assert sev == "warn"
+        assert label == "Vault migration"
+        assert "boom" in detail
