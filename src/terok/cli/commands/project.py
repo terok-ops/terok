@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import argparse
 
-from ...lib.core.projects import derive_project, list_presets, list_projects, load_project
-from ...lib.domain.facade import delete_project, find_projects_sharing_gate
-from ...lib.domain.wizards.new_project import run_wizard
+from ...lib.core.projects import list_presets, list_projects, load_project
+from ...lib.domain.facade import delete_project, derive_project, find_projects_sharing_gate
+from ...lib.domain.wizards.new_project import offer_edit_then_init, run_wizard
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 from .setup import cmd_project_init
 
@@ -73,12 +73,14 @@ def dispatch(args: argparse.Namespace) -> bool:
                 )
         return True
     if args.cmd == "project-derive":
-        target = derive_project(args.source_id, args.new_id)
-        print(f"Derived project '{args.new_id}' from '{args.source_id}' at {target}")
-        print("Next steps:")
-        print(f"  1. Edit {target / 'project.yml'} (customize agent: section)")
-        print(f"  2. Initialize: terok project-init {args.new_id}")
-        print("  Tip: global presets are shared across projects (see terok config)")
+        project = derive_project(args.source_id, args.new_id)
+        config_path = project.config.root / "project.yml"
+        print(
+            f"Derived project '{args.new_id}' from '{args.source_id}' — "
+            f"shares git gate and SSH key with source.\n"
+            f"Config: {config_path}"
+        )
+        offer_edit_then_init(config_path, args.new_id, init_fn=cmd_project_init)
         return True
     if args.cmd == "project-delete":
         _cmd_project_delete(args.project_id, force=args.force)

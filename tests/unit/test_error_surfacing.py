@@ -335,7 +335,7 @@ class TestProjectStateWarnings:
             ),
             patch("subprocess.run", side_effect=FileNotFoundError("no podman")),
             patch("terok.lib.util.logging_utils.log_warning") as mock_warn,
-            patch("terok.lib.domain.project_state.make_sandbox_config") as mock_sbx,
+            patch("terok.lib.core.projects.make_sandbox_config") as mock_sbx,
         ):
             mock_sbx.return_value.ssh_keys_dir = tmp_path / "ssh-keys"
             get_project_state("test-proj")
@@ -362,7 +362,7 @@ class TestProjectStateWarnings:
             patch("terok.lib.domain.project_state.build_dir", return_value=tmp_path / "build"),
             patch("subprocess.run", side_effect=FileNotFoundError("no podman")),
             patch("terok.lib.util.logging_utils.log_warning") as mock_warn,
-            patch("terok.lib.domain.project_state.make_sandbox_config") as mock_sbx,
+            patch("terok.lib.core.projects.make_sandbox_config") as mock_sbx,
         ):
             mock_sbx.return_value.ssh_keys_dir = tmp_path / "ssh-keys"
             get_project_state("test-proj", gate_commit_provider=broken_commit)

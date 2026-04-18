@@ -25,7 +25,7 @@ from terok_sandbox import (
     uninstall_systemd_units,
 )
 
-from ..lib.core.projects import effective_ssh_key_name, load_project
+from ..lib.core.projects import effective_ssh_key_name, load_project, resolve_ssh_host_dir
 from ..lib.domain.facade import (
     authenticate,
     build_images,
@@ -61,11 +61,8 @@ class ProjectActionsMixin:
         if not (upstream.startswith("git@") or upstream.startswith("ssh://")):
             return
 
-        from ..lib.core.config import make_sandbox_config
-
-        ssh_dir = project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / project.id)
         key_name = effective_ssh_key_name(project, key_type="ed25519")
-        pub_key_path = ssh_dir / f"{key_name}.pub"
+        pub_key_path = resolve_ssh_host_dir(project) / f"{key_name}.pub"
 
         print("\nHint: this project uses an SSH upstream.")
         print(

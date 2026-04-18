@@ -303,7 +303,7 @@ class TestProject:
                     "terok.lib.core.projects._get_global_git_config", return_value=None
                 ),
                 unittest.mock.patch(
-                    "terok.lib.domain.project_state.make_sandbox_config",
+                    "terok.lib.core.projects.make_sandbox_config",
                     return_value=mock_sandbox_cfg,
                 ),
             ):
@@ -321,3 +321,80 @@ class TestProject:
             "gate": True,
             "gate_last_commit": None,
         }
+
+
+class TestShareSshKeyRegistration:
+    """Source's key paths are aliased under the derived scope, not copied."""
+
+    def _patch_sandbox_config(self, keys_path: Path) -> unittest.mock._patch:
+        """Return a patch that routes ``make_sandbox_config().ssh_keys_json_path`` to *keys_path*."""
+        mock_cfg = unittest.mock.MagicMock()
+        mock_cfg.ssh_keys_json_path = keys_path
+        return unittest.mock.patch(
+            "terok.lib.core.config.make_sandbox_config", return_value=mock_cfg
+        )
+
+    def test_copies_dict_entry_to_new_scope(self, tmp_path: Path) -> None:
+        """Source's single-key dict entry is copied under the new scope."""
+        import json
+
+        from terok.lib.domain.facade import _share_ssh_key_registration
+
+        keys_path = tmp_path / "ssh-keys.json"
+        keys_path.write_text(
+            json.dumps({"alpha": {"private_key": "/k/alpha/id", "public_key": "/k/alpha/id.pub"}})
+        )
+        with self._patch_sandbox_config(keys_path):
+            _share_ssh_key_registration("alpha", "beta")
+
+        mapping = json.loads(keys_path.read_text())
+        # ``update_ssh_keys_json`` normalises entries to a list per scope.
+        assert mapping["beta"] == [{"private_key": "/k/alpha/id", "public_key": "/k/alpha/id.pub"}]
+        assert mapping["alpha"]["private_key"] == "/k/alpha/id"
+
+    def test_missing_file_is_noop(self, tmp_path: Path) -> None:
+        """Absent ``ssh-keys.json`` — silent no-op (handled later by project-init)."""
+        from terok.lib.domain.facade import _share_ssh_key_registration
+
+        keys_path = tmp_path / "ssh-keys.json"
+        with self._patch_sandbox_config(keys_path):
+            _share_ssh_key_registration("alpha", "beta")
+        assert not keys_path.exists()
+
+    def test_missing_source_entry_is_noop(self, tmp_path: Path) -> None:
+        """No entry for *source_id* — derived project is left unregistered."""
+        import json
+
+        from terok.lib.domain.facade import _share_ssh_key_registration
+
+        keys_path = tmp_path / "ssh-keys.json"
+        keys_path.write_text(
+            json.dumps({"gamma": {"private_key": "/k/g", "public_key": "/k/g.pub"}})
+        )
+        with self._patch_sandbox_config(keys_path):
+            _share_ssh_key_registration("alpha", "beta")
+
+        assert "beta" not in json.loads(keys_path.read_text())
+
+    def test_list_entry_copies_first_key(self, tmp_path: Path) -> None:
+        """When source has multiple keys, the first is shared with the new scope."""
+        import json
+
+        from terok.lib.domain.facade import _share_ssh_key_registration
+
+        keys_path = tmp_path / "ssh-keys.json"
+        keys_path.write_text(
+            json.dumps(
+                {
+                    "alpha": [
+                        {"private_key": "/k/a1", "public_key": "/k/a1.pub"},
+                        {"private_key": "/k/a2", "public_key": "/k/a2.pub"},
+                    ]
+                }
+            )
+        )
+        with self._patch_sandbox_config(keys_path):
+            _share_ssh_key_registration("alpha", "beta")
+
+        mapping = json.loads(keys_path.read_text())
+        assert mapping["beta"] == [{"private_key": "/k/a1", "public_key": "/k/a1.pub"}]

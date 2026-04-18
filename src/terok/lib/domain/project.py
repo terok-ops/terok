@@ -62,7 +62,7 @@ from ..core.config import (
     user_projects_dir,
 )
 from ..core.project_model import ProjectConfig
-from ..core.projects import list_presets, load_project
+from ..core.projects import list_presets, load_project, resolve_ssh_host_dir
 from ..orchestration.agent_config import resolve_agent_config
 from ..orchestration.image import build_images, generate_dockerfiles
 from ..orchestration.task_runners import HeadlessRunRequest, task_run_headless
@@ -183,27 +183,24 @@ def make_git_gate(config: ProjectConfig) -> GitGate:
     Resolves *ssh_host_dir* via :func:`make_sandbox_config` so the gate looks
     in terok's state directory, not sandbox's standalone default.
     """
-    cfg = make_sandbox_config()
-    ssh_dir = config.ssh_host_dir or (cfg.ssh_keys_dir / config.id)
     return GitGate(
         scope=config.id,
         gate_path=config.gate_path,
         upstream_url=config.upstream_url,
         default_branch=config.default_branch,
-        ssh_host_dir=ssh_dir,
+        ssh_host_dir=resolve_ssh_host_dir(config),
         ssh_key_name=config.ssh_key_name,
         allow_host_keys=config.ssh_allow_host_keys,
         validate_gate_fn=validate_gate_upstream_match,
-        clone_cache_base=cfg.clone_cache_base_path,
+        clone_cache_base=make_sandbox_config().clone_cache_base_path,
     )
 
 
 def make_ssh_manager(config: ProjectConfig) -> SSHManager:
     """Construct an :class:`SSHManager` from a :class:`ProjectConfig` (adapter factory)."""
-    ssh_dir = config.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / config.id)
     return SSHManager(
         scope=config.id,
-        ssh_host_dir=ssh_dir,
+        ssh_host_dir=resolve_ssh_host_dir(config),
         ssh_key_name=config.ssh_key_name,
         ssh_config_template=config.ssh_config_template,
     )
@@ -346,8 +343,7 @@ def delete_project(project_id: str) -> DeleteProjectResult:
             deleted.append(str(d))
 
     # 5. SSH credentials (may be user-configured path)
-    ssh_dir = project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / pid)
-    _rmtree_managed(ssh_dir, "SSH dir", deleted, skipped)
+    _rmtree_managed(resolve_ssh_host_dir(project), "SSH dir", deleted, skipped)
 
     # 6. Git gate (skip if shared with other projects)
     sharing = find_projects_sharing_gate(project.gate_path, exclude_project=pid)
