@@ -998,6 +998,45 @@ When enabled, terok adds:
 
 ---
 
+## Running Containers Inside Your Container
+
+Projects that run `podman` or `docker` inside their terok container (for example, projects developing container tooling, or those needing `fuse-overlayfs`) need the outer container launched with two extra flags. Declare this once in `project.yml`:
+
+```yaml
+run:
+  nested_containers: true
+```
+
+When set, terok appends to the outer `podman run`:
+
+- `--security-opt label=nested` — the SELinux type that confines the outer container but permits nested container operations (devpts mount, rootless overlay setup). This is *not* `label=disable` — SELinux stays enforced.
+- `--device /dev/fuse` — required by rootless podman's `fuse-overlayfs` storage driver.
+
+Verify inside the container:
+
+```console
+$ podman run alpine echo hello
+hello
+```
+
+### Requirements
+
+- Podman ≥ v4.5.0 on the **host** (introduced `label=nested`, April 2023 — every current distro ships 4.5+).
+- A base image with podman preinstalled; the bundled `online-podman` / `gatekeeping-podman` presets point at `quay.io/podman/stable:latest` (Fedora-based, rootless-ready).
+- On SELinux-enforcing hosts: `container-selinux` package (usually already installed on Fedora/RHEL).
+
+If the image doesn't have podman preinstalled, `nested_containers: true` still sets the capabilities — your project's user snippet can install the runtime:
+
+```yaml
+image:
+  base_image: fedora:43
+  user_snippet_inline: RUN dnf install -y podman fuse-overlayfs
+run:
+  nested_containers: true
+```
+
+---
+
 ## Tips
 
 - **Show resolved paths:** `terok config`

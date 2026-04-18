@@ -343,6 +343,7 @@ def _run_container(
         command: Optional command + args appended after the image name.
         hooks: Optional lifecycle callbacks fired around the launch.
     """
+    merged_args = list(extra_args or ()) + _project_runtime_flags(project)
     spec = RunSpec(
         container_name=cname,
         image=image,
@@ -353,7 +354,7 @@ def _run_container(
         gpu_enabled=has_gpu(project),
         memory_limit=project.memory_limit,
         cpu_limit=project.cpu_limit,
-        extra_args=tuple(extra_args or ()),
+        extra_args=tuple(merged_args),
         unrestricted="TEROK_UNRESTRICTED" in env,
         sealed=project.is_sealed,
     )
@@ -367,6 +368,23 @@ def _run_container(
 def _sandbox() -> Sandbox:
     """Return a :class:`Sandbox` with terok's bridged config."""
     return Sandbox(make_sandbox_config())
+
+
+def _project_runtime_flags(project: ProjectConfig) -> list[str]:
+    """Return extra ``podman run`` flags derived from project-level capabilities.
+
+    ``run.nested_containers`` → ``--security-opt label=nested`` plus
+    ``--device /dev/fuse``.  ``label=nested`` confines the outer container
+    to the SELinux type that permits nested container operations
+    (devpts mount, rootless overlay setup) without disabling labelling;
+    ``/dev/fuse`` is required by rootless podman's fuse-overlayfs driver.
+    Available on podman v4.5.0+ (April 2023); older podmans error with
+    "unknown label option: nested" and the user is expected to upgrade.
+    """
+    flags: list[str] = []
+    if project.nested_containers:
+        flags += ["--security-opt", "label=nested", "--device", "/dev/fuse"]
+    return flags
 
 
 def task_run_cli(

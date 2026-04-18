@@ -20,6 +20,7 @@ provisioning.
 - **Security Modes**: Online and gatekeeping modes for different trust levels
 - **Container Layers**: Efficient three-layer container image architecture (L0/L1/L2)
 - **Distro-Agnostic Base Images**: Ubuntu/Debian (apt) and Fedora/RPM (dnf) base images supported out of the box; `image.family` override for anything outside the allowlist
+- **Nested Containers**: `run.nested_containers: true` declares projects that run podman/docker inside their container — terok adds the SELinux `label=nested` type and `/dev/fuse` device, keeping the outer container's SELinux boundary intact
 - **Hardened Runtime**: Defence-in-depth via [terok-sandbox](https://github.com/terok-ai/terok-sandbox) — egress firewall, gated git access, SSH isolation, GPU passthrough, socket-based credential and SSH transport with SELinux support
 - **Agent Instructions**: Layered, inheritable instruction system delivered to every task
 - **Interactive TUI**: Full-featured Textual interface with project/task management, log viewing, and login sessions

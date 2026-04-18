@@ -61,6 +61,8 @@ class ProjectConfig(BaseModel):
     """Podman ``--memory`` limit from ``run.memory`` in project.yml."""
     cpu_limit: str | None = None
     """Podman ``--cpus`` limit from ``run.cpus`` in project.yml."""
+    nested_containers: bool = False
+    """Project runs podman/docker inside its container (see ``run.nested_containers``)."""
     task_name_categories: list[str] | None = None
     shield_drop_on_task_run: bool = True
     shield_on_task_restart: str = "retain"

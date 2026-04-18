@@ -268,6 +268,15 @@ class RawRunSection(BaseModel):
     )
     memory: str | None = None
     cpus: str | None = None
+    nested_containers: bool = Field(
+        default=False,
+        description=(
+            "Declares that the project runs podman/docker inside its container. "
+            "When true, the outer container is launched with ``--security-opt "
+            "label=nested`` and ``--device /dev/fuse`` so rootless nested "
+            "containers work under SELinux without disabling labels wholesale."
+        ),
+    )
     hooks: RawHooksSection = Field(default_factory=RawHooksSection)
 
     @field_validator("memory", "cpus", mode="before")

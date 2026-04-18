@@ -350,6 +350,7 @@ class TestRunContainer:
         p.is_sealed = False
         p.memory_limit = None
         p.cpu_limit = None
+        p.nested_containers = False
         return p
 
     def test_builds_runspec_and_delegates(self) -> None:
@@ -601,6 +602,53 @@ class TestRunContainer:
 
         spec = sandbox_factory.return_value.run.call_args[0][0]
         assert spec.sealed is False
+
+    def test_nested_containers_adds_selinux_and_fuse_flags(self) -> None:
+        """run.nested_containers=true appends label=nested + /dev/fuse."""
+        project = self._make_project()
+        project.nested_containers = True
+        with (
+            patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
+            patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
+        ):
+            _run_container(
+                cname="nested-ctr",
+                image="alpine:latest",
+                env={},
+                volumes=[],
+                project=project,
+                task_dir=MOCK_TASK_DIR,
+                extra_args=["-p", "127.0.0.1:8080:8080"],
+            )
+
+        spec = sandbox_factory.return_value.run.call_args[0][0]
+        # Caller-supplied flags come first, project-derived flags append.
+        assert "--security-opt" in spec.extra_args
+        assert "label=nested" in spec.extra_args
+        assert "--device" in spec.extra_args
+        assert "/dev/fuse" in spec.extra_args
+        assert "-p" in spec.extra_args
+        assert "127.0.0.1:8080:8080" in spec.extra_args
+
+    def test_nested_containers_default_adds_nothing(self) -> None:
+        """run.nested_containers=false (default) leaves extra_args untouched."""
+        project = self._make_project()  # nested_containers defaults False
+        with (
+            patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
+            patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
+        ):
+            _run_container(
+                cname="plain-ctr",
+                image="alpine:latest",
+                env={},
+                volumes=[],
+                project=project,
+                task_dir=MOCK_TASK_DIR,
+            )
+
+        spec = sandbox_factory.return_value.run.call_args[0][0]
+        assert "label=nested" not in spec.extra_args
+        assert "/dev/fuse" not in spec.extra_args
 
 
 # ── _apply_unrestricted_env ───────────────────────────────
