@@ -18,7 +18,7 @@ from terok.lib.domain.panic import (
 from tests.testfs import FAKE_PROJECT_TASKS_ROOT
 
 _SHIELD = "terok.lib.domain.panic._raise_shield"
-_PROXY = "terok.lib.domain.panic._stop_vault"
+_VAULT = "terok.lib.domain.panic._stop_vault"
 _GATE = "terok.lib.domain.panic._stop_gate"
 _BYPASS = "terok.lib.domain.panic.get_shield_bypass_firewall_no_protection"
 _DISCOVER = "terok.lib.domain.panic._discover_targets"
@@ -116,7 +116,7 @@ class TestExecutePanic:
     @patch(_BYPASS, return_value=False)
     @patch(_DISCOVER)
     @patch(_SHIELD)
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(True, None))
     def test_success(self, _g, _p, mock_shield, mock_discover, _b, _l):
         """All operations succeed."""
@@ -134,7 +134,7 @@ class TestExecutePanic:
     @patch(_BYPASS, return_value=True)
     @patch(_DISCOVER, return_value=[_target()])
     @patch(_SHIELD)
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(True, None))
     def test_shield_bypass(self, _g, _p, mock_shield, _d, _b, _l):
         """Shield ops skipped when bypass active."""
@@ -146,7 +146,7 @@ class TestExecutePanic:
     @patch(_BYPASS, return_value=False)
     @patch(_DISCOVER)
     @patch(_SHIELD)
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(False, "not running"))
     def test_partial_failure(self, _g, _p, mock_shield, mock_discover, _b, _l):
         """Some ops fail, others still succeed."""
@@ -165,7 +165,7 @@ class TestExecutePanic:
     @patch(_BYPASS, return_value=False)
     @patch(_DISCOVER)
     @patch(_SHIELD)
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(True, None))
     def test_phase2_stop(self, _g, _p, mock_shield, mock_discover, _b, _l, _s):
         """Phase 2 container stop works when requested."""
@@ -180,7 +180,7 @@ class TestExecutePanic:
     @patch(_LOCK)
     @patch(_BYPASS, return_value=False)
     @patch(_DISCOVER, return_value=[])
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(True, None))
     def test_phase2_skipped_when_no_targets(self, _g, _p, _d, _b, _l, mock_stop):
         """Phase 2 skipped when no running containers."""
@@ -192,7 +192,7 @@ class TestExecutePanic:
     @patch(_BYPASS, return_value=False)
     @patch(_DISCOVER)
     @patch(_SHIELD, side_effect=Exception("thread crashed"))
-    @patch(_PROXY, return_value=(True, None))
+    @patch(_VAULT, return_value=(True, None))
     @patch(_GATE, return_value=(True, None))
     def test_shield_future_exception(self, _g, _p, _shield, mock_discover, _b, _l):
         """Shield future raising an exception is captured as error."""
@@ -282,7 +282,7 @@ class TestStopVault:
     """Tests for _stop_vault."""
 
     @patch("terok_sandbox.stop_vault")
-    def test_success(self, mock_stop):
+    def test_success(self, mock_stop: MagicMock) -> None:
         """Vault stop succeeds."""
         from terok.lib.domain.panic import _stop_vault
 
@@ -290,7 +290,7 @@ class TestStopVault:
         assert ok and err is None
 
     @patch("terok_sandbox.stop_vault", side_effect=Exception("no vault"))
-    def test_failure(self, _):
+    def test_failure(self, mock_stop: MagicMock) -> None:
         """Vault stop failure returns error."""
         from terok.lib.domain.panic import _stop_vault
 

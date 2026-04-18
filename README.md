@@ -161,7 +161,7 @@ Per-project overrides live in `project.yml` under `image:` — `base_image`, `fa
 | `TEROK_CONFIG_FILE` | Global config file path |
 | `TEROK_ROOT` | Shared namespace root for all ecosystem packages |
 | `TEROK_STATE_DIR` | Host-only state (builds, metadata) |
-| `TEROK_VAULT_DIR` | Vault store (proxy DB, routes, key registry) |
+| `TEROK_VAULT_DIR` | Vault store (vault database, routes, key registry) |
 
 ## Requirements
 

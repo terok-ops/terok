@@ -466,7 +466,7 @@ def _check_vault_migration() -> _CheckResult:
                 "warn",
                 label,
                 f"legacy credentials/ dir exists at {old_dir} — "
-                "run 'terok setup' to migrate to vault/",
+                "run 'python3 tools/terok-migrate-vault.py' to migrate to vault/",
             )
         if old_dir.is_dir() and new_dir.is_dir():
             return (

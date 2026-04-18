@@ -58,7 +58,7 @@ class TerokIntegrationEnv:
 
     @property
     def vault_dir(self) -> Path:
-        """Return the isolated credentials directory."""
+        """Return the isolated vault directory."""
         return self.base_dir / "credentials"
 
     @property

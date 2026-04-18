@@ -29,14 +29,14 @@ from cryptography.hazmat.primitives.serialization import (
     PublicFormat,
 )
 from terok_sandbox import CredentialDB
-from terok_sandbox.credentials.proxy.ssh_agent import (
+from terok_sandbox.vault.ssh_signer import (
     SSH_AGENT_IDENTITIES_ANSWER,
     SSH_AGENT_SIGN_RESPONSE,
     SSH_AGENTC_REQUEST_IDENTITIES,
     SSH_AGENTC_SIGN_REQUEST,
     _pack_string,
     _unpack_string,
-    start_ssh_agent_server,
+    start_ssh_signer,
 )
 
 pytestmark = pytest.mark.needs_vault
@@ -102,11 +102,11 @@ class TestStorySSHSignerSigning:
         # 2. Create phantom token (simulates environment.py at task launch)
         db_path = tmp_path / "proxy" / "credentials.db"
         db = CredentialDB(db_path)
-        phantom = db.create_proxy_token("testproj", "task-1", "testproj", "ssh")
+        phantom = db.create_token("testproj", "task-1", "testproj", "ssh")
         db.close()
 
         # 3. Start SSH agent server (simulates credential proxy daemon)
-        server = await start_ssh_agent_server(str(db_path), str(keys_json), "127.0.0.1", 0)
+        server = await start_ssh_signer(str(db_path), str(keys_json), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
             # 4. Connect with phantom token (simulates socat bridge from container)
@@ -177,9 +177,9 @@ class TestStorySSHSignerTokenRevocation:
 
         db_path = tmp_path / "proxy" / "credentials.db"
         db = CredentialDB(db_path)
-        phantom = db.create_proxy_token("proj", "task-1", "proj", "ssh")
+        phantom = db.create_token("proj", "task-1", "proj", "ssh")
 
-        server = await start_ssh_agent_server(str(db_path), str(keys_json), "127.0.0.1", 0)
+        server = await start_ssh_signer(str(db_path), str(keys_json), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
             # Works before revocation
@@ -193,7 +193,7 @@ class TestStorySSHSignerTokenRevocation:
             await writer.wait_closed()
 
             # Revoke all tokens for this task
-            db.revoke_proxy_tokens("proj", "task-1")
+            db.revoke_tokens("proj", "task-1")
             db.close()
 
             # Rejected after revocation — server closes connection
