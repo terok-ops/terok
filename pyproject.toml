@@ -4,7 +4,7 @@ build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry]
 name = "terok"
-version = "0.7.1"
+version = "0.7.2"
 description = "Manage containerized projects and per-run tasks with Podman"
 readme = "README.md"
 license = "Apache-2.0"
@@ -44,7 +44,7 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.86/terok_executor-0.0.86-py3-none-any.whl"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.87/terok_executor-0.0.87-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.73/terok_sandbox-0.0.73-py3-none-any.whl"}
 terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.6/terok_dbus-0.5.6-py3-none-any.whl"}
 
