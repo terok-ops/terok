@@ -361,7 +361,14 @@ class TaskActionsMixin:
 
         from terok.lib.core.images import installed_agents_for_project
 
-        installed = await asyncio.to_thread(installed_agents_for_project, project)
+        installed: frozenset[str] | None = None
+        try:
+            installed = await asyncio.to_thread(installed_agents_for_project, project)
+        except (SystemExit, Exception):
+            # podman missing or inspect failure — fall back to unfiltered picker
+            # (unlabeled images are treated as unrestricted) rather than aborting
+            # the autopilot flow.
+            pass
 
         await self.push_screen(
             AgentSelectionScreen(

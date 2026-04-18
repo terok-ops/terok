@@ -839,14 +839,14 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
         visible = _visible_providers(installed)
         if default_agent in AGENT_PROVIDERS and (not installed or default_agent in installed):
-            self._default_agent = default_agent
+            self._default_agent: str | None = default_agent
         elif visible:
             self._default_agent = visible[0]
         else:
             # Misconfigured selection (e.g. only tool-kind entries installed):
-            # the modal will render an empty list and the user can only cancel.
-            self._default_agent = ""
-        self._selected_agent: str = self._default_agent
+            # the modal renders an empty list and OK is rejected — user can only cancel.
+            self._default_agent = None
+        self._selected_agent: str | None = self._default_agent
 
     def compose(self) -> ComposeResult:
         """Build the agent list, optional sub-agent checkboxes, and buttons."""
@@ -910,8 +910,15 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
             self.dismiss(None)
 
     def _submit(self) -> None:
-        """Dismiss with the selected agent and sub-agent list."""
+        """Dismiss with the selected agent and sub-agent list.
+
+        Rejects the submission when no agent is selectable (empty visible
+        list) so the caller never receives a falsy agent name.
+        """
         agent = self._selected_agent
+        if not agent:
+            self.notify("No agents available — rebuild the image or adjust selection.")
+            return
         subagents: list[str] | None = None
         if self._subagents:
             sel = self.query_one("#subagent-selection", SelectionList)

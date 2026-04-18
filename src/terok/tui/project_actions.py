@@ -167,6 +167,7 @@ class ProjectActionsMixin:
             lambda: build_images(pid),
             success_msg=f"Built L2 project images for {pid}",
         )
+        self._invalidate_image_caches()
 
     async def action_init_ssh(self) -> None:
         """Initialize the per-project SSH directory and keypair."""
@@ -251,6 +252,7 @@ class ProjectActionsMixin:
             print("\n=== Full Setup complete! ===")
 
         ok = await self._run_suspended(work, refresh="project_state")
+        self._invalidate_image_caches()
         if ok and gate_ok:
             self.notify(f"Full setup completed for {pid}")
         elif ok:
