@@ -105,6 +105,27 @@ class TestProjects:
         assert "- alpha [online]" in listed.stdout
         assert "- beta [online]" in listed.stdout
 
+    def test_project_derive_copies_instructions_md(self, terok_env: TerokIntegrationEnv) -> None:
+        """``project-derive`` copies source ``instructions.md`` into the new project.
+
+        Absent on the source, the file must remain absent on the target — the
+        copy is best-effort, not a required invariant of every derivation.
+        """
+        source_root = terok_env.write_project("alpha", SOURCE_PROJECT)
+        instructions = "# Alpha house rules\n\nAlways run `make lint` first.\n"
+        (source_root / "instructions.md").write_text(instructions, encoding="utf-8")
+
+        terok_env.run_cli("project-derive", "alpha", "beta")
+
+        derived_instructions = terok_env.project_root("beta") / "instructions.md"
+        assert derived_instructions.is_file()
+        assert derived_instructions.read_text(encoding="utf-8") == instructions
+
+        # Sibling without source instructions.md stays clean.
+        terok_env.write_project("gamma", SOURCE_PROJECT.replace("id: alpha", "id: gamma"))
+        terok_env.run_cli("project-derive", "gamma", "delta")
+        assert not (terok_env.project_root("delta") / "instructions.md").exists()
+
     def test_project_derive_preserves_yaml_comments(self, terok_env: TerokIntegrationEnv) -> None:
         """``project-derive`` preserves user comments via ruamel.yaml round-trip.
 

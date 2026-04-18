@@ -5,6 +5,7 @@
 
 import logging
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +45,7 @@ from .yaml_schema import RawGlobalGitSection, RawProjectYaml
 logger = logging.getLogger(__name__)
 
 _PROJECT_YML = "project.yml"
+_INSTRUCTIONS_MD = "instructions.md"
 
 
 def _get_global_git_config(key: str) -> str | None:
@@ -289,7 +291,9 @@ def derive_project(source_id: str, new_id: str) -> Path:
     keypair as the source — only ``project.id`` and the ``agent:`` section
     differ.  This is the "sibling project" use case: rerun the same repo
     through a different image or agent without re-provisioning keys or
-    re-cloning the mirror.
+    re-cloning the mirror.  The source's ``instructions.md``, if present, is
+    copied over so the derived project starts with the same user-provided
+    guidance.
 
     Returns the new project's root directory.
 
@@ -318,6 +322,10 @@ def derive_project(source_id: str, new_id: str) -> Path:
         _yaml_dump(source_cfg),
         encoding="utf-8",
     )
+
+    instructions_src = source.root / _INSTRUCTIONS_MD
+    if instructions_src.is_file():
+        shutil.copy2(instructions_src, target_root / _INSTRUCTIONS_MD)
 
     return target_root
 
