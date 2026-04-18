@@ -478,6 +478,7 @@ expose = [
     "list_presets",
     "derive_project",
     "effective_ssh_key_name",
+    "resolve_ssh_host_dir",
     "validate_project_id",
 ]
 from = ["terok.lib.core.projects"]
@@ -679,7 +680,7 @@ expose = ["wait_for_container_exit", "follow_container_logs_cmd"]
 from = ["terok.lib.orchestration.autopilot"]
 
 [[interfaces]]
-expose = ["run_wizard", "collect_wizard_inputs", "generate_config"]
+expose = ["run_wizard", "offer_edit_then_init", "collect_wizard_inputs", "generate_config"]
 from = ["terok.lib.domain.wizards.new_project"]
 
 # Facade interface (stable boundary for presentation layer)

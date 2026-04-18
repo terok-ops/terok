@@ -79,19 +79,26 @@ class TestProjects:
     def test_project_derive_preserves_infra_and_clears_agent(
         self, terok_env: TerokIntegrationEnv
     ) -> None:
-        """``project-derive`` copies infra config but clears ``agent:``."""
+        """``project-derive`` pins shared gate+SSH paths and clears ``agent:``."""
         terok_env.write_project("alpha", SOURCE_PROJECT)
 
         result = terok_env.run_cli("project-derive", "alpha", "beta")
 
         target = terok_env.project_root("beta") / "project.yml"
         assert "Derived project 'beta' from 'alpha'" in result.stdout
+        assert "shares git gate and SSH key with source" in result.stdout
         assert target.is_file()
 
         derived = yaml_load(target.read_text(encoding="utf-8"))
         assert derived["project"]["id"] == "beta"
         assert "agent" not in derived
         assert derived["git"]["upstream_url"] == TEST_UPSTREAM_URL
+
+        # Shared infra is pinned to source's resolved paths so the derived
+        # project points at the same gate mirror and SSH keypair.
+        assert derived["gate"]["path"] == str(terok_env.gate_path("alpha"))
+        expected_ssh_dir = terok_env.sandbox_state_root / "ssh-keys" / "alpha"
+        assert derived["ssh"]["host_dir"] == str(expected_ssh_dir)
         assert derived["ssh"]["key_name"] == "id_alpha"
 
         listed = terok_env.run_cli("projects")
@@ -134,6 +141,7 @@ class TestProjects:
         assert re.search(r"(?m)^\s*agent\s*:", raw) is None
         assert re.search(r"(?m)^\s*#.*\bagent\b", raw) is None
 
-        # Key order matches the source file (not alphabetically sorted)
+        # Original section order is preserved (not alphabetically sorted).
+        # ``gate`` is appended by derive to pin the shared gate mirror path.
         keys = [m.group(1) for m in re.finditer(r"(?m)^(\w+)\s*:", raw)]
-        assert keys == ["project", "git", "ssh"]
+        assert keys == ["project", "git", "ssh", "gate"]

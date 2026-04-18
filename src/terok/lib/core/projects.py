@@ -24,6 +24,7 @@ from .config import (
     get_global_section,
     get_shield_drop_on_task_run,
     get_shield_on_task_restart,
+    make_sandbox_config,
     projects_dir,
     sandbox_live_dir,
     user_presets_dir,
@@ -279,11 +280,15 @@ def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path
 
 
 def derive_project(source_id: str, new_id: str) -> Path:
-    """Create a new project config derived from an existing one.
+    """Create a new project config that *shares infrastructure* with an existing one.
 
-    Copies the source ``project.yml``, preserving ``git``, ``ssh``, and ``gate``
-    sections while resetting ``project.id`` and clearing the ``agent:`` section
-    for customization.  Returns the new project root directory.
+    The derived project points at the same git-gate mirror and the same SSH
+    keypair as the source — only ``project.id`` and the ``agent:`` section
+    differ.  This is the "sibling project" use case: rerun the same repo
+    through a different image or agent without re-provisioning keys or
+    re-cloning the mirror.
+
+    Returns the new project's root directory.
 
     Raises SystemExit if the source project is not found or the target already exists.
     """
@@ -301,13 +306,9 @@ def derive_project(source_id: str, new_id: str) -> Path:
 
     source_cfg = _yaml_load((source.root / _PROJECT_YML).read_text(encoding="utf-8")) or {}
 
-    # Update project ID
-    if "project" not in source_cfg:
-        source_cfg["project"] = {}
-    source_cfg["project"]["id"] = new_id
-
-    # Clear agent section for customization
+    source_cfg.setdefault("project", {})["id"] = new_id
     source_cfg.pop("agent", None)
+    _pin_shared_infra(source_cfg, source)
 
     target_root.mkdir(parents=True, exist_ok=True)
     (target_root / _PROJECT_YML).write_text(
@@ -316,6 +317,27 @@ def derive_project(source_id: str, new_id: str) -> Path:
     )
 
     return target_root
+
+
+def _pin_shared_infra(cfg: dict, source: ProjectConfig) -> None:
+    """Pin *source*'s resolved gate and SSH paths into *cfg*.
+
+    Makes the sibling project's infrastructure sharing explicit in the
+    written YAML, decoupled from terok's default-path conventions.
+    """
+    cfg.setdefault("gate", {})["path"] = str(source.gate_path)
+    ssh_section = cfg.setdefault("ssh", {})
+    ssh_section["host_dir"] = str(resolve_ssh_host_dir(source))
+    ssh_section["key_name"] = effective_ssh_key_name(source)
+
+
+def resolve_ssh_host_dir(project: ProjectConfig) -> Path:
+    """On-disk directory holding *project*'s SSH keypair and config.
+
+    Project-level ``ssh.host_dir`` wins; otherwise falls back to the managed
+    default ``<sandbox state>/ssh-keys/<project_id>``.
+    """
+    return project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / project.id)
 
 
 def _find_project_root(project_id: str) -> Path:

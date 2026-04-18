@@ -29,12 +29,14 @@ used by CLI commands that operate on ``project_id`` strings directly.
 
 from __future__ import annotations
 
+import json
+
 from terok_executor import (
     authenticate as _authenticate_raw,
 )
 
 from ..core.images import project_cli_image
-from ..core.projects import load_project
+from ..core.projects import derive_project as _derive_project, load_project
 from ..orchestration.image import build_images, generate_dockerfiles
 from ..orchestration.task_runners import (  # noqa: F401 — re-exported public API
     HeadlessRunRequest,
@@ -92,11 +94,47 @@ def list_projects() -> list[Project]:
 
 
 def derive_project(source_id: str, new_id: str) -> Project:
-    """Derive a new project from an existing one and return it."""
-    from ..core.projects import derive_project as _derive_project
+    """Derive a new project from an existing one and return it.
 
+    The derived project shares the source's git-gate mirror and SSH keypair.
+    If the source already has an ``ssh-keys.json`` entry, the same key files
+    are registered under the new scope so the credential proxy can serve the
+    derived project without further setup.
+    """
     _derive_project(source_id, new_id)
+    _share_ssh_key_registration(source_id, new_id)
     return Project(load_project(new_id))
+
+
+def _share_ssh_key_registration(source_id: str, new_id: str) -> None:
+    """Register the source's SSH key under *new_id* in ``ssh-keys.json``.
+
+    Silent no-op when the source has no registered key yet — ``project-init``
+    on the derived project will populate both scopes once the key exists on
+    disk.  For sources with multiple keys the first is shared; that is enough
+    for the common single-remote sibling use case.
+    """
+    from ..core.config import make_sandbox_config
+
+    try:
+        mapping = json.loads(make_sandbox_config().ssh_keys_json_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return
+
+    raw = mapping.get(source_id)
+    source_entries = raw if isinstance(raw, list) else [raw]
+    shareable_key = next(
+        (
+            k
+            for k in source_entries
+            if isinstance(k, dict) and {"private_key", "public_key"} <= k.keys()
+        ),
+        None,
+    )
+    if shareable_key is None:
+        return
+
+    register_ssh_key(new_id, shareable_key)
 
 
 # ---------------------------------------------------------------------------

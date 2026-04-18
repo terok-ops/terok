@@ -217,6 +217,38 @@ def generate_config(values: dict) -> Path:
     return config_path
 
 
+def offer_edit_then_init(
+    config_path: Path,
+    project_id: str,
+    init_fn: Callable[[str], None] | None,
+) -> None:
+    """Interactively review and commission a newly-created project configuration.
+
+    Opens the config in the user's editor (skippable), then offers to run the
+    initialisation routine.  On ``KeyboardInterrupt`` or ``EOFError`` the
+    half-finished sequence is abandoned cleanly — the config file is kept
+    and a manual next-step hint is printed so the user can resume later.
+    """
+    try:
+        edit_answer = input("Edit configuration file before setup? [Y/n]: ").strip().lower()
+        if edit_answer not in ("n", "no") and not open_in_editor(config_path):
+            print(
+                f"Warning: could not open editor — edit file manually: {config_path}",
+                file=sys.stderr,
+            )
+
+        if init_fn is not None:
+            init_answer = input("Run project initialization? [Y/n]: ").strip().lower()
+            if init_answer not in ("n", "no"):
+                init_fn(project_id)
+                print(f"\nProject '{project_id}' is ready.")
+                return
+
+        print(f"Next step: terok project-init {project_id}")
+    except (KeyboardInterrupt, EOFError):
+        print(f"\nSkipped. Run manually: terok project-init {project_id}")
+
+
 def run_wizard(init_fn: Callable[[str], None] | None = None) -> Path | None:
     """Top-level wizard entry point called by the CLI.
 
@@ -235,26 +267,5 @@ def run_wizard(init_fn: Callable[[str], None] | None = None) -> Path | None:
     project_id = values["project_id"]
     print(f"\nProject configuration created: {config_path}")
 
-    try:
-        # Offer to edit the generated config before setup
-        edit_answer = input("Edit configuration file before setup? [Y/n]: ").strip().lower()
-        if edit_answer not in ("n", "no"):
-            if not open_in_editor(config_path):
-                print(
-                    f"Warning: could not open editor — edit file manually: {config_path}",
-                    file=sys.stderr,
-                )
-
-        # Offer to run project-init if a handler was provided
-        if init_fn is not None:
-            init_answer = input("Run project initialization? [Y/n]: ").strip().lower()
-            if init_answer not in ("n", "no"):
-                init_fn(project_id)
-                print(f"\nProject '{project_id}' is ready.")
-                return config_path
-
-        print(f"Next step: terok project-init {project_id}")
-    except (KeyboardInterrupt, EOFError):
-        print(f"\nSkipped. Run manually: terok project-init {project_id}")
-
+    offer_edit_then_init(config_path, project_id, init_fn)
     return config_path

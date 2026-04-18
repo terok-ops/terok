@@ -11,12 +11,11 @@ for overview displays.
 import subprocess
 from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..core.config import build_dir, make_sandbox_config
+from ..core.config import build_dir
 from ..core.images import project_cli_image
-from ..core.projects import load_project
+from ..core.projects import load_project, resolve_ssh_host_dir
 from ..core.task_display import container_name as _container_name
 
 if TYPE_CHECKING:
@@ -111,8 +110,7 @@ def get_project_state(
 
     # SSH: consider SSH "ready" when the key directory and its config file exist.
     # Falls back to the managed ssh-keys store (same as SSHManager / git gate).
-    ssh_dir = project.ssh_host_dir or (make_sandbox_config().ssh_keys_dir / project.id)
-    ssh_dir = Path(ssh_dir).expanduser().resolve()
+    ssh_dir = resolve_ssh_host_dir(project).expanduser().resolve()
     has_ssh = ssh_dir.is_dir() and (ssh_dir / "config").is_file()
 
     # Gate: a mirror bare repo initialized by sync_project_gate(). We
