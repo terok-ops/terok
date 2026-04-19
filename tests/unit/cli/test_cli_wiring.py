@@ -330,3 +330,55 @@ class TestAgentCommandsRegistered:
         args = parser.parse_args(["executor", "agents", "--all"])
         assert args._wired_cmd.name == "agents"
         assert args.show_all is True
+
+
+class TestRenameMapping:
+    """``rename=`` kwarg re-labels sibling commands at wire time."""
+
+    def test_rename_changes_parser_key(self) -> None:
+        """A rename entry maps ``old_name`` → ``new_name`` on the parser."""
+
+        def h() -> None:
+            return None
+
+        cmds = (_Cmd(name="ls", handler=h), _Cmd(name="stop", handler=h))
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds, rename={"ls": "list"})
+
+        # Renamed entry is reachable under the new name
+        args = parser.parse_args(["grp", "list"])
+        assert args._wired_cmd.name == "list"
+
+        # Unrenamed entries are untouched
+        args = parser.parse_args(["grp", "stop"])
+        assert args._wired_cmd.name == "stop"
+
+    def test_rename_preserves_handler(self) -> None:
+        """Renaming keeps the handler bound so dispatch still works."""
+        received: list[dict] = []
+
+        def handler() -> None:
+            received.append({"called": True})
+
+        cmds = (_Cmd(name="ls", handler=handler),)
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds, rename={"ls": "list"})
+
+        args = parser.parse_args(["grp", "list"])
+        wire_dispatch(args)
+
+        assert received == [{"called": True}]
+
+    def test_original_name_rejected_after_rename(self) -> None:
+        """Renamed commands are not also exposed under the old name."""
+        cmds = (_Cmd(name="ls"),)
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="cmd")
+        wire_group(sub, "grp", cmds, rename={"ls": "list"})
+
+        with pytest.raises(SystemExit):
+            parser.parse_args(["grp", "ls"])
