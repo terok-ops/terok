@@ -64,13 +64,14 @@ class ProjectActionsMixin:
 
     def _print_sync_gate_ssh_help(self, project_id: str) -> None:
         """Print SSH-specific troubleshooting details for gate sync failures."""
+        from terok_sandbox import is_ssh_url
+
         try:
             project = load_project(project_id)
         except (Exception, SystemExit):
             return
 
-        upstream = project.upstream_url or ""
-        if not (upstream.startswith("git@") or upstream.startswith("ssh://")):
+        if not is_ssh_url(project.upstream_url):
             return
 
         print("\nHint: this project uses an SSH upstream.")

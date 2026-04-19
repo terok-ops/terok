@@ -104,10 +104,18 @@ def derive_project(source_id: str, new_id: str) -> Project:
     return Project(load_project(new_id))
 
 
+def _share_ssh_key_assignments(source_id: str, new_id: str) -> None:
+    """Copy every SSH key assignment from *source_id* to *new_id*."""
+    with vault_db() as db:
+        for row in db.list_ssh_keys_for_scope(source_id):
+            db.assign_ssh_key(new_id, row.id)
+
+
 # ---------------------------------------------------------------------------
-# SSH provisioning — ``provision_ssh_key`` is the single entry point for
-# generation; ``register_ssh_key`` is reused by import flows that already
-# have a ``key_id``; ``summarize_ssh_init`` is the caller's rendering hook.
+# SSH provisioning — the three public verbs form the user-facing ``ssh-init``
+# story: mint the keypair, bind it to the project, render the result for the
+# human.  ``maybe_pause_for_ssh_key_registration`` is the follow-up step for
+# projects that need the public key registered upstream before gate-sync.
 # ---------------------------------------------------------------------------
 
 
@@ -118,7 +126,7 @@ def provision_ssh_key(
     comment: str | None = None,
     force: bool = False,
 ) -> SSHInitResult:
-    """Generate a vault-backed keypair for *project_id* and assign it.
+    """Mint a vault-backed keypair for *project_id* and bind it to the scope.
 
     Single entry point for both the CLI and the TUI.  Rendering the
     result for the user is the caller's job — see :func:`summarize_ssh_init`.
@@ -133,26 +141,19 @@ def provision_ssh_key(
 
 
 def register_ssh_key(project_id: str, key_id: int) -> None:
-    """Assign a freshly generated or imported key to *project_id* (idempotent)."""
+    """Bind an already-minted *key_id* to *project_id* (idempotent)."""
     with vault_db() as db:
         db.assign_ssh_key(project_id, key_id)
 
 
 def summarize_ssh_init(result: SSHInitResult) -> None:
-    """Print the human-readable summary for an ``ssh-init`` result."""
+    """Render an ``ssh-init`` result for the terminal."""
     print(f"  id:          {result['key_id']}")
     print(f"  type:        {result['key_type']}")
     print(f"  fingerprint: SHA256:{result['fingerprint']}")
     print(f"  comment:     {result['comment']}")
     print("Public key (register as a deploy key on the remote):")
     print(f"  {result['public_line']}")
-
-
-def _share_ssh_key_assignments(source_id: str, new_id: str) -> None:
-    """Copy every SSH key assignment from *source_id* to *new_id*."""
-    with vault_db() as db:
-        for row in db.list_ssh_keys_for_scope(source_id):
-            db.assign_ssh_key(new_id, row.id)
 
 
 def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
