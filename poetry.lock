@@ -3083,7 +3083,7 @@ tomli-w = ">=1.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-executor.git"
 reference = "feat/container-runtime-protocol"
-resolved_reference = "f2e1ab8474fd249fe52bf8246f4b401a64cddd95"
+resolved_reference = "9bae5eb01ecf411325969735893cebdc61e9f4ef"
 
 [[package]]
 name = "terok-sandbox"
@@ -3105,7 +3105,7 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/container-runtime-protocol"
-resolved_reference = "8dc6bbcd0932bec62a83627d94a20f6d543c93ac"
+resolved_reference = "a49480a6996771cb2c13f3333be078b284a6dff1"
 
 [[package]]
 name = "terok-shield"

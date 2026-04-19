@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import secrets
 import shlex
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,7 +97,7 @@ def stream_initial_logs(
     *,
     container_name: str,
     timeout_sec: float | None,
-    ready_check,
+    ready_check: Callable[[str], bool],
 ) -> bool:
     """Stream logs for *container_name* until *ready_check* matches or timeout."""
     return _runtime.container(container_name).stream_initial_logs(ready_check, timeout_sec)
@@ -107,9 +108,9 @@ def wait_for_exit(cname: str, timeout: float | None = None) -> int:
     return _runtime.container(cname).wait(timeout)
 
 
-def login_command(cname: str, *, command=()) -> list[str]:
+def login_command(cname: str, *, command: Sequence[str] = ()) -> list[str]:
     """Return the argv for interactively logging into *cname*."""
-    return _runtime.container(cname).login_command(command=command)
+    return _runtime.container(cname).login_command(command=tuple(command))
 
 
 _LOCALHOST = "127.0.0.1"

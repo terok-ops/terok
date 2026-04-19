@@ -10,7 +10,7 @@ poisoned git hooks or scripts executing with host privileges.
 
 from subprocess import TimeoutExpired
 
-from terok_sandbox import PodmanRuntime
+from terok_sandbox import ExecResult, PodmanRuntime
 
 from ..core.task_display import container_name as _container_name
 from ..util.logging_utils import _log_debug
@@ -36,7 +36,7 @@ def get_container_state(cname: str) -> str | None:
     return _runtime.container(cname).state
 
 
-def sandbox_exec(cname: str, cmd: list[str], *, timeout: int = 30):
+def sandbox_exec(cname: str, cmd: list[str], *, timeout: int = 30) -> ExecResult:
     """Run *cmd* inside *cname* via the container runtime."""
     return _runtime.exec(_runtime.container(cname), cmd, timeout=timeout)
 

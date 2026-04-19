@@ -301,7 +301,7 @@ class TestSandboxRunShieldIntegration:
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
-                "terok_sandbox.runtime._detect_rootless_network_mode",
+                "terok_sandbox.runtime.podman._detect_rootless_network_mode",
                 return_value=network_mode,
             ),
             # Shield must NOT be called at all when bypass is active

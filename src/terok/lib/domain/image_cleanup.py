@@ -183,9 +183,15 @@ def cleanup_images(dry_run: bool = False) -> CleanupResult:
         if dry_run:
             removed.append(img.full_name)
             continue
-        if _runtime.image(img.image_id).remove():
-            removed.append(img.full_name)
-        else:
+        try:
+            if _runtime.image(img.image_id).remove():
+                removed.append(img.full_name)
+            else:
+                failed.append(img.full_name)
+        except Exception as exc:  # noqa: BLE001 — one bad image shouldn't abort the sweep
+            from ..util.logging_utils import log_warning
+
+            log_warning(f"Image cleanup failed for {img.full_name}: {exc}")
             failed.append(img.full_name)
 
     return CleanupResult(removed=removed, failed=failed, dry_run=dry_run)

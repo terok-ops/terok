@@ -150,18 +150,22 @@ def test_task_restart_starts_exited_container() -> None:
         task_id = create_task_with_mode(ctx, project_id)
         container_name = f"{project_id}-cli-{task_id}"
 
-        # First state query → "exited"; second (after start) → "running"
+        # First state query → "exited"; subsequent queries (after start) → "running"
         container_states = iter(["exited", "running"])
+        cache: dict[str, Mock] = {}
 
         def make_container(name: str) -> Mock:
-            """Return a fresh Mock with the next state from the iterator."""
-            c = Mock()
+            """Return the cached Mock for *name*, updating .state per the schedule."""
+            c = cache.get(name)
+            if c is None:
+                c = Mock()
+                c.login_command.return_value = ["podman", "exec", "-it", name, "bash"]
+                cache[name] = c
             try:
                 c.state = next(container_states)
             except StopIteration:
                 c.state = "running"
             c.running = c.state == "running"
-            c.login_command.return_value = ["podman", "exec", "-it", name, "bash"]
             return c
 
         runtime_mock = Mock(spec=PodmanRuntime)
@@ -173,6 +177,8 @@ def test_task_restart_starts_exited_container() -> None:
             capture_stdout(task_restart, project_id, task_id)
 
         runtime_mock.container.assert_any_call(container_name)
+        assert container_name in cache, "runtime.container should have been queried for the task"
+        cache[container_name].start.assert_called_once()
 
 
 def test_task_restart_running_container_stops_then_starts() -> None:
