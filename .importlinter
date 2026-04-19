@@ -95,4 +95,3 @@ type = protected
 protected_modules = terok_shield
 allowed_importers =
     terok.cli.commands.shield
-    terok.tui.task_actions

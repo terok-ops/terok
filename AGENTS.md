@@ -129,6 +129,8 @@ The project uses [tach](https://github.com/gauge-sh/tach) to enforce module boun
 - If adding a new dependency between modules, add it to the `depends_on` list and update `[[interfaces]]` as needed
 - Run `make tach` (or `tach check`) to verify; CI will reject boundary violations
 
+**Boundary tools are design signal.** A long `.importlinter` allowed-importer list or a tach violation usually means the API is leakier than it should be — find the missing abstraction, don't hide it behind a facade.
+
 ## SonarCloud
 
 The project is analyzed by [SonarCloud](https://sonarcloud.io/summary/new_code?id=terok-ai_terok) on every push to master. Unlike CodeRabbit (which posts actionable PR comments), SonarCloud findings often require triage — many are low-priority style issues or false positives rather than real bugs. Treat them as input for decisions, not as a checklist.

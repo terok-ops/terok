@@ -754,13 +754,11 @@ class TaskActionsMixin:
         tid = task.task_id
 
         def work() -> None:
-            from terok_sandbox import make_shield
-            from terok_shield.cli.interactive import run_interactive
+            from terok_sandbox import shield_interactive_session
 
             task_dir = load_project(pid).tasks_root / str(tid)
             cname = container_name(pid, task.mode or "cli", tid)
-            shield = make_shield(task_dir)
-            run_interactive(shield.config.state_dir, cname)
+            shield_interactive_session(cname, task_dir)
 
         await self._run_suspended(work, refresh="tasks")
 
@@ -776,13 +774,11 @@ class TaskActionsMixin:
         tid = task.task_id
 
         def work() -> None:
-            from terok_sandbox import make_shield
-            from terok_shield.cli.watch import run_watch
+            from terok_sandbox import shield_watch_session
 
             task_dir = load_project(pid).tasks_root / str(tid)
             cname = container_name(pid, task.mode or "cli", tid)
-            shield = make_shield(task_dir)
-            run_watch(shield.config.state_dir, cname)
+            shield_watch_session(cname, task_dir)
 
         await self._run_suspended(work, refresh="tasks")
 
