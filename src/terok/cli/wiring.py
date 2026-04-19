@@ -96,7 +96,8 @@ def wire_group(
     *,
     help: str = "",
     config_factory: Any = None,
-) -> None:
+    return_action: bool = False,
+) -> tuple[argparse.ArgumentParser, argparse._SubParsersAction] | None:  # type: ignore[type-arg]
     """Mount a tuple of command definitions under a named subparser group.
 
     Creates ``<prog> <name> <subcommand>`` paths for each command in *commands*.
@@ -106,12 +107,22 @@ def wire_group(
     time and the result injected as ``cfg``.  Handlers that declare ``cfg``
     explicitly or accept ``**kwargs`` are both valid.  A ``TypeError`` is
     raised at dispatch time if the handler supports neither.
+
+    When *return_action* is true, returns ``(group_parser, group_sub_action)``
+    so callers can attach additional locally-dispatched subparsers alongside
+    the wired sibling commands.  Local subparsers must ``set_defaults`` a
+    sentinel attribute for their own dispatcher to recognise them, and set
+    ``_wired_cmd=None`` so :func:`wire_dispatch` doesn't short-circuit with
+    group help.
     """
     group = sub.add_parser(name, help=help)
     group_sub = group.add_subparsers(dest=f"{name}_cmd")
     for cmd in commands:
         wire(group_sub, cmd)
     group.set_defaults(_group_help=group, _config_factory=config_factory)
+    if return_action:
+        return group, group_sub
+    return None
 
 
 def wire_dispatch(args: argparse.Namespace) -> bool:

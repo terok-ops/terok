@@ -18,7 +18,6 @@ from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
     clearance,
     completions,
-    credentials,
     dbus,
     image,
     info,
@@ -28,6 +27,7 @@ from .commands import (
     shield,
     sickbay,
     task,
+    vault_local,
 )
 from .wiring import wire_dispatch, wire_group
 
@@ -43,9 +43,9 @@ _DISPATCHERS = [
     panic.dispatch,
     task.dispatch,
     project.dispatch,
-    credentials.dispatch,
     setup.dispatch,
     image.dispatch,
+    vault_local.dispatch,  # must precede wire_dispatch — handles `vault serve`
     wire_dispatch,
     shield.dispatch,
     dbus.dispatch,
@@ -131,7 +131,6 @@ def main(prog: str = "terok") -> None:
     panic.register(sub)
     task.register(sub)
     project.register(sub)
-    credentials.register(sub)  # vault-serve (standalone)
     setup.register(sub)
     image.register(sub)
     shield.register(sub)
@@ -157,13 +156,17 @@ def main(prog: str = "terok") -> None:
         help="Gate server commands",
         config_factory=make_sandbox_config,
     )
-    wire_group(
+    vault_wiring = wire_group(
         sub,
         "vault",
         AGENT_VAULT_COMMANDS,
         help="Vault commands",
         config_factory=make_sandbox_config,
+        return_action=True,
     )
+    assert vault_wiring is not None  # return_action=True guarantees a tuple
+    _, vault_sub = vault_wiring
+    vault_local.register(vault_sub)
     wire_group(
         sub,
         "ssh",
