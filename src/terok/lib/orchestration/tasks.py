@@ -857,7 +857,8 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'terokctl task attach {project.id} {task_id}'."
+            f"Start it first with 'terokctl task attach {project.id} {task_id} --mode cli' "
+            f"(or --mode toad)."
         )
 
     cname = container_name(project.id, mode, task_id)

@@ -61,7 +61,11 @@ Built `FROM` the L1 image.
 
 ## Runtime Behavior
 
-- `terokctl task attach --mode cli` starts `<project>:l2-cli`.
+- `terok task run <project>` (default `--mode cli`) creates a fresh task and
+  runs a container from `<project>:l2-cli`.  `--mode toad` uses the same
+  L2 image with the Toad browser TUI entry point.
+- `terokctl task attach <project> <task> --mode cli` re-runs an existing
+  task in the same L2 image (scripting surface).
 - Mounts a per-task workspace to `/workspace` and shared credential directories.
 - The init script clones or syncs the project repository into `/workspace`.
 

@@ -71,7 +71,7 @@ Or do the same from the command line:
 terok project wizard                    # interactive setup
 terok auth claude myproj                # authenticate agent
 terok task run myproj                 # start a CLI agent task
-terok task run myproj --toad          # Toad multi-agent TUI (browser access)
+terok task run myproj --mode toad     # Toad multi-agent TUI (browser access)
 terok login myproj a3                   # attach to a running task by hex ID prefix
 ```
 
