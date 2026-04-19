@@ -27,7 +27,6 @@ from .commands import (
     setup,
     shield,
     sickbay,
-    storage,
     task,
 )
 from .wiring import wire_dispatch, wire_group
@@ -47,7 +46,6 @@ _DISPATCHERS = [
     credentials.dispatch,
     setup.dispatch,
     image.dispatch,
-    storage.dispatch,
     wire_dispatch,
     shield.dispatch,
     dbus.dispatch,
@@ -136,7 +134,6 @@ def main(prog: str = "terok") -> None:
     credentials.register(sub)  # vault-serve (standalone)
     setup.register(sub)
     image.register(sub)
-    storage.register(sub)
     shield.register(sub)
     dbus.register(sub)
     clearance.register(sub)

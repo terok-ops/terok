@@ -1,19 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Storage usage summary: how much disk space terok is using.
+"""Render helpers + overview/detail pipelines for ``terok image usage``.
 
-Two modes:
-- Default (``terok storage``): fast overview with per-project one-liners
-- Detail (``terok storage --project <id>``): per-task breakdown with overlays
+Extracted from the former ``storage.py`` so ``image.py`` can stay lean.
+Pure view layer — no argparse registration, no dispatch.
 """
 
 from __future__ import annotations
 
-import argparse
-
 from ...lib.util.ansi import blue, bold, color, supports_color
-from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 # ---------------------------------------------------------------------------
 # Column formatting helpers
@@ -60,48 +56,11 @@ def _heavy_separator(enabled: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
-# CLI registration and dispatch
-# ---------------------------------------------------------------------------
-
-
-def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register the ``storage`` subcommand."""
-    p = subparsers.add_parser("storage", help="Show storage usage summary")
-    set_completer(
-        p.add_argument(
-            "--project",
-            default=None,
-            help="Show detailed per-task breakdown for one project",
-        ),
-        _complete_project_ids,
-    )
-    p.add_argument(
-        "--json",
-        action="store_true",
-        dest="json_output",
-        help="Machine-readable JSON output",
-    )
-
-
-def dispatch(args: argparse.Namespace) -> bool:
-    """Handle the ``storage`` command.  Returns True if handled."""
-    if args.cmd != "storage":
-        return False
-    project_id = getattr(args, "project", None)
-    json_output = getattr(args, "json_output", False)
-    if project_id:
-        _cmd_detail(project_id, json_output=json_output)
-    else:
-        _cmd_overview(json_output=json_output)
-    return True
-
-
-# ---------------------------------------------------------------------------
 # Overview mode — the fast, wide-angle view
 # ---------------------------------------------------------------------------
 
 
-def _cmd_overview(*, json_output: bool = False) -> None:
+def cmd_overview(*, json_output: bool = False) -> None:
     """Print the global storage overview."""
     from ...lib.domain.storage import format_bytes, get_storage_overview
 
@@ -194,7 +153,7 @@ def _cmd_overview(*, json_output: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cmd_detail(project_id: str, *, json_output: bool = False) -> None:
+def cmd_detail(project_id: str, *, json_output: bool = False) -> None:
     """Print per-task storage detail for one project."""
     from ...lib.domain.storage import format_bytes, get_project_storage_detail
 
@@ -257,7 +216,7 @@ def _cmd_detail(project_id: str, *, json_output: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _json_overview(overview: StorageOverview) -> None:  # noqa: F821
+def _json_overview(overview) -> None:
     """Emit the overview as JSON."""
     import json
 
@@ -288,7 +247,7 @@ def _json_overview(overview: StorageOverview) -> None:  # noqa: F821
     print(json.dumps(data, indent=2))
 
 
-def _json_detail(detail: ProjectDetail) -> None:  # noqa: F821
+def _json_detail(detail) -> None:
     """Emit the project detail as JSON."""
     import json
 

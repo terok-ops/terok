@@ -124,7 +124,7 @@ terok task delete <project> <task_id>   # Delete a task
 terok login <project> <id_prefix>       # Attach to running task
 terok project-init <project>            # Full setup: ssh + generate + build + gate
 terok project-wizard                    # Interactive project creation
-terok storage                           # Disk usage across projects and images
+terok image usage                       # Disk usage across projects and images
 terok sickbay                           # In-container health checks
 terok panic                             # Emergency kill-switch
 terok image list [project]              # List terok images

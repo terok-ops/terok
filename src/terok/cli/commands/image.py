@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Image management commands: list and cleanup."""
+"""Image management commands: list, cleanup, usage."""
 
 from __future__ import annotations
 
 import argparse
 
 from ...lib.domain.facade import cleanup_images, list_images
+from . import _storage_view
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
@@ -31,19 +32,53 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Show what would be removed without removing",
     )
 
+    # image usage — disk usage summary (was top-level `storage`)
+    p_usage = image_sub.add_parser(
+        "usage",
+        help="Show storage usage summary (global and per-project)",
+    )
+    set_completer(
+        p_usage.add_argument(
+            "--project",
+            default=None,
+            help="Show detailed per-task breakdown for one project",
+        ),
+        _complete_project_ids,
+    )
+    p_usage.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Machine-readable JSON output",
+    )
+
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle image management commands.  Returns True if handled."""
     if args.cmd != "image":
         return False
 
-    if args.image_cmd == "list":
-        _cmd_list(getattr(args, "project_id", None))
-        return True
-    if args.image_cmd == "cleanup":
-        _cmd_cleanup(dry_run=getattr(args, "dry_run", False))
-        return True
-    return False
+    match args.image_cmd:
+        case "list":
+            _cmd_list(getattr(args, "project_id", None))
+        case "cleanup":
+            _cmd_cleanup(dry_run=getattr(args, "dry_run", False))
+        case "usage":
+            _cmd_usage(
+                project_id=getattr(args, "project", None),
+                json_output=getattr(args, "json_output", False),
+            )
+        case _:  # pragma: no cover — required=True makes argparse enforce this
+            return False
+    return True
+
+
+def _cmd_usage(*, project_id: str | None, json_output: bool) -> None:
+    """Dispatch usage display to the appropriate render mode."""
+    if project_id:
+        _storage_view.cmd_detail(project_id, json_output=json_output)
+    else:
+        _storage_view.cmd_overview(json_output=json_output)
 
 
 def _cmd_list(project_id: str | None) -> None:

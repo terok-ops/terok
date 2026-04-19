@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the ``terok storage`` CLI command.
+"""Tests for ``terok image usage`` (argparse + dispatch + render).
 
-Verifies argument parsing, dispatch routing, and output for both
-overview and detail modes — all with mocked domain calls.
+Parsing and dispatch live in :mod:`terok.cli.commands.image`; the
+overview/detail rendering lives in
+:mod:`terok.cli.commands._storage_view`.  This test module covers
+both layers.
 """
 
 from __future__ import annotations
@@ -13,7 +15,8 @@ import argparse
 import json
 from unittest.mock import patch
 
-from terok.cli.commands.storage import dispatch, register
+from terok.cli.commands._storage_view import cmd_detail, cmd_overview
+from terok.cli.commands.image import dispatch, register
 from terok.lib.domain.image_cleanup import ImageInfo
 from terok.lib.domain.storage import ProjectDetail, ProjectSummary, StorageOverview
 
@@ -23,7 +26,7 @@ from terok.lib.domain.storage import ProjectDetail, ProjectSummary, StorageOverv
 
 
 def _parser() -> argparse.ArgumentParser:
-    """Build a parser with the storage command registered."""
+    """Build a parser with the image command registered."""
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd")
     register(sub)
@@ -59,20 +62,21 @@ def _make_detail(**kwargs) -> ProjectDetail:
 
 
 class TestRegister:
-    """The ``storage`` command registers cleanly."""
+    """The ``image usage`` subcommand registers cleanly."""
 
     def test_default_mode(self):
-        args = _parser().parse_args(["storage"])
-        assert args.cmd == "storage"
+        args = _parser().parse_args(["image", "usage"])
+        assert args.cmd == "image"
+        assert args.image_cmd == "usage"
         assert args.project is None
         assert args.json_output is False
 
     def test_project_flag(self):
-        args = _parser().parse_args(["storage", "--project", "myproj"])
+        args = _parser().parse_args(["image", "usage", "--project", "myproj"])
         assert args.project == "myproj"
 
     def test_json_flag(self):
-        args = _parser().parse_args(["storage", "--json"])
+        args = _parser().parse_args(["image", "usage", "--json"])
         assert args.json_output is True
 
 
@@ -82,43 +86,43 @@ class TestRegister:
 
 
 class TestDispatch:
-    """Dispatch returns True for ``storage`` and False for anything else."""
+    """Dispatch routes ``image usage`` into the storage-view pipelines."""
 
-    def test_handles_storage(self):
-        args = argparse.Namespace(cmd="storage", project=None, json_output=False)
-        with patch("terok.cli.commands.storage._cmd_overview") as mock:
+    def test_overview_mode(self):
+        args = argparse.Namespace(cmd="image", image_cmd="usage", project=None, json_output=False)
+        with patch("terok.cli.commands.image._storage_view.cmd_overview") as mock:
             assert dispatch(args) is True
-            mock.assert_called_once()
+            mock.assert_called_once_with(json_output=False)
 
-    def test_ignores_other_commands(self):
-        args = argparse.Namespace(cmd="image")
-        assert dispatch(args) is False
-
-    def test_routes_to_detail_with_project(self):
-        args = argparse.Namespace(cmd="storage", project="myproj", json_output=False)
-        with patch("terok.cli.commands.storage._cmd_detail") as mock:
+    def test_detail_mode_with_project(self):
+        args = argparse.Namespace(
+            cmd="image", image_cmd="usage", project="myproj", json_output=False
+        )
+        with patch("terok.cli.commands.image._storage_view.cmd_detail") as mock:
             assert dispatch(args) is True
             mock.assert_called_once_with("myproj", json_output=False)
 
+    def test_ignores_unrelated_commands(self):
+        args = argparse.Namespace(cmd="task")
+        assert dispatch(args) is False
+
 
 # ---------------------------------------------------------------------------
-# Overview output
+# Overview output (render layer)
 # ---------------------------------------------------------------------------
 
 
 class TestOverviewOutput:
-    """Overview mode prints a human-readable summary."""
+    """``cmd_overview`` prints a human-readable summary (or JSON)."""
 
     @patch("terok.lib.domain.storage.sandbox_live_mounts_dir")
     @patch("terok.lib.domain.storage.list_projects", return_value=[])
     @patch("terok.lib.domain.storage.get_shared_mounts_storage", return_value=[])
     @patch("terok.lib.domain.storage.list_images")
-    @patch("terok.cli.commands.storage.supports_color", return_value=False)
+    @patch("terok.cli.commands._storage_view.supports_color", return_value=False)
     def test_prints_without_error(self, _color, mock_imgs, _shared, _projs, _mdir, capsys):
         mock_imgs.return_value = [ImageInfo("terok-l0", "bkwm", "id1", "1GB", "2d ago")]
-        from terok.cli.commands.storage import _cmd_overview
-
-        _cmd_overview()
+        cmd_overview()
         output = capsys.readouterr().out
         assert "Global" in output
         assert "terok-l0" in output
@@ -128,11 +132,9 @@ class TestOverviewOutput:
     @patch("terok.lib.domain.storage.list_projects", return_value=[])
     @patch("terok.lib.domain.storage.get_shared_mounts_storage", return_value=[])
     @patch("terok.lib.domain.storage.list_images", return_value=[])
-    @patch("terok.cli.commands.storage.supports_color", return_value=False)
+    @patch("terok.cli.commands._storage_view.supports_color", return_value=False)
     def test_empty_system(self, _color, _imgs, _shared, _projs, _mdir, capsys):
-        from terok.cli.commands.storage import _cmd_overview
-
-        _cmd_overview()
+        cmd_overview()
         output = capsys.readouterr().out
         assert "Grand total" in output
 
@@ -142,9 +144,7 @@ class TestOverviewOutput:
     @patch("terok.lib.domain.storage.list_images")
     def test_json_output(self, mock_imgs, _shared, _projs, _mdir, capsys):
         mock_imgs.return_value = [ImageInfo("terok-l0", "bkwm", "id1", "1GB", "2d ago")]
-        from terok.cli.commands.storage import _cmd_overview
-
-        _cmd_overview(json_output=True)
+        cmd_overview(json_output=True)
         data = json.loads(capsys.readouterr().out)
         assert "global" in data
         assert "projects" in data
@@ -152,18 +152,18 @@ class TestOverviewOutput:
 
 
 # ---------------------------------------------------------------------------
-# Detail output
+# Detail output (render layer)
 # ---------------------------------------------------------------------------
 
 
 class TestDetailOutput:
-    """Detail mode prints per-task breakdown."""
+    """``cmd_detail`` prints per-task breakdown for one project."""
 
     @patch("terok_sandbox.get_container_rw_sizes", return_value={})
     @patch("terok.lib.domain.storage.get_tasks_storage", return_value=[])
     @patch("terok.lib.domain.storage.list_images")
     @patch("terok.lib.core.projects.load_project")
-    @patch("terok.cli.commands.storage.supports_color", return_value=False)
+    @patch("terok.cli.commands._storage_view.supports_color", return_value=False)
     def test_prints_without_error(self, _color, mock_load, mock_imgs, _tasks, _ov, capsys):
         from unittest.mock import MagicMock
 
@@ -173,9 +173,8 @@ class TestDetailOutput:
         proj.tasks_root = MOCK_BASE / "tasks" / "myproject"
         mock_load.return_value = proj
         mock_imgs.return_value = [ImageInfo("myproject", "l2-cli", "id2", "3GB", "1d ago")]
-        from terok.cli.commands.storage import _cmd_detail
 
-        _cmd_detail("myproject")
+        cmd_detail("myproject")
         output = capsys.readouterr().out
         assert "myproject" in output
         assert "Project total" in output
@@ -193,9 +192,8 @@ class TestDetailOutput:
         proj.tasks_root = MOCK_BASE / "tasks" / "myproject"
         mock_load.return_value = proj
         mock_imgs.return_value = [ImageInfo("myproject", "l2-cli", "id2", "3GB", "1d ago")]
-        from terok.cli.commands.storage import _cmd_detail
 
-        _cmd_detail("myproject", json_output=True)
+        cmd_detail("myproject", json_output=True)
         data = json.loads(capsys.readouterr().out)
         assert data["project_id"] == "myproject"
         assert "images" in data
