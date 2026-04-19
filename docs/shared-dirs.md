@@ -102,7 +102,7 @@ static marker in the file works around this limitation.
   — you cannot have per-project or per-task Claude OAuth credentials.
 - The static marker token is not revoked between tasks.  The real OAuth
   token is still protected by the proxy and refreshed automatically.
-- API key auth for Claude (`terok project auth claude` → option 2) remains
+- API key auth for Claude (`terok auth claude` → option 2) remains
   per-task and is unaffected.
 
 ## Git Identity

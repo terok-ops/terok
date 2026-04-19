@@ -16,6 +16,7 @@ import sys
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
+    auth,
     clearance,
     completions,
     dbus,
@@ -41,9 +42,10 @@ except ImportError:  # pragma: no cover - optional dep
 # wire_dispatch handles commands mounted via wire_group (agent, gate).
 _DISPATCHERS = [
     panic.dispatch,
-    task.dispatch,
-    project.dispatch,
     setup.dispatch,
+    auth.dispatch,
+    project.dispatch,
+    task.dispatch,
     image.dispatch,
     vault_local.dispatch,  # must precede wire_dispatch — handles `vault serve`
     wire_dispatch,
@@ -95,10 +97,10 @@ def main(prog: str = "terok") -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start:\n"
-            f"  1. Bootstrap:  {prog} setup                          (install host services)\n"
-            f"  2. Project:    {prog} project wizard                 (create a project)\n"
-            f"  3. Auth:       {prog} project auth claude <project>  (authenticate agents)\n"
-            f"  4. Work:       {prog} task start <project_id>        (new CLI task)\n"
+            f"  1. Bootstrap:  {prog} setup                       (install host services)\n"
+            f"  2. Auth:       {prog} auth claude <project>       (authenticate agents)\n"
+            f"  3. Project:    {prog} project wizard              (create a project)\n"
+            f"  4. Work:       {prog} task start <project_id>     (new CLI task)\n"
             f"  5. Login:      {prog} login <project_id> <task_id>\n"
             "\n"
             "Standalone agent (no project):\n"
@@ -127,18 +129,20 @@ def main(prog: str = "terok") -> None:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    # Register subcommands from each module
+    # Register subcommands.  Order matters — it's the order they appear in
+    # ``--help``.  Emergency and bootstrap first, then the daily-workflow
+    # verbs (auth → project → task → login), then operator tools, then
+    # sibling-wired groups, then dev/shell niceties.
     panic.register(sub)
-    task.register(sub)
-    project.register(sub)
     setup.register(sub)
+    auth.register(sub)
+    project.register(sub)
+    task.register(sub)  # adds the ``task`` group and the flat ``login`` shortcut
     image.register(sub)
-    shield.register(sub)
-    dbus.register(sub)
     clearance.register(sub)
     sickbay.register(sub)
+    shield.register(sub)
     info.register(sub)
-    completions.register(sub)
 
     # Mount sub-package command registries under scoped prefixes.
     # Groups that touch SandboxConfig paths receive config_factory so the
@@ -148,12 +152,12 @@ def main(prog: str = "terok") -> None:
 
     from ..lib.core.config import make_sandbox_config
 
-    wire_group(sub, "executor", AGENT_COMMANDS, help="Executor container commands")
+    wire_group(sub, "executor", AGENT_COMMANDS, help="Task container executor commands")
     wire_group(
         sub,
         "gate",
         GATE_COMMANDS,
-        help="Gate server commands",
+        help="Git gate commands",
         config_factory=make_sandbox_config,
     )
     vault_wiring = wire_group(
@@ -175,8 +179,12 @@ def main(prog: str = "terok") -> None:
         config_factory=make_sandbox_config,
     )
 
+    # Dev / shell niceties at the bottom of the help listing.
+    dbus.register(sub)
+    completions.register(sub)
+
     # TUI launcher — delegates to terok-tui entry point (dispatched before argparse)
-    sub.add_parser("tui", help="Launch the Textual TUI (same as terok-tui)")
+    sub.add_parser("tui", help="Launch the Textual TUI")
 
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
