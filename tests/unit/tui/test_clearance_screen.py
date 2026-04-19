@@ -59,13 +59,13 @@ class TestNotifyBridge:
             nid=2,
             summary="Blocked",
             body="c1",
-            actions=[("accept", "Allow")],
+            actions=[("allow", "Allow")],
             replaces_id=0,
             timeout_ms=0,
         )
         screen._on_notify(n)
         msg = screen.post_message.call_args[0][0]
-        assert msg.actions == [("accept", "Allow")]
+        assert msg.actions == [("allow", "Allow")]
 
     def test_on_notify_replaces_id(self) -> None:
         """_on_notify forwards replaces_id for verdict updates."""

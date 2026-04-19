@@ -247,8 +247,8 @@ class ClearanceScreen(screen.Screen[None]):
     # -- actions --
 
     def action_allow_selected(self) -> None:
-        """Send an ``accept`` verdict for the highlighted pending request."""
-        self._send_verdict("accept")
+        """Send an ``allow`` verdict for the highlighted pending request."""
+        self._send_verdict("allow")
 
     def action_deny_selected(self) -> None:
         """Send a ``deny`` verdict for the highlighted pending request."""

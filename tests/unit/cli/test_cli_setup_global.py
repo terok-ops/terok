@@ -422,6 +422,7 @@ def test_gate_no_systemd_skips(
 # ── cmd_setup integration ───────────────────────────────────────────────
 
 
+@patch("terok.cli.commands.setup._ensure_dbus_bridge", return_value=True)
 @patch("terok.cli.commands.setup._ensure_gate", return_value=True)
 @patch("terok.cli.commands.setup._ensure_vault", return_value=True)
 @patch("terok.cli.commands.setup._ensure_shield", return_value=True)
@@ -431,6 +432,7 @@ def test_cmd_setup_all_ok(
     _shield: MagicMock,
     _proxy: MagicMock,
     _gate: MagicMock,
+    _bridge: MagicMock,
     capsys: pytest.CaptureFixture,
 ) -> None:
     """All steps succeed → prints summary with next steps."""
@@ -440,24 +442,34 @@ def test_cmd_setup_all_ok(
     assert "project wizard" in out
 
 
+@patch("terok.cli.commands.setup._ensure_dbus_bridge", return_value=True)
 @patch("terok.cli.commands.setup._ensure_gate", return_value=True)
 @patch("terok.cli.commands.setup._ensure_vault", return_value=True)
 @patch("terok.cli.commands.setup._ensure_shield", return_value=True)
 @patch("terok.cli.commands.setup._check_host_binaries", return_value=False)
 def test_cmd_setup_missing_binary_exits_2(
-    _bins: MagicMock, _shield: MagicMock, _proxy: MagicMock, _gate: MagicMock
+    _bins: MagicMock,
+    _shield: MagicMock,
+    _proxy: MagicMock,
+    _gate: MagicMock,
+    _bridge: MagicMock,
 ) -> None:
     """Missing mandatory binary → exit code 2."""
     with pytest.raises(SystemExit, match="2"):
         cmd_setup(check_only=False)
 
 
+@patch("terok.cli.commands.setup._ensure_dbus_bridge", return_value=True)
 @patch("terok.cli.commands.setup._ensure_gate", return_value=False)
 @patch("terok.cli.commands.setup._ensure_vault", return_value=True)
 @patch("terok.cli.commands.setup._ensure_shield", return_value=True)
 @patch("terok.cli.commands.setup._check_host_binaries", return_value=True)
 def test_cmd_setup_service_failure_exits_1(
-    _bins: MagicMock, _shield: MagicMock, _proxy: MagicMock, _gate: MagicMock
+    _bins: MagicMock,
+    _shield: MagicMock,
+    _proxy: MagicMock,
+    _gate: MagicMock,
+    _bridge: MagicMock,
 ) -> None:
     """Service installation failure → exit code 1."""
     with pytest.raises(SystemExit, match="1"):
@@ -582,19 +594,19 @@ class TestDispatch:
         assert dispatch(argparse.Namespace(cmd="task")) is False
 
     def test_setup_invokes_cmd_setup(self) -> None:
-        """``terok setup`` calls cmd_setup with the --check flag propagated."""
+        """``terok setup`` calls cmd_setup with the --check and --no-dbus-bridge flags."""
         import argparse
 
-        args = argparse.Namespace(cmd="setup", check=True)
+        args = argparse.Namespace(cmd="setup", check=True, no_dbus_bridge=False)
         with patch("terok.cli.commands.setup.cmd_setup") as mock:
             assert dispatch(args) is True
-        mock.assert_called_once_with(check_only=True)
+        mock.assert_called_once_with(check_only=True, no_dbus_bridge=False)
 
     def test_setup_defaults_check_to_false(self) -> None:
-        """Missing --check attribute defaults to check_only=False."""
+        """Missing --check/--no-dbus-bridge attributes default to False."""
         import argparse
 
         args = argparse.Namespace(cmd="setup")
         with patch("terok.cli.commands.setup.cmd_setup") as mock:
             assert dispatch(args) is True
-        mock.assert_called_once_with(check_only=False)
+        mock.assert_called_once_with(check_only=False, no_dbus_bridge=False)

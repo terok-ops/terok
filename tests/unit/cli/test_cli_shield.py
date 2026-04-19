@@ -103,19 +103,9 @@ def shield_parser() -> argparse.ArgumentParser:
             id="watch",
         ),
         pytest.param(
-            ["shield", "interactive", "proj", "task1"],
-            {"shield_cmd": "interactive", "project_id": "proj", "task_id": "task1", "raw": False},
-            id="interactive",
-        ),
-        pytest.param(
-            ["shield", "interactive", "proj", "task1", "--raw"],
-            {"shield_cmd": "interactive", "project_id": "proj", "task_id": "task1", "raw": True},
-            id="interactive-raw",
-        ),
-        pytest.param(
-            ["shield", "dbus-bridge", "proj", "task1"],
-            {"shield_cmd": "dbus-bridge", "project_id": "proj", "task_id": "task1"},
-            id="dbus-bridge",
+            ["shield", "simple-clearance", "proj", "task1"],
+            {"shield_cmd": "simple-clearance", "project_id": "proj", "task_id": "task1"},
+            id="simple-clearance",
         ),
         pytest.param(
             ["shield", "logs", "proj", "task1"],
@@ -324,24 +314,24 @@ def test_install_hooks_requires_scope_flag() -> None:
     assert "terok shield install-hooks" in message
 
 
-@patch("terok_shield.cli.interactive.run_interactive")
+@patch("terok_shield.cli.simple_clearance.run_simple_clearance")
 @patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
 @patch("terok.cli.commands.shield.make_shield")
-def test_dispatch_interactive(
+def test_dispatch_simple_clearance(
     mock_make: MagicMock,
     _resolve: MagicMock,
     mock_run: MagicMock,
 ) -> None:
-    """``shield interactive`` dispatches to the interactive handler."""
+    """``shield simple-clearance`` dispatches to the terminal fallback handler."""
     mock_shield = MagicMock()
     mock_shield.config.state_dir = MOCK_TASK_DIR_1 / "shield"
     mock_make.return_value = mock_shield
 
     args = argparse.Namespace(
-        cmd="shield", shield_cmd="interactive", project_id="proj", task_id="1", raw=False
+        cmd="shield", shield_cmd="simple-clearance", project_id="proj", task_id="1"
     )
     assert dispatch(args)
-    mock_run.assert_called_once_with(mock_shield.config.state_dir, "proj-cli-1", raw=False)
+    mock_run.assert_called_once_with(mock_shield.config.state_dir, "proj-cli-1")
 
 
 @patch("terok_shield.cli.watch.run_watch")

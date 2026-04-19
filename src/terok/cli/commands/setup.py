@@ -12,8 +12,10 @@ server.  Per-project operations live under the ``project`` group in
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
+from pathlib import Path
 
 from terok_executor import AUTH_PROVIDERS
 
@@ -47,13 +49,25 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Dry-run: report status without installing anything",
     )
+    p_setup.add_argument(
+        "--no-dbus-bridge",
+        action="store_true",
+        help=(
+            "Skip the optional D-Bus clearance bridge (NFLOG reader resource + "
+            "terok-dbus hub unit).  Use on hosts with no session D-Bus or when "
+            "auditability of the hook surface is the priority."
+        ),
+    )
 
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle ``setup``.  Returns True if handled."""
     if args.cmd != "setup":
         return False
-    cmd_setup(check_only=getattr(args, "check", False))
+    cmd_setup(
+        check_only=getattr(args, "check", False),
+        no_dbus_bridge=getattr(args, "no_dbus_bridge", False),
+    )
     return True
 
 
@@ -274,6 +288,145 @@ def _ensure_gate(*, check_only: bool, color: bool) -> bool:
         return False
 
 
+def _ensure_dbus_bridge(*, check_only: bool, enabled: bool, color: bool) -> bool:
+    """Install the D-Bus clearance bridge: shield reader resource + dbus hub unit.
+
+    Two moving parts: a stdlib-only NFLOG reader script (shipped as a
+    terok-shield resource) and the terok-dbus systemd user unit that owns
+    ``org.terok.Shield1``.  When *enabled* is ``False`` this phase removes
+    any prior installation so the nft hook pair is the only thing on disk.
+
+    Requires ``dbus-send`` on the host; if missing we emit a remediation
+    hint but still proceed (the reader soft-fails at hook-fire time).
+
+    Returns ``True`` on success (installed, or skipped intentionally).
+    """
+    if not enabled:
+        return _disable_dbus_bridge(check_only=check_only, color=color)
+
+    dbus_send_ok = _check_dbus_send(color)
+    reader_ok = _ensure_bridge_reader(check_only=check_only, color=color)
+    hub_ok = _ensure_dbus_hub(check_only=check_only, color=color)
+    # dbus-send absence is a warning, not a failure — reader soft-fails on run.
+    return reader_ok and hub_ok or not dbus_send_ok  # propagate reader/hub outcome
+
+
+def _ensure_bridge_reader(*, check_only: bool, color: bool) -> bool:
+    """Copy the NFLOG reader script out of terok-shield into the user data dir."""
+    dest = Path.home() / ".local" / "share" / "terok-shield" / "nflog-reader.py"
+    if check_only:
+        present = dest.is_file()
+        label = _status_label(present, color)
+        suffix = " (installed)" if present else " (not installed)"
+        print(f"  Bridge reader    {label}{suffix}")
+        return present
+
+    from terok_sandbox import install_shield_bridge
+
+    try:
+        install_shield_bridge(dest)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  Bridge reader    {_status_label(False, color)} ({exc})")
+        return False
+    print(f"  Bridge reader    {_status_label(True, color)} (installed)")
+    return True
+
+
+def _ensure_dbus_hub(*, check_only: bool, color: bool) -> bool:
+    """Install the terok-dbus systemd user unit that owns org.terok.Shield1."""
+    unit_path = _user_systemd_dir() / "terok-dbus.service"
+    if check_only:
+        present = unit_path.is_file()
+        label = _status_label(present, color)
+        suffix = " (installed)" if present else " (not installed)"
+        print(f"  D-Bus hub        {label}{suffix}")
+        return present
+
+    try:
+        from terok_dbus._install import install_service
+    except ImportError as exc:  # noqa: BLE001
+        print(f"  D-Bus hub        {_status_label(False, color)} (import failed: {exc})")
+        return False
+
+    bin_path = shutil.which("terok-dbus") or f"{sys.executable} -m terok_dbus._cli"
+    try:
+        install_service(bin_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  D-Bus hub        {_status_label(False, color)} ({exc})")
+        return False
+    _enable_user_service("terok-dbus")
+    print(f"  D-Bus hub        {_status_label(True, color)} (installed + enabled)")
+    return True
+
+
+def _disable_dbus_bridge(*, check_only: bool, color: bool) -> bool:
+    """Tear down the bridge installation when the operator runs ``--no-dbus-bridge``."""
+    if check_only:
+        print(f"  D-Bus bridge     {_warn_label(color)} (opted out via --no-dbus-bridge)")
+        return True
+
+    from terok_sandbox import uninstall_shield_bridge
+
+    try:
+        uninstall_shield_bridge()
+    except Exception:  # noqa: BLE001 — best-effort cleanup
+        pass
+
+    unit_path = _user_systemd_dir() / "terok-dbus.service"
+    if unit_path.is_file():
+        unit_path.unlink(missing_ok=True)
+        _disable_user_service("terok-dbus")
+    print(f"  D-Bus bridge     {_warn_label(color)} (disabled — audit-minimal mode)")
+    return True
+
+
+def _check_dbus_send(color: bool) -> bool:
+    """Warn the operator when ``dbus-send`` is missing; doesn't fail setup."""
+    present = shutil.which("dbus-send") is not None
+    if present:
+        return True
+    print(
+        f"  dbus-send        {_warn_label(color)} "
+        f"(missing — install dbus-tools / dbus for clearance signals)"
+    )
+    return False
+
+
+def _user_systemd_dir() -> Path:
+    """Resolve the user's systemd unit directory (XDG-aware)."""
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".config"
+    return base / "systemd" / "user"
+
+
+def _enable_user_service(unit: str) -> None:
+    """``systemctl --user enable --now <unit>`` — silent on hosts without systemctl."""
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return
+    import subprocess as _sp
+
+    _sp.run(
+        [systemctl, "--user", "enable", "--now", unit],
+        check=False,
+        capture_output=True,
+    )
+
+
+def _disable_user_service(unit: str) -> None:
+    """``systemctl --user disable --now <unit>`` — tolerate missing systemctl."""
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return
+    import subprocess as _sp
+
+    _sp.run(
+        [systemctl, "--user", "disable", "--now", unit],
+        check=False,
+        capture_output=True,
+    )
+
+
 def _check_selinux_policy(*, color: bool) -> bool:
     """Print SELinux prereq status and return whether it's satisfied.
 
@@ -345,11 +498,13 @@ def _check_selinux_policy(*, color: bool) -> bool:
     return True  # pragma: no cover — exhaustive above; defensive fallthrough for new enum members
 
 
-def cmd_setup(*, check_only: bool = False) -> None:
-    """Global bootstrap: install shield, vault, and gate server.
+def cmd_setup(*, check_only: bool = False, no_dbus_bridge: bool = False) -> None:
+    """Global bootstrap: install shield, vault, gate server, and optional D-Bus bridge.
 
     Non-interactive and idempotent — safe to re-run.  Installs to user-local
     directories (no root needed).  With ``--check``, only reports status.
+    ``--no-dbus-bridge`` skips the NFLOG reader resource and the terok-dbus
+    hub unit so audit-minimal hosts only see the nft hook pair on disk.
     """
     color = supports_color()
     action = "Checking" if check_only else "Setting up"
@@ -369,15 +524,15 @@ def cmd_setup(*, check_only: bool = False) -> None:
     print(bold("Services:", color))
     shield_ok = _ensure_shield(check_only=check_only, color=color)
 
-    # Step 3: Vault
     vault_ok = _ensure_vault(check_only=check_only, color=color)
 
-    # Step 4: Gate server
     gate_ok = _ensure_gate(check_only=check_only, color=color)
+
+    bridge_ok = _ensure_dbus_bridge(check_only=check_only, enabled=not no_dbus_bridge, color=color)
     print()
 
     # Summary + next steps
-    all_ok = binaries_ok and shield_ok and vault_ok and gate_ok and selinux_ok
+    all_ok = binaries_ok and shield_ok and vault_ok and gate_ok and selinux_ok and bridge_ok
     if all_ok:
         print(bold("Setup complete.", color))
     elif not binaries_ok:

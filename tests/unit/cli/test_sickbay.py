@@ -523,3 +523,75 @@ class TestCheckVaultMigration:
         assert sev == "warn"
         assert label == "Vault migration"
         assert "boom" in detail
+
+
+class TestCheckDbusHubStateDir:
+    """``_check_dbus_hub_state_dir`` surfaces env↔unit mismatch for the hub."""
+
+    def test_ok_when_unit_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.delenv("TEROK_SHIELD_STATE_DIR", raising=False)
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=None):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "ok"
+        assert "not installed" in detail
+
+    def test_ok_when_both_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.delenv("TEROK_SHIELD_STATE_DIR", raising=False)
+        unit_text = "[Service]\nExecStart=/a/terok-dbus serve\n"
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=unit_text):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "ok"
+        assert "XDG default" in detail
+
+    def test_ok_when_both_agree(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.setenv("TEROK_SHIELD_STATE_DIR", "/foo")
+        unit_text = (
+            "[Service]\nExecStart=/a/terok-dbus serve\nEnvironment=TEROK_SHIELD_STATE_DIR=/foo\n"
+        )
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=unit_text):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "ok"
+        assert "/foo" in detail
+
+    def test_warn_when_env_set_but_unit_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.setenv("TEROK_SHIELD_STATE_DIR", "/foo")
+        unit_text = "[Service]\nExecStart=/a/terok-dbus serve\n"
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=unit_text):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "warn"
+        assert "absent from unit" in detail
+        assert "terok setup" in detail
+
+    def test_warn_when_unit_set_but_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.delenv("TEROK_SHIELD_STATE_DIR", raising=False)
+        unit_text = (
+            "[Service]\nExecStart=/a/terok-dbus serve\nEnvironment=TEROK_SHIELD_STATE_DIR=/foo\n"
+        )
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=unit_text):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "warn"
+        assert "/foo" in detail
+        assert "shell env unset" in detail
+
+    def test_warn_when_values_differ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.setenv("TEROK_SHIELD_STATE_DIR", "/shell")
+        unit_text = (
+            "[Service]\nExecStart=/a/terok-dbus serve\nEnvironment=TEROK_SHIELD_STATE_DIR=/unit\n"
+        )
+        with unittest.mock.patch("terok_dbus._install.read_installed_unit", return_value=unit_text):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "warn"
+        assert "/shell" in detail
+        assert "/unit" in detail

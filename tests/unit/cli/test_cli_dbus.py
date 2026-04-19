@@ -46,9 +46,9 @@ def dbus_parser() -> argparse.ArgumentParser:
             id="notify-long-timeout",
         ),
         pytest.param(
-            ["dbus", "subscribe"],
-            {"dbus_cmd": "subscribe"},
-            id="subscribe",
+            ["dbus", "serve"],
+            {"dbus_cmd": "serve"},
+            id="serve",
         ),
     ],
 )
@@ -84,7 +84,7 @@ def test_dispatch_notify() -> None:
 
     stub_commands = (
         CommandDef(name="notify", handler=stub_notify, args=_real_args("notify")),
-        CommandDef(name="subscribe", handler=None),
+        CommandDef(name="serve", handler=None),
     )
     args = argparse.Namespace(
         cmd="dbus", dbus_cmd="notify", summary="Test", body="Body", timeout=5000
@@ -94,18 +94,18 @@ def test_dispatch_notify() -> None:
     assert calls == [{"summary": "Test", "body": "Body", "timeout": 5000}]
 
 
-def test_dispatch_subscribe() -> None:
-    """``dbus subscribe`` dispatches to the subscribe handler."""
+def test_dispatch_serve() -> None:
+    """``dbus serve`` dispatches to the hub serve handler."""
     calls: list[dict] = []
 
-    async def stub_subscribe(**kwargs: object) -> None:
+    async def stub_serve(**kwargs: object) -> None:
         calls.append(kwargs)
 
     stub_commands = (
         CommandDef(name="notify", handler=None),
-        CommandDef(name="subscribe", handler=stub_subscribe, args=_real_args("subscribe")),
+        CommandDef(name="serve", handler=stub_serve, args=_real_args("serve")),
     )
-    args = argparse.Namespace(cmd="dbus", dbus_cmd="subscribe")
+    args = argparse.Namespace(cmd="dbus", dbus_cmd="serve")
     with patch("terok.cli.commands.dbus.COMMANDS", stub_commands):
         assert dispatch(args)
     assert calls == [{}]

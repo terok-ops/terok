@@ -458,6 +458,54 @@ def _check_vault_migration() -> _CheckResult:
     return ("ok", label, "no legacy directory")
 
 
+def _check_dbus_hub_state_dir() -> _CheckResult:
+    """Check that the installed D-Bus hub unit agrees with the shell's state-dir env.
+
+    Three forms of drift are surfaced:
+
+    - **env set but unit has none**: the hub will fall back to the XDG default,
+      which differs from what the shell's ``terok-shield`` resolves.
+    - **unit baked but env unset**: the hub points at a custom state root the
+      interactive shell no longer sees — probably stale.
+    - **both set, different values**: explicit mismatch, verdicts land in the
+      wrong state dir.
+
+    No mismatch (both unset, or both set to the same value) reports ``ok``.
+    The check is skipped cleanly when the unit isn't installed at all.
+    """
+    from terok_dbus._install import STATE_DIR_ENV, extract_baked_state_dir, read_installed_unit
+
+    label = "D-Bus hub state_dir"
+    unit = read_installed_unit()
+    if unit is None:
+        return ("ok", label, "hub not installed — nothing to audit")
+    baked = extract_baked_state_dir(unit)
+    env = os.environ.get(STATE_DIR_ENV)
+    if baked == env:
+        if baked is None:
+            return ("ok", label, "using XDG default on both sides")
+        return ("ok", label, f"env and unit agree on {baked}")
+    if env and not baked:
+        return (
+            "warn",
+            label,
+            f"{STATE_DIR_ENV}={env} in shell but absent from unit — "
+            "re-run `terok setup` to bake it in",
+        )
+    if baked and not env:
+        return (
+            "warn",
+            label,
+            f"unit baked with {STATE_DIR_ENV}={baked} but shell env unset — "
+            "export it in your shell or re-run `terok setup` without it",
+        )
+    return (
+        "warn",
+        label,
+        f"{STATE_DIR_ENV} mismatch: shell={env!r}, unit={baked!r} — re-run `terok setup` to sync",
+    )
+
+
 _GLOBAL_CHECKS = [
     _check_gate_server,
     _check_shield,
@@ -466,6 +514,7 @@ _GLOBAL_CHECKS = [
     _check_ssh_signer,
     _check_keyring,
     _check_selinux_policy,
+    _check_dbus_hub_state_dir,
 ]
 
 _STATUS_MARKERS = {
