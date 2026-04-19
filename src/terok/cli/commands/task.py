@@ -89,11 +89,13 @@ def _resolve_unrestricted(args: argparse.Namespace) -> bool | None:
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register task-related subcommands."""
-    # login (top-level shortcut)
-    p_login = subparsers.add_parser("login", help="Open interactive shell in a running container")
-    _add_project_task_args(p_login)
+    """Register task-related subcommands.
 
+    Note on ordering: the ``task`` group is added *before* the flat
+    ``login`` shortcut so ``--help`` reads ``task`` → ``login``, matching
+    the mental model of "task management, with login as a quick way to
+    attach."
+    """
     # task subcommand group
     p_task = subparsers.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -266,6 +268,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "archive_id",
         help="Archive ID prefix (timestamp, e.g. 20260305T143000Z)",
     )
+
+    # login (top-level shortcut — registered after the task group so --help
+    # lists ``task`` → ``login`` in intuitive order)
+    p_login = subparsers.add_parser("login", help="Open interactive shell in a running container")
+    _add_project_task_args(p_login)
 
 
 def dispatch(args: argparse.Namespace) -> bool:

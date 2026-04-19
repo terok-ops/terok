@@ -7,12 +7,8 @@ from __future__ import annotations
 
 import argparse
 
-from terok_executor import AUTH_PROVIDERS
-
-from ...lib.core.images import require_agent_installed
 from ...lib.core.projects import list_presets, list_projects, load_project
 from ...lib.domain.facade import (
-    authenticate,
     build_images,
     delete_project,
     derive_project,
@@ -141,17 +137,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Recreate the mirror from scratch",
     )
 
-    # auth
-    provider_names = list(AUTH_PROVIDERS)
-    providers_help = ", ".join(f"{p.name} ({p.label})" for p in AUTH_PROVIDERS.values())
-    p_auth = sub.add_parser(
-        "auth",
-        help="Authenticate an agent/tool for a project",
-        description=f"Available providers: {providers_help}",
-    )
-    p_auth.add_argument("provider", choices=provider_names, metavar="provider")
-    _add_project_arg(p_auth)
-
     # presets (leaf — takes project_id directly; no further subcommand)
     p_presets = sub.add_parser("presets", help="List available presets for a project")
     _add_project_arg(p_presets)
@@ -186,9 +171,6 @@ def dispatch(args: argparse.Namespace) -> bool:
             _cmd_ssh_init(args)
         case "gate-sync":
             _cmd_gate_sync(args)
-        case "auth":
-            require_agent_installed(load_project(args.project_id), args.provider, noun="Provider")
-            authenticate(args.project_id, args.provider)
         case "presets":
             _cmd_presets(args.project_id)
         case _:  # pragma: no cover — required=True makes argparse enforce this

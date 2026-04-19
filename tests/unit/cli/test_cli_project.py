@@ -134,23 +134,6 @@ def test_dispatch_routes_to_handler(
         )
 
 
-def test_dispatch_auth_combines_two_calls() -> None:
-    """``project auth`` checks agent installation then authenticates."""
-    args = argparse.Namespace(cmd="project", project_cmd="auth", project_id="p1", provider="claude")
-    fake_project = SimpleNamespace(id="p1")
-    with (
-        patch("terok.cli.commands.project.load_project", return_value=fake_project),
-        patch("terok.cli.commands.project.require_agent_installed") as mock_check,
-        patch("terok.cli.commands.project.authenticate") as mock_auth,
-    ):
-        assert dispatch(args) is True
-
-    # ``require_agent_installed`` receives the *loaded* project object
-    # (not the raw project_id) and the noun label used for error messages.
-    mock_check.assert_called_once_with(fake_project, "claude", noun="Provider")
-    mock_auth.assert_called_once_with("p1", "claude")
-
-
 def test_dispatch_ignores_non_project_cmd() -> None:
     """Dispatch returns False for other top-level commands."""
     assert dispatch(argparse.Namespace(cmd="task")) is False

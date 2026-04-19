@@ -38,7 +38,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     """Register the ``dbus-debug`` subcommand group from the terok-dbus registry."""
     p = subparsers.add_parser(
         "dbus-debug",
-        help="Debug D-Bus notifications (internal; kept until the feature matures)",
+        help="Debug D-Bus notifications",
     )
     sub = p.add_subparsers(dest="dbus_cmd", required=True)
 

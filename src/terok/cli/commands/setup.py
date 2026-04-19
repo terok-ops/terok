@@ -397,7 +397,7 @@ def cmd_setup(*, check_only: bool = False) -> None:
     providers = ", ".join(AUTH_PROVIDERS)
     print(
         f"\nNext steps:\n"
-        f"  terok project auth <provider> <project>    Authenticate agents ({providers})\n"
+        f"  terok auth <provider> <project>            Authenticate agents ({providers})\n"
         f"  terok project wizard                       Create your first project\n"
     )
 
