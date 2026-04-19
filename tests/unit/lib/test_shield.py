@@ -288,7 +288,8 @@ def test_run_setup(
     """Shield setup handles usage, user, and root installation paths."""
     with patch("terok_sandbox.shield.setup_hooks_direct") as mock_direct:
         if expected_call is None:
-            with pytest.raises(SystemExit, match="--root"):
+            # sandbox ≥0.0.75 raises ValueError instead of SystemExit
+            with pytest.raises((SystemExit, ValueError)):
                 run_setup(**kwargs)
             mock_direct.assert_not_called()
         else:
