@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot (Level 1+2) features: terok run and agent config."""
+"""Tests for autopilot (Level 1+2) features: terok task run and agent config."""
 
 from __future__ import annotations
 
