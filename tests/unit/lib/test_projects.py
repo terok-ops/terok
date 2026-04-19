@@ -298,7 +298,9 @@ class TestProject:
             mock_sandbox_cfg.ssh_keys_dir = sandbox_state / "ssh-keys"
 
             with (
-                unittest.mock.patch("terok.lib.domain.project_state.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.domain.project_state.image_exists", return_value=True
+                ),
                 unittest.mock.patch(
                     "terok.lib.core.projects._get_global_git_config", return_value=None
                 ),
@@ -307,8 +309,6 @@ class TestProject:
                     return_value=mock_sandbox_cfg,
                 ),
             ):
-                run_mock.return_value.returncode = 0
-                run_mock.return_value.stdout = "2024-01-01T00:00:00Z\t<no value>"
                 state = get_project_state(project_id, gate_commit_provider=lambda _pid: None)
 
         assert state == {

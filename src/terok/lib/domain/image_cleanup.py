@@ -5,8 +5,15 @@
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
+
+from terok_sandbox import (
+    ImageRecord,
+    image_history,
+    image_labels,
+    image_rm,
+    images_list,
+)
 
 from ..core.projects import list_projects
 
@@ -28,6 +35,17 @@ class ImageInfo:
             return f"<none> ({self.image_id[:12]})"
         return f"{self.repository}:{self.tag}"
 
+    @classmethod
+    def from_record(cls, record: ImageRecord) -> ImageInfo:
+        """Lift a sandbox :class:`ImageRecord` into terok's display type."""
+        return cls(
+            repository=record.repository,
+            tag=record.tag,
+            image_id=record.image_id,
+            size=record.size,
+            created=record.created,
+        )
+
 
 @dataclass
 class CleanupResult:
@@ -36,32 +54,6 @@ class CleanupResult:
     removed: list[str]
     failed: list[str]
     dry_run: bool
-
-
-def _run_podman(*args: str) -> subprocess.CompletedProcess[str]:
-    """Run a podman command and return the result.
-
-    Returns a synthetic failed result if podman is not found or times out,
-    so callers can check ``returncode`` without exception handling.
-    """
-    try:
-        return subprocess.run(
-            ["podman", *args],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except FileNotFoundError:
-        return subprocess.CompletedProcess(
-            args=["podman", *args], returncode=127, stdout="", stderr="podman not found"
-        )
-    except subprocess.TimeoutExpired as exc:
-        return subprocess.CompletedProcess(
-            args=["podman", *args],
-            returncode=124,
-            stdout=exc.stdout or "",
-            stderr=exc.stderr or "podman command timed out",
-        )
 
 
 def _known_project_ids() -> set[str] | None:
@@ -106,36 +98,18 @@ def list_images(project_id: str | None = None) -> list[ImageInfo]:
     Returns:
         List of ImageInfo objects for matching images.
     """
-    result = _run_podman(
-        "images",
-        "--format",
-        "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.Created}}",
-        "--no-trunc",
-    )
-    if result.returncode != 0:
-        return []
-
     images: list[ImageInfo] = []
-    for line in result.stdout.strip().splitlines():
-        parts = line.split("\t", 4)
-        if len(parts) < 5:
-            continue
-        repo, tag, img_id, size, created = parts
-        if not _is_terok_image(repo, tag):
+    for record in images_list():
+        if not _is_terok_image(record.repository, record.tag):
             continue
         if project_id is not None:
             # Filter: L2 images must match the project; L0/L1 always shown
-            if _is_terok_l2_image(repo, tag) and repo != project_id:
+            if (
+                _is_terok_l2_image(record.repository, record.tag)
+                and record.repository != project_id
+            ):
                 continue
-        images.append(
-            ImageInfo(
-                repository=repo,
-                tag=tag,
-                image_id=img_id,
-                size=size,
-                created=created,
-            )
-        )
+        images.append(ImageInfo.from_record(record))
     return images
 
 
@@ -176,37 +150,15 @@ def find_orphaned_images() -> list[ImageInfo]:
 def _find_dangling_terok_images() -> list[ImageInfo]:
     """Find dangling (untagged) images that were built by terok.
 
-    Uses podman to list dangling images, then checks ancestry via labels
-    or layer history to identify those from terok builds.
+    Walks the sandbox ``images_list(dangling_only=True)`` enumeration and
+    keeps only records whose ancestry matches :func:`_is_terok_built_image`
+    (build-context-hash label or terok layer name in history).
     """
-    result = _run_podman(
-        "images",
-        "--filter",
-        "dangling=true",
-        "--format",
-        "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.Created}}",
-        "--no-trunc",
-    )
-    if result.returncode != 0:
-        return []
-
-    dangling: list[ImageInfo] = []
-    for line in result.stdout.strip().splitlines():
-        parts = line.split("\t", 4)
-        if len(parts) < 5:
-            continue
-        repo, tag, img_id, size, created = parts
-        if _is_terok_built_image(img_id):
-            dangling.append(
-                ImageInfo(
-                    repository=repo,
-                    tag=tag,
-                    image_id=img_id,
-                    size=size,
-                    created=created,
-                )
-            )
-    return dangling
+    return [
+        ImageInfo.from_record(record)
+        for record in images_list(dangling_only=True)
+        if _is_terok_built_image(record.image_id)
+    ]
 
 
 def _is_terok_built_image(image_id: str) -> bool:
@@ -215,33 +167,9 @@ def _is_terok_built_image(image_id: str) -> bool:
     Inspects the ``terok.build_context_hash`` label and image history
     for terok layer names.
     """
-    # Check for terok label
-    result = _run_podman(
-        "image",
-        "inspect",
-        "--format",
-        '{{index .Config.Labels "terok.build_context_hash"}}',
-        image_id,
-    )
-    if result.returncode == 0:
-        label = result.stdout.strip()
-        if label and label != "<no value>":
-            return True
-
-    # Check image history for terok layer names
-    result = _run_podman(
-        "image",
-        "history",
-        "--format",
-        "{{.CreatedBy}}",
-        image_id,
-    )
-    if result.returncode == 0:
-        history = result.stdout
-        if "terok-l0" in history or "terok-l1" in history:
-            return True
-
-    return False
+    if image_labels(image_id).get("terok.build_context_hash"):
+        return True
+    return any("terok-l0" in line or "terok-l1" in line for line in image_history(image_id))
 
 
 def cleanup_images(dry_run: bool = False) -> CleanupResult:
@@ -261,8 +189,7 @@ def cleanup_images(dry_run: bool = False) -> CleanupResult:
         if dry_run:
             removed.append(img.full_name)
             continue
-        result = _run_podman("image", "rm", img.image_id)
-        if result.returncode == 0:
+        if image_rm(img.image_id):
             removed.append(img.full_name)
         else:
             failed.append(img.full_name)

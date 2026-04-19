@@ -107,13 +107,12 @@ class TestTask:
             assert second_id != returned_id
 
             with (
-                unittest.mock.patch("terok.lib.orchestration.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok_executor.AgentRunner.capture_logs", return_value=False),
                 unittest.mock.patch(
                     "terok.lib.orchestration.tasks.stop_task_containers", return_value=[]
                 ),
                 mock_git_config(),
             ):
-                run_mock.return_value.returncode = 0
                 result = task_delete(project_id, returned_id)
 
             assert isinstance(result, TaskDeleteResult)
@@ -1098,20 +1097,21 @@ class TestTaskLogs:
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.domain.task_logs.subprocess.Popen",
-                        return_value=mock_proc,
-                    ),
+                        "terok.lib.domain.task_logs.AgentRunner"
+                    ) as mock_runner_cls,
                     unittest.mock.patch(
                         "terok.lib.domain.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                     unittest.mock.patch("select.select") as mock_select,
                 ):
+                    mock_runner_cls.return_value.stream_logs_process.return_value = mock_proc
                     mock_select.return_value = ([mock_proc.stdout], [], [])
                     buf = StringIO()
                     with redirect_stdout(buf):
                         task_logs("proj_logs7", task_id)
 
+                    mock_runner_cls.return_value.stream_logs_process.assert_called_once()
                     mock_formatter.feed_line.assert_called()
                     mock_formatter.finish.assert_called_once()
 
@@ -1129,10 +1129,12 @@ class TestTaskLogs:
                         return_value="running",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.domain.task_logs.subprocess.Popen",
-                        side_effect=FileNotFoundError("podman"),
-                    ),
+                        "terok.lib.domain.task_logs.AgentRunner"
+                    ) as mock_runner_cls,
                 ):
+                    mock_runner_cls.return_value.stream_logs_process.side_effect = (
+                        FileNotFoundError("podman")
+                    )
                     with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs8", task_id)
                     assert "podman not found" in str(cm.value)
@@ -1276,20 +1278,16 @@ class TestTaskArchive:
                 logs_dir.mkdir(parents=True, exist_ok=True)
                 (logs_dir / "container.log").write_text("log content\n")
 
-                log_content = b"captured log output\n"
+                log_content = "captured log output\n"
 
-                def fake_run(cmd, *, stdout=None, stderr=None, timeout=None, **kw):
-                    """Simulate podman: write to stdout file handle or no-op for rm."""
-                    if stdout is not None and hasattr(stdout, "write"):
-                        stdout.write(log_content)
-                    result = unittest.mock.Mock()
-                    result.returncode = 0
-                    return result
+                def _fake_capture(self, cname, dest, *, timestamps=True, timeout=60.0):
+                    dest.write_text(log_content)
+                    return True
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.orchestration.tasks.subprocess.run",
-                        side_effect=fake_run,
+                        "terok_executor.AgentRunner.capture_logs",
+                        new=_fake_capture,
                     ),
                     unittest.mock.patch(
                         "terok.lib.orchestration.tasks.stop_task_containers",
@@ -1344,8 +1342,8 @@ class TestTaskArchive:
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.orchestration.tasks.subprocess.run",
-                        side_effect=fake_run,
+                        "terok_executor.AgentRunner.capture_logs",
+                        return_value=True,
                     ),
                     unittest.mock.patch(
                         "terok.lib.orchestration.tasks.stop_task_containers",
@@ -1444,7 +1442,8 @@ class TestTaskArchive:
             assert "No archived tasks found" in buf.getvalue()
 
     def test_capture_task_logs(self) -> None:
-        """capture_task_logs writes podman logs to host filesystem."""
+        """capture_task_logs delegates to AgentRunner.capture_logs and
+        returns the log file path when the executor reports success."""
         from terok.lib.orchestration.tasks import capture_task_logs
 
         project_id = "proj_capture1"
@@ -1455,28 +1454,26 @@ class TestTaskArchive:
             with mock_git_config():
                 task_id = task_new(project_id)
 
-                log_content = b"2026-03-05T12:00:00Z stdout line\n"
+                log_content = "2026-03-05T12:00:00Z stdout line\n"
 
-                def fake_run(cmd, *, stdout=None, stderr=None, timeout=None):
-                    """Write log content to stdout file handle like podman would."""
-                    if stdout is not None and hasattr(stdout, "write"):
-                        stdout.write(log_content)
-                    result = unittest.mock.Mock()
-                    result.returncode = 0
-                    return result
+                def fake_capture(self, cname, dest, *, timestamps=True, timeout=60.0):
+                    """Simulate AgentRunner.capture_logs writing to *dest*."""
+                    dest.write_text(log_content)
+                    return True
 
                 with unittest.mock.patch(
-                    "terok.lib.orchestration.tasks.subprocess.run",
-                    side_effect=fake_run,
+                    "terok_executor.AgentRunner.capture_logs",
+                    new=fake_capture,
                 ):
                     log_file = capture_task_logs(project_id, task_id, "run")
 
                 assert log_file is not None
-                content = log_file.read_text()
-                assert "stdout line" in content
+                assert "stdout line" in log_file.read_text()
 
     def test_capture_task_logs_podman_not_found(self) -> None:
-        """capture_task_logs returns None when podman is not available."""
+        """capture_task_logs returns None when the executor reports failure
+        (podman missing, timeout, non-zero returncode — all surface the same
+        way through AgentRunner.capture_logs)."""
         from terok.lib.orchestration.tasks import capture_task_logs
 
         project_id = "proj_capture2"
@@ -1488,8 +1485,8 @@ class TestTaskArchive:
                 task_id = task_new(project_id)
 
                 with unittest.mock.patch(
-                    "terok.lib.orchestration.tasks.subprocess.run",
-                    side_effect=FileNotFoundError("podman"),
+                    "terok_executor.AgentRunner.capture_logs",
+                    return_value=False,
                 ):
                     result = capture_task_logs(project_id, task_id, "run")
 
@@ -1528,8 +1525,8 @@ class TestTaskDeleteWarnings:
 
                 patches = [
                     unittest.mock.patch(
-                        "terok.lib.orchestration.tasks.subprocess.run",
-                        return_value=unittest.mock.Mock(returncode=1),
+                        "terok_executor.AgentRunner.capture_logs",
+                        return_value=True,
                     ),
                     unittest.mock.patch(
                         "terok.lib.orchestration.tasks.stop_task_containers",

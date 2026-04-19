@@ -15,12 +15,31 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from terok_executor import AgentRunner
 from terok_sandbox import get_container_state
 
 from ..core.projects import load_project
 from ..orchestration.tasks import container_name, tasks_meta_dir
 from ..util.yaml import load as _yaml_load
 from .log_format import auto_detect_formatter
+
+
+def _build_raw_logs_cmd(cname: str, *, follow: bool, tail: int | None) -> list[str]:
+    """Build the ``podman logs`` argv for terok's raw mode.
+
+    "Raw" is a terok concept — the :class:`LogViewOptions` ``raw=True`` path
+    asks us to bypass our formatter pipeline and hand podman's byte stream
+    straight to the user's terminal.  It is not a podman flag.  The caller
+    uses ``os.execvp`` to replace the current process with ``podman logs``
+    so the user talks to podman directly.
+    """
+    cmd = ["podman", "logs"]
+    if follow:
+        cmd.append("-f")
+    if tail is not None:
+        cmd.extend(["--tail", str(tail)])
+    cmd.append(cname)
+    return cmd
 
 
 @dataclass(frozen=True)
@@ -99,16 +118,12 @@ def task_logs(
             f"Run 'terok task restart {project_id} {task_id}' first."
         )
 
-    # Build podman logs command
-    cmd = ["podman", "logs"]
-    if options.follow:
-        cmd.append("-f")
-    if options.tail is not None:
-        cmd.extend(["--tail", str(options.tail)])
-    cmd.append(cname)
+    runner = AgentRunner()
 
     if options.raw:
-        # Raw mode: exec podman directly, no formatting
+        # Raw mode: exec podman directly, no formatting.  os.execvp replaces
+        # this process — no executor-layer wrapping is appropriate.
+        cmd = _build_raw_logs_cmd(cname, follow=options.follow, tail=options.tail)
         try:
             os.execvp(cmd[0], cmd)
         except FileNotFoundError:
@@ -119,13 +134,11 @@ def task_logs(
     formatter = auto_detect_formatter(mode, streaming=options.streaming, provider=provider)
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        proc = runner.stream_logs_process(cname, follow=options.follow, tail=options.tail)
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
+    except OSError as exc:
+        raise SystemExit(f"failed to launch podman logs: {exc}")
 
     # Handle Ctrl+C gracefully
     interrupted = False

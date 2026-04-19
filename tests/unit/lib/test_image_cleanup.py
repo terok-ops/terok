@@ -9,6 +9,7 @@ import subprocess
 import unittest.mock
 
 import pytest
+from terok_sandbox import ImageRecord
 
 from terok.lib.domain.image_cleanup import (
     ImageInfo,
@@ -19,8 +20,18 @@ from terok.lib.domain.image_cleanup import (
 
 
 def podman_result(stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess:
-    """Create a mock podman result."""
+    """Create a mock podman result (retained for other callers)."""
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+
+
+def _records_from_tsv(text: str) -> list[ImageRecord]:
+    """Parse the TSV shape ``podman images --format`` emits into ImageRecords."""
+    out: list[ImageRecord] = []
+    for line in text.strip().splitlines():
+        parts = line.split("\t")
+        if len(parts) == 5:
+            out.append(ImageRecord(*parts))
+    return out
 
 
 ORPHAN_IMAGE = ImageInfo("old-proj", "l2-cli", "sha256:abc", "1GB", "5 days ago")
@@ -76,21 +87,22 @@ class TestListImages:
         ],
         ids=["all-terok-images", "filtered-by-project", "dev-tag"],
     )
-    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.images_list")
     def test_list_images(
         self,
-        mock_podman: unittest.mock.Mock,
+        mock_images_list: unittest.mock.Mock,
         stdout: str,
         project_id: str | None,
         expected_names: set[str],
     ) -> None:
-        mock_podman.return_value = podman_result(stdout)
+        mock_images_list.return_value = _records_from_tsv(stdout)
         images = list_images(project_id)
         assert {image.full_name for image in images} == expected_names
 
-    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
-    def test_list_images_podman_failure(self, mock_podman: unittest.mock.Mock) -> None:
-        mock_podman.return_value = podman_result(returncode=1)
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.images_list")
+    def test_list_images_podman_failure(self, mock_images_list: unittest.mock.Mock) -> None:
+        """Sandbox returns an empty list on podman failure — terok passes it through."""
+        mock_images_list.return_value = []
         assert list_images() == []
 
 
@@ -177,27 +189,27 @@ class TestCleanupImages:
         ],
         ids=["dry-run", "success", "failure"],
     )
-    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.image_rm")
     @unittest.mock.patch("terok.lib.domain.image_cleanup.find_orphaned_images")
     def test_cleanup_images(
         self,
         mock_orphaned: unittest.mock.Mock,
-        mock_podman: unittest.mock.Mock,
+        mock_image_rm: unittest.mock.Mock,
         dry_run: bool,
         podman_returncode: int,
         expected_removed: list[str],
         expected_failed: list[str],
     ) -> None:
         mock_orphaned.return_value = [ORPHAN_IMAGE]
-        mock_podman.return_value = podman_result(returncode=podman_returncode)
+        mock_image_rm.return_value = podman_returncode == 0
         result = cleanup_images(dry_run=dry_run)
         assert result.dry_run is dry_run
         assert result.removed == expected_removed
         assert result.failed == expected_failed
         if dry_run:
-            mock_podman.assert_not_called()
+            mock_image_rm.assert_not_called()
         else:
-            mock_podman.assert_called_once_with("image", "rm", "sha256:abc")
+            mock_image_rm.assert_called_once_with("sha256:abc")
 
     @unittest.mock.patch("terok.lib.domain.image_cleanup.find_orphaned_images")
     def test_nothing_to_clean(self, mock_orphaned: unittest.mock.Mock) -> None:

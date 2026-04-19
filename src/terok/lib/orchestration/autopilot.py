@@ -36,8 +36,3 @@ def wait_for_container_exit(
 
     update_task_exit_code(project_id, task_id, exit_code)
     return exit_code, None
-
-
-def follow_container_logs_cmd(container_name: str) -> list[str]:
-    """Return the podman command to follow container logs."""
-    return ["podman", "logs", "-f", container_name]

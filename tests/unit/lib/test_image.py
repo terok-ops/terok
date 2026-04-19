@@ -64,7 +64,6 @@ def build_commands(
     )
     with (
         patch("subprocess.run", side_effect=mock_run),
-        patch("terok.lib.orchestration.image._check_podman_available"),
         patch(
             "terok.lib.orchestration.image.build_base_images",
             return_value=_mock_base_images(),
@@ -416,7 +415,6 @@ class TestPackageFamily:
         with image_project_with("proj_rocky", base_image="rockylinux:9", family="rpm"):
             with (
                 patch("subprocess.run", return_value=Mock(returncode=0)),
-                patch("terok.lib.orchestration.image._check_podman_available"),
                 patch("terok.lib.orchestration.image._image_exists", return_value=True),
                 patch(
                     "terok.lib.orchestration.image.build_base_images",
@@ -434,7 +432,6 @@ class TestPackageFamily:
         with image_project_with("proj_ubuntu", base_image="ubuntu:24.04"):
             with (
                 patch("subprocess.run", return_value=Mock(returncode=0)),
-                patch("terok.lib.orchestration.image._check_podman_available"),
                 patch("terok.lib.orchestration.image._image_exists", return_value=True),
                 patch(
                     "terok.lib.orchestration.image.build_base_images",

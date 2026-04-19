@@ -23,6 +23,7 @@ from enum import Enum, auto
 
 from rich.style import Style
 from rich.text import Text
+from terok_executor import AgentRunner
 from textual import screen
 from textual.app import ComposeResult
 from textual.widgets import RichLog, Static
@@ -417,16 +418,9 @@ class LogViewerScreen(screen.Screen[None]):
         else:
             formatter = _PlainTextTuiFormatter()
 
-        cmd = ["podman", "logs"]
-        if self.follow:
-            cmd.append("-f")
-        cmd.append(self.container_name)
-
         try:
-            self._process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+            self._process = AgentRunner().stream_logs_process(
+                self.container_name, follow=self.follow, merge_stderr=True
             )
         except FileNotFoundError:
             self._post_text(Text("Error: podman not found", style=_STYLE_RESULT_ERR))

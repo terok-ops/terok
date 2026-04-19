@@ -12,9 +12,6 @@ three layers together.
 import hashlib
 import json
 import logging
-import shlex
-import shutil
-import subprocess
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -23,6 +20,7 @@ from typing import Any
 from terok_executor import (
     BuildError,
     build_base_images,
+    build_project_image,
     detect_family,
     l0_image_tag,
     parse_agent_selection,
@@ -30,6 +28,7 @@ from terok_executor import (
     stage_tmux_config,
     stage_toad_agents,
 )
+from terok_sandbox import image_exists as _sandbox_image_exists
 
 from ..core.config import build_dir
 from ..core.images import project_cli_image, project_dev_image
@@ -40,19 +39,14 @@ from ..util.fs import ensure_dir
 # ---------- helpers ----------
 
 
-def _check_podman_available() -> None:
-    """Raise SystemExit if podman is not on PATH."""
-    if shutil.which("podman") is None:
-        raise SystemExit("podman not found; please install podman")
-
-
 def _image_exists(image: str) -> bool:
-    """Check if a container image exists locally."""
-    result = subprocess.run(
-        ["podman", "image", "exists", image],
-        capture_output=True,
-    )
-    return result.returncode == 0
+    """Check if a container image exists locally.
+
+    Thin wrapper over :func:`terok_sandbox.image_exists` kept as a
+    same-module symbol so existing test mocks (``patch("terok.lib.
+    orchestration.image._image_exists")``) keep working.
+    """
+    return _sandbox_image_exists(image)
 
 
 # ---------- Hashing ----------
@@ -314,8 +308,6 @@ def build_images(
             ``"all"``).  When ``None``, ``project.agents`` is used (which
             itself inherits from the global ``image.agents`` config).
     """
-    _check_podman_available()
-
     project = load_project(project_id)
     base_image = project.base_image
     stage_dir = build_dir() / project.id
@@ -355,7 +347,6 @@ def build_images(
     l1_hash = l1_content_hash(rendered)
     l2_hash = l2_content_hash(rendered)
     context_hash = _sha256(l0_hash, l1_hash, l2_hash)
-    context_dir = str(stage_dir)
 
     # Resolve manifest L0/L1 hashes: use current hashes if rebuilt,
     # carry forward from previous manifest if skipped.
@@ -367,21 +358,18 @@ def build_images(
         manifest_l1_hash = prev["l1"]["content_hash"] if prev else l1_hash
 
     def _build_l2(base_arg: str, target: str) -> None:
-        """Build one L2 image variant."""
-        cmd = ["podman", "build", "-f", str(l2_path)]
-        cmd += ["--build-arg", f"BASE_IMAGE={base_arg}"]
-        cmd += ["--label", f"terok.build_context_hash={context_hash}"]
-        cmd += ["-t", target]
-        if full_rebuild:
-            cmd.append("--no-cache")
-        cmd.append(context_dir)
-        print("$", shlex.join(cmd))
+        """Build one L2 image variant — thin delegate to the executor's factory."""
         try:
-            subprocess.run(cmd, check=True)
-        except FileNotFoundError:
-            raise SystemExit("podman not found; please install podman")
-        except subprocess.CalledProcessError as e:
-            raise SystemExit(f"Build failed: {e}")
+            build_project_image(
+                dockerfile=l2_path,
+                context_dir=stage_dir,
+                target_tag=target,
+                build_args={"BASE_IMAGE": base_arg},
+                labels={"terok.build_context_hash": context_hash},
+                no_cache=full_rebuild,
+            )
+        except BuildError as exc:
+            raise SystemExit(str(exc)) from exc
 
     # Always build L2 CLI image (project layer on top of L1)
     _build_l2(l1_cli_image, l2_cli_image)

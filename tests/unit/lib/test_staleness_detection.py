@@ -188,10 +188,10 @@ class TestIsTaskImageOld:
         from terok.lib.domain.project_state import is_task_image_old
 
         task = Mock(mode="cli", task_id="42")
-        container_inspect = Mock(returncode=0, stdout="true\tsha256:abc123")
 
         with (
-            patch("terok.lib.domain.project_state.subprocess.run", return_value=container_inspect),
+            patch("terok.lib.domain.project_state.is_container_running", return_value=True),
+            patch("terok.lib.domain.project_state.container_image", return_value="sha256:abc123"),
             patch("terok.lib.domain.project_state._container_name", return_value="c1"),
             patch(
                 "terok.lib.orchestration.image.render_all_dockerfiles",
@@ -215,10 +215,10 @@ class TestIsTaskImageOld:
         from terok.lib.domain.project_state import is_task_image_old
 
         task = Mock(mode="cli", task_id="42")
-        container_inspect = Mock(returncode=0, stdout="true\tsha256:abc123")
 
         with (
-            patch("terok.lib.domain.project_state.subprocess.run", return_value=container_inspect),
+            patch("terok.lib.domain.project_state.is_container_running", return_value=True),
+            patch("terok.lib.domain.project_state.container_image", return_value="sha256:abc123"),
             patch("terok.lib.domain.project_state._container_name", return_value="c1"),
             patch(
                 "terok.lib.orchestration.image.render_all_dockerfiles",
@@ -253,15 +253,13 @@ class TestIsTaskImageOld:
 
     def test_falls_back_to_label_check_on_exception(self) -> None:
         """When manifest approach fails, falls back to L2 label comparison."""
-        from datetime import UTC, datetime
-
         from terok.lib.domain.project_state import is_task_image_old
 
         task = Mock(mode="cli", task_id="42")
-        container_inspect = Mock(returncode=0, stdout="true\tsha256:abc123")
 
         with (
-            patch("terok.lib.domain.project_state.subprocess.run", return_value=container_inspect),
+            patch("terok.lib.domain.project_state.is_container_running", return_value=True),
+            patch("terok.lib.domain.project_state.container_image", return_value="sha256:abc123"),
             patch("terok.lib.domain.project_state._container_name", return_value="c1"),
             # Make manifest approach fail at load_project (inside is_task_image_old)
             patch(
@@ -275,8 +273,8 @@ class TestIsTaskImageOld:
             ),
             # Label on image doesn't match → stale
             patch(
-                "terok.lib.domain.project_state._get_image_metadata",
-                return_value=(datetime.now(UTC), "old-hash"),
+                "terok.lib.domain.project_state.image_labels",
+                return_value={"terok.build_context_hash": "old-hash"},
             ),
         ):
             result = is_task_image_old("proj1", task)

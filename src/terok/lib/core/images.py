@@ -7,13 +7,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
-import subprocess
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from terok_executor import AGENTS_LABEL
+from terok_sandbox import image_labels
 
 if TYPE_CHECKING:
     from terok.lib.core.project_model import ProjectConfig
@@ -66,22 +65,7 @@ def installed_agents(image_tag: str) -> frozenset[str]:
     empty set — callers treat empty as "unknown / unrestricted" so older
     images keep working.
     """
-    try:
-        result = subprocess.run(
-            ["podman", "inspect", "--format", "{{json .Config.Labels}}", image_tag],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return frozenset()
-
-    try:
-        labels = json.loads(result.stdout) or {}
-    except json.JSONDecodeError:
-        return frozenset()
-
-    csv = (labels.get(AGENTS_LABEL) or "").strip()
+    csv = (image_labels(image_tag).get(AGENTS_LABEL) or "").strip()
     if not csv:
         return frozenset()
     return frozenset(name.strip() for name in csv.split(",") if name.strip())

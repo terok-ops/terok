@@ -8,10 +8,10 @@ project by querying podman and the filesystem.  Used by both CLI and TUI
 for overview displays.
 """
 
-import subprocess
 from collections.abc import Callable
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+from terok_sandbox import container_image, image_exists, image_labels, is_container_running
 
 from ..core.config import build_dir
 from ..core.images import project_cli_image
@@ -58,25 +58,9 @@ def get_project_state(
     ]
     has_dockerfiles = all(p.is_file() for p in dockerfiles)
 
-    # Images: rely on podman image tags created by build_images().
-    has_images = False
-    try:
-        required_tags = [project_cli_image(project.id)]
-        ok = True
-        for tag in required_tags:
-            # ``podman image exists`` exits with 0 when the image is present.
-            result = subprocess.run(
-                ["podman", "image", "exists", tag],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                ok = False
-                break
-        has_images = ok
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        has_images = False
+    # Images: rely on image tags created by build_images().
+    required_tags = [project_cli_image(project.id)]
+    has_images = all(image_exists(tag) for tag in required_tags)
 
     rendered: dict[str, str] | None = None
     dockerfiles_old = False
@@ -182,64 +166,6 @@ def _detect_stale_layers(project: "ProjectConfig", rendered: dict[str, str] | No
     return stale
 
 
-def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str | None]:
-    """Return (created_datetime, label_value) for a podman image *tag*."""
-    try:
-        result = subprocess.run(
-            [
-                "podman",
-                "image",
-                "inspect",
-                "--format",
-                f'{{{{.Created}}}}\\t{{{{index .Config.Labels "{label_key}"}}}}',
-                tag,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return None, None
-    if result.returncode != 0:
-        return None, None
-    created_raw, _, label_raw = result.stdout.partition("\t")
-    label = label_raw.strip() or None
-    if label == "<no value>":
-        label = None
-    return _parse_podman_created(created_raw), label
-
-
-def _parse_podman_created(value: str) -> datetime | None:
-    """Parse a podman ``Created`` timestamp string into a datetime."""
-    if not isinstance(value, str):
-        return None
-    value = value.strip()
-    if not value:
-        return None
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    if "." in value:
-        head, tail = value.split(".", 1)
-        tz_sep = None
-        for sep in ("+", "-"):
-            idx = tail.find(sep)
-            if idx != -1:
-                tz_sep = idx
-                break
-        if tz_sep is None:
-            frac = tail
-            tz = ""
-        else:
-            frac = tail[:tz_sep]
-            tz = tail[tz_sep:]
-        frac = (frac[:6]).ljust(6, "0")
-        value = f"{head}.{frac}{tz}"
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
-
-
 def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
     """Check if the image used by a task's container is outdated.
 
@@ -259,29 +185,9 @@ def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
         return None
 
     cname = _container_name(project_id, task.mode, task.task_id)
-    try:
-        result = subprocess.run(
-            [
-                "podman",
-                "container",
-                "inspect",
-                "--format",
-                "{{.State.Running}}\t{{.Image}}",
-                cname,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+    if not is_container_running(cname):
         return None
-    if result.returncode != 0:
-        return None
-
-    running_str, _, image_id = result.stdout.partition("\t")
-    if running_str.strip().lower() != "true":
-        return None
-    image_id = image_id.strip()
+    image_id = container_image(cname)
     if not image_id:
         return None
 
@@ -299,8 +205,8 @@ def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
             current_hash = build_context_hash(project_id)
         except Exception:
             return None
-        _, label = _get_image_metadata(image_id, "terok.build_context_hash")
-        if label is None:
+        label = image_labels(image_id).get("terok.build_context_hash")
+        if not label:
             return True
         return label != current_hash
 

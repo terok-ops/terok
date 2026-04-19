@@ -16,11 +16,11 @@ import os
 import re
 import secrets
 import shutil
-import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from terok_executor import AgentRunner
 from terok_sandbox import (
     container_stop,
     get_container_state,
@@ -662,23 +662,9 @@ def capture_task_logs(project: ProjectConfig | str, task_id: str, mode: str) -> 
     log_file = logs_dir / "container.log"
 
     cname = container_name(project.id, mode, task_id)
-    try:
-        with log_file.open("wb") as f:
-            result = subprocess.run(
-                ["podman", "logs", "--timestamps", cname],
-                stdout=f,
-                stderr=subprocess.PIPE,
-                timeout=60,
-            )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        log_file.unlink(missing_ok=True)
-        return None
-
-    if result.returncode != 0:
-        log_file.unlink(missing_ok=True)
-        return None
-
-    return log_file
+    if AgentRunner().capture_logs(cname, log_file, timestamps=True, timeout=60.0):
+        return log_file
+    return None
 
 
 def _archive_task(project: ProjectConfig, task_id: str, meta: dict) -> Path | None:

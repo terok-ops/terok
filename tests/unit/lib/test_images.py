@@ -139,45 +139,45 @@ def _clear_installed_agents_cache() -> None:
     images.installed_agents.cache_clear()
 
 
-def _patch_inspect(monkeypatch: pytest.MonkeyPatch, stdout: str | Exception) -> None:
-    """Stub ``subprocess.run`` for ``podman inspect`` calls."""
-    import subprocess
+def _patch_labels(monkeypatch: pytest.MonkeyPatch, labels: dict[str, str]) -> None:
+    """Stub :func:`terok_sandbox.image_labels` as seen by ``images.py``.
 
-    def fake_run(*args: object, **kwargs: object) -> object:
-        if isinstance(stdout, Exception):
-            raise stdout
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
-
-    monkeypatch.setattr(images.subprocess, "run", fake_run)
+    The module imports ``image_labels`` directly, so the patch target is
+    the name in ``terok.lib.core.images``.  An empty dict mimics
+    podman's behaviour for both missing images and unlabeled images —
+    the distinction doesn't matter for the callers under test here.
+    """
+    monkeypatch.setattr(images, "image_labels", lambda _tag: labels)
 
 
 def test_installed_agents_parses_label(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_inspect(monkeypatch, '{"ai.terok.agents": "claude,codex,opencode"}')
+    _patch_labels(monkeypatch, {"ai.terok.agents": "claude,codex,opencode"})
     assert images.installed_agents("terok-l1-cli:test") == frozenset(
         {"claude", "codex", "opencode"}
     )
 
 
 def test_installed_agents_missing_label_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_inspect(monkeypatch, "{}")
+    _patch_labels(monkeypatch, {})
     assert images.installed_agents("terok-l1-cli:legacy") == frozenset()
 
 
 def test_installed_agents_missing_image_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    import subprocess
-
-    _patch_inspect(monkeypatch, subprocess.CalledProcessError(1, "podman"))
+    # ``image_labels`` returns {} when the image is absent; same end-state
+    # as an unlabeled image, which is correct for the unrestricted-fallback
+    # semantics callers rely on.
+    _patch_labels(monkeypatch, {})
     assert images.installed_agents("terok-l1-cli:nope") == frozenset()
 
 
 def test_is_installed_treats_unlabeled_as_unrestricted(monkeypatch: pytest.MonkeyPatch) -> None:
     # Legacy / unlabeled image: every agent is considered installed so
     # older builds keep working until the user rebuilds.
-    _patch_inspect(monkeypatch, "{}")
+    _patch_labels(monkeypatch, {})
     assert images.is_installed("anything", "terok-l1-cli:legacy") is True
 
 
 def test_is_installed_filters_by_label(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_inspect(monkeypatch, '{"ai.terok.agents": "claude,codex"}')
+    _patch_labels(monkeypatch, {"ai.terok.agents": "claude,codex"})
     assert images.is_installed("claude", "terok-l1-cli:test") is True
     assert images.is_installed("vibe", "terok-l1-cli:test") is False

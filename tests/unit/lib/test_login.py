@@ -137,10 +137,8 @@ class TestLogin:
                     return_value="running",
                 ),
                 mock_git_config(),
-                unittest.mock.patch("terok.lib.orchestration.tasks.subprocess.run") as mock_run,
             ):
                 command = get_login_command(project_id, task_id)
 
         assert command[3] == f"{project_id}-cli-{task_id}"
         assert "tmux" in command
-        mock_run.assert_not_called()
