@@ -9,7 +9,12 @@ Pure view layer — no argparse registration, no dispatch.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ...lib.util.ansi import blue, bold, color, supports_color
+
+if TYPE_CHECKING:
+    from ...lib.domain.storage import ProjectDetail, StorageOverview
 
 # ---------------------------------------------------------------------------
 # Column formatting helpers
@@ -216,7 +221,7 @@ def cmd_detail(project_id: str, *, json_output: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _json_overview(overview) -> None:
+def _json_overview(overview: StorageOverview) -> None:
     """Emit the overview as JSON."""
     import json
 
@@ -247,7 +252,7 @@ def _json_overview(overview) -> None:
     print(json.dumps(data, indent=2))
 
 
-def _json_detail(detail) -> None:
+def _json_detail(detail: ProjectDetail) -> None:
     """Emit the project detail as JSON."""
     import json
 

@@ -35,7 +35,13 @@ def register(group_sub: argparse._SubParsersAction) -> None:  # type: ignore[typ
 
 
 def dispatch(args: argparse.Namespace) -> bool:
-    """Handle the locally-attached ``vault serve``.  Returns True if handled."""
+    """Handle the locally-attached ``vault serve``.  Returns True if handled.
+
+    Expects ``sys.argv`` to contain the invocation that argparse already
+    parsed — i.e. ``"vault"`` followed by ``"serve"``.  If either token is
+    missing (exotic test setup, programmatic dispatch), we decline to handle
+    and let the chain continue instead of raising from ``list.index``.
+    """
     if getattr(args, "_terok_local_cmd", None) != _SENTINEL:
         return False
 
@@ -43,8 +49,12 @@ def dispatch(args: argparse.Namespace) -> bool:
 
     # Strip the ``vault serve`` prefix so the token broker's argparse
     # sees only its own flags (--socket-path, --db-path, etc.).
-    vault_idx = _sys.argv.index("vault")
-    serve_idx = _sys.argv.index("serve", vault_idx + 1)
+    try:
+        vault_idx = _sys.argv.index("vault")
+        serve_idx = _sys.argv.index("serve", vault_idx + 1)
+    except ValueError:
+        return False
+
     saved = _sys.argv
     try:
         _sys.argv = ["terok-vault-serve", *_sys.argv[serve_idx + 1 :]]

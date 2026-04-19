@@ -295,7 +295,7 @@ def _check_ssh_signer() -> _CheckResult:
             "error",
             label,
             f"{len(broken)}/{total} project(s) have missing key files: "
-            f"{_abbreviate(broken)} — re-run 'terok project ssh-init'",
+            f"{_abbreviate(broken)} — re-run 'terok project ssh-init <project>'",
         )
     if unregistered:
         return (

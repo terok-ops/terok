@@ -19,9 +19,10 @@ class TestCliHelp:
         """``terok --help`` shows the main workflow entry points."""
         result = terok_env.run_cli("--help")
         assert "Quick start:" in result.stdout
-        assert "projects" in result.stdout
+        assert "project" in result.stdout
         assert "task" in result.stdout
-        assert "project-derive" in result.stdout
+        # Quick-start epilog still exercises the project verb tree.
+        assert "terok project wizard" in result.stdout
 
     def test_task_help_lists_management_commands(self, terok_env: TerokIntegrationEnv) -> None:
         """``terok task --help`` shows task lifecycle subcommands."""
