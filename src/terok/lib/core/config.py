@@ -491,12 +491,13 @@ def get_services_mode() -> ServicesMode:
 def get_vault_transport() -> str:
     """Return the vault transport mode (``"direct"`` or ``"socket"``).
 
-    Global config (config.yml)::
-
-        vault:
-          transport: socket   # or "direct"
+    Derived from ``services.mode``: ``socket`` → ``"socket"`` (containers
+    read the mounted Unix socket), anything else → ``"direct"``
+    (containers connect to the broker's TCP port).  One knob, two
+    vocabularies — kept aligned so the listener and the container-side
+    routing cannot disagree.
     """
-    return _load_validated().vault.transport
+    return "socket" if _load_validated().services.mode == "socket" else "direct"
 
 
 def get_vault_token_broker_port() -> int | None:

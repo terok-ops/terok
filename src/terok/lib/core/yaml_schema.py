@@ -504,12 +504,18 @@ class RawServicesSection(BaseModel):
 
 
 class RawVaultSection(BaseModel):
-    """Global ``vault:`` section (token broker + SSH signer)."""
+    """Global ``vault:`` section (token broker + SSH signer).
+
+    The container-side transport was previously configured via
+    ``vault.transport``; since 0.7.4 it is derived from
+    ``services.mode`` so the two knobs stay in lockstep (tcp listener
+    ↔ direct routing, socket listener ↔ socket routing).  Any prior
+    ``vault.transport:`` line in ``config.yml`` must be removed.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     bypass_no_secret_protection: bool = False
-    transport: Literal["direct", "socket"] = "direct"
     port: int | None = Field(default=None, ge=1, le=65535)
     ssh_signer_port: int | None = Field(default=None, ge=1, le=65535)
 

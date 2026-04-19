@@ -245,6 +245,11 @@ class RawGlobalConfigTests(unittest.TestCase):
         cfg = RawGlobalConfig.model_validate({"services": {"mode": "tcp"}})
         self.assertEqual(cfg.services.mode, "tcp")
 
+    def test_vault_transport_field_rejected(self) -> None:
+        """``vault.transport`` is no longer a config key — it's derived from ``services.mode``."""
+        with self.assertRaises(ValidationError):
+            RawGlobalConfig.model_validate({"vault": {"transport": "socket"}})
+
     def test_experimental_flag(self) -> None:
         """``experimental: true`` is accepted as a top-level bool."""
         cfg = RawGlobalConfig.model_validate({"experimental": True})
