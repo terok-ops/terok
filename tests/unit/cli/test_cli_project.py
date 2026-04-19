@@ -102,10 +102,10 @@ from terok.cli.commands.project import (
         ),
         pytest.param(
             "presets",
-            {"project_id": "p1"},
+            {"presets_cmd": "list", "project_id": "p1"},
             "terok.cli.commands.project._cmd_presets",
             {"positional": ("p1",)},
-            id="presets",
+            id="presets-list",
         ),
     ],
 )

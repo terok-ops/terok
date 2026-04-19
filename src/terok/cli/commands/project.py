@@ -137,9 +137,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Recreate the mirror from scratch",
     )
 
-    # presets (leaf — takes project_id directly; no further subcommand)
-    p_presets = sub.add_parser("presets", help="List available presets for a project")
-    _add_project_arg(p_presets)
+    # presets — subgroup so future preset ops (add/remove/edit) have a home
+    p_presets = sub.add_parser("presets", help="Manage agent-config presets for a project")
+    presets_sub = p_presets.add_subparsers(dest="presets_cmd", required=True)
+    p_presets_list = presets_sub.add_parser("list", help="List available presets for a project")
+    _add_project_arg(p_presets_list)
 
 
 def dispatch(args: argparse.Namespace) -> bool:
@@ -172,7 +174,8 @@ def dispatch(args: argparse.Namespace) -> bool:
         case "gate-sync":
             _cmd_gate_sync(args)
         case "presets":
-            _cmd_presets(args.project_id)
+            if args.presets_cmd == "list":
+                _cmd_presets(args.project_id)
         case _:  # pragma: no cover — required=True makes argparse enforce this
             return False
     return True
