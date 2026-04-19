@@ -104,9 +104,13 @@ def _check_shield() -> _CheckResult:
     if ec.health == "bypass":
         return ("warn", label, "bypass_firewall_no_protection is active — egress disabled")
     if ec.health == "stale-hooks":
-        return ("warn", label, "hooks outdated — run 'terok shield setup --user'")
+        return ("warn", label, "hooks outdated — run 'terok shield install-hooks --user'")
     if ec.health == "setup-needed":
-        hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else "run 'terok shield setup --user'"
+        hint = (
+            ec.setup_hint.splitlines()[0]
+            if ec.setup_hint
+            else "run 'terok shield install-hooks --user'"
+        )
         return ("warn", label, f"{ec.issues[0] if ec.issues else 'setup needed'} — {hint}")
     if ec.health != "ok":
         return ("warn", label, f"unexpected health: {ec.health}")

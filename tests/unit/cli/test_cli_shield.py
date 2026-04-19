@@ -83,19 +83,19 @@ def shield_parser() -> argparse.ArgumentParser:
             id="profiles",
         ),
         pytest.param(
-            ["shield", "setup"],
-            {"shield_cmd": "setup", "root": False, "user": False},
-            id="setup",
+            ["shield", "install-hooks"],
+            {"shield_cmd": "install-hooks", "root": False, "user": False},
+            id="install-hooks",
         ),
         pytest.param(
-            ["shield", "setup", "--root"],
-            {"shield_cmd": "setup", "root": True, "user": False},
-            id="setup-root",
+            ["shield", "install-hooks", "--root"],
+            {"shield_cmd": "install-hooks", "root": True, "user": False},
+            id="install-hooks-root",
         ),
         pytest.param(
-            ["shield", "setup", "--user"],
-            {"shield_cmd": "setup", "root": False, "user": True},
-            id="setup-user",
+            ["shield", "install-hooks", "--user"],
+            {"shield_cmd": "install-hooks", "root": False, "user": True},
+            id="install-hooks-user",
         ),
         pytest.param(
             ["shield", "watch", "proj", "task1"],
@@ -302,7 +302,7 @@ def test_setup_dispatch(
     expected: dict[str, bool],
 ) -> None:
     """The setup subcommand delegates to the facade with the parsed flags."""
-    assert dispatch(argparse.Namespace(cmd="shield", shield_cmd="setup", **kwargs))
+    assert dispatch(argparse.Namespace(cmd="shield", shield_cmd="install-hooks", **kwargs))
     mock_setup.assert_called_once_with(**expected)
 
 

@@ -171,7 +171,7 @@ def test_cmd_sickbay_reports_health(
         ),
         pytest.param(
             "setup-needed",
-            "run 'terok shield setup --user'",
+            "run 'terok shield install-hooks --user'",
             ["nft not found"],
             None,
             "warn",

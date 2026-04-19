@@ -122,10 +122,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
                 continue
             _add_arg(sp, arg)
 
-    # Manually register setup (standalone_only in registry, needs subprocess passthrough)
-    p_setup = sub.add_parser("setup", help="Install global OCI hooks for shield")
-    p_setup.add_argument("--root", action="store_true", help="System-wide (sudo)")
-    p_setup.add_argument("--user", action="store_true", help="User-local")
+    # Manually register install-hooks (standalone_only in registry, needs
+    # subprocess passthrough).  Named explicitly so it doesn't shadow the
+    # top-level ``terok setup`` which installs *all* host services — this
+    # one touches only the shield OCI hooks.
+    p_install = sub.add_parser("install-hooks", help="Install global OCI hooks for shield")
+    p_install.add_argument("--root", action="store_true", help="System-wide (sudo)")
+    p_install.add_argument("--user", action="store_true", help="User-local")
 
 
 def dispatch(args: argparse.Namespace) -> bool:
@@ -135,8 +138,9 @@ def dispatch(args: argparse.Namespace) -> bool:
 
     cmd_name = args.shield_cmd
 
-    # setup is standalone_only and needs subprocess passthrough (no registry handler)
-    if cmd_name == "setup":
+    # install-hooks is standalone_only and needs subprocess passthrough
+    # (no registry handler)
+    if cmd_name == "install-hooks":
         from terok_sandbox import run_setup as shield_run_setup
 
         shield_run_setup(root=args.root, user=args.user)

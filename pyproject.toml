@@ -88,7 +88,7 @@ markers = [
   "needs_root: requires root for nftables",
   "needs_host_features: real host/filesystem/process integration, no network or podman required",
   "needs_internet: requires outbound network connectivity",
-  "needs_hooks: requires OCI global hooks installed via terok shield setup",
+  "needs_hooks: requires OCI global hooks installed via terok shield install-hooks",
   "needs_vault: exercises real vault (DB + token-broker daemon)",
 ]
 asyncio_mode = "auto"

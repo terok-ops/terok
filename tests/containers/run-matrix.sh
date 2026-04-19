@@ -136,7 +136,7 @@ run_tests() {
 
     # Three-phase flow:
     #   Phase 1: tests that do NOT need hooks
-    #   Phase 2: install global hooks via terok shield setup --user
+    #   Phase 2: install global hooks via terok shield install-hooks --user
     #   Phase 3: tests that need hooks
     #
     # Privileged mode gives the outer container the capabilities needed
@@ -202,7 +202,7 @@ run_tests() {
                 # ── Phase 2: install global hooks ──
                 echo \"\"
                 echo \"--- phase 2: installing shield hooks ---\"
-                poetry run terok shield setup --user
+                poetry run terok shield install-hooks --user
 
                 # Verify hooks are detectable — fail fast if setup did not work
                 poetry run python3 -c \"
