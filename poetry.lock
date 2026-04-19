@@ -3105,7 +3105,7 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/ssh-keys-in-vault"
-resolved_reference = "96c1418bf8cba960d98e9f0fb51cbab85dbdfe9a"
+resolved_reference = "ecf9e977aae38adb8329139b5d4f9d2872bcc9ef"
 
 [[package]]
 name = "terok-shield"

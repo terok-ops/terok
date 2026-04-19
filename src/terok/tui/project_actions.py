@@ -173,7 +173,7 @@ class ProjectActionsMixin:
         self._invalidate_image_caches()
 
     async def action_init_ssh(self) -> None:
-        """Initialize the per-project SSH directory and keypair."""
+        """Mint a fresh vault-backed SSH keypair for the current project."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
@@ -181,7 +181,7 @@ class ProjectActionsMixin:
 
         await self._run_suspended(
             lambda: summarize_ssh_init(provision_ssh_key(pid)),
-            success_msg=f"Initialized SSH dir for {pid}",
+            success_msg=f"Initialized vault-backed SSH key for {pid}",
         )
 
     async def _action_build_agents(self) -> None:
