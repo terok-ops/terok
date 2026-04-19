@@ -49,13 +49,16 @@ def test_base_version(value: str, expected: str) -> None:
     ("value", "expected"),
     [
         pytest.param("0.4.0", "0.4.0", id="release"),
-        pytest.param("0.4.0.post3.dev0+gabcdef", "0.4.0+", id="past-release"),
-        pytest.param("1.0.0.dev1", "1.0.0+", id="dev-version"),
+        pytest.param("0.7.4.post4.dev0+549a07a", "0.7.4.post4", id="dynver-post-release"),
+        pytest.param("0.4.0.post3+gabcdef", "0.4.0.post3", id="post-without-dev"),
+        pytest.param("1.0.0.dev1", "1.0.0.dev1", id="dev-preserved"),
+        pytest.param("1.0.0.dev1+gabcdef", "1.0.0.dev1", id="dev-with-local-stripped"),
+        pytest.param("1.2.3rc1", "1.2.3rc1", id="rc-preserved"),
         pytest.param("unknown", "unknown", id="unknown"),
     ],
 )
 def test_short_version(value: str, expected: str) -> None:
-    """``short_version`` preserves releases and adds ``+`` past them."""
+    """``short_version`` strips only the git-hash local segment and the redundant ``.devN`` that dynver appends to ``.postN``."""
     from terok.lib.core.version import short_version
 
     assert short_version(value) == expected

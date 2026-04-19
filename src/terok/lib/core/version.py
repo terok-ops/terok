@@ -202,21 +202,25 @@ def base_version(version: str) -> str:
 def short_version(version: str) -> str:
     """Return a human-friendly short version for display.
 
-    At a tagged release the base version is returned as-is (e.g. ``"0.4.0"``).
-    When the full version string contains post/dev/local suffixes — indicating
-    that HEAD is past the last release tag — a trailing ``"+"`` is appended
-    (e.g. ``"0.4.0+"``).
+    Keeps at most four dot-separated segments (``X.Y.Z.SUFFIX``) and
+    drops the ``+local`` git-hash segment.  Anything past the first
+    suffix — typically ``poetry-dynamic-versioning``'s redundant
+    ``.dev0`` tacked onto a ``.postN`` — is dropped.  No hard-coded
+    knowledge of which suffixes are meaningful, just "first thing
+    after the release triple, if there is one."
 
-    Args:
-        version: Full PEP 440 version string.
+    Examples::
 
-    Returns:
-        Short display version like ``"0.4.0"`` or ``"0.4.0+"``.
+        >>> short_version("0.4.0")
+        '0.4.0'
+        >>> short_version("0.7.4.post4.dev0+549a07a")
+        '0.7.4.post4'
+        >>> short_version("1.0.0.dev1")
+        '1.0.0.dev1'
+        >>> short_version("1.2.3rc1")
+        '1.2.3rc1'
     """
-    base = base_version(version)
-    if version != base:
-        return f"{base}+"
-    return base
+    return ".".join(version.split(".", 4)[:4]).split("+", 1)[0]
 
 
 def format_version_string(version: str, branch: str | None) -> str:
