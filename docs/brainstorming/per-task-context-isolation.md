@@ -97,7 +97,7 @@ volumes.append(f"{claude_task_dir}:/home/dev/.claude:Z")
 
 - `terok task contexts <project> <task>` - List sessions created by task
 - `terok task import-context <project> <dest-task> --from <source-task>` - Copy sessions
-- `terok auth sync [--project <project>]` - Sync auth files after credential update
+- `terok project auth sync [--project <project>]` - Sync auth files after credential update
 
 #### Pros/Cons
 

@@ -40,16 +40,16 @@ Built `FROM` the L1 image.
 
 ## Build Flow
 
-`terok generate <project>` renders Dockerfiles into the per-project build directory:
+`terok project generate <project>` renders Dockerfiles into the per-project build directory:
 `L0.Dockerfile`, `L1.cli.Dockerfile`, `L2.Dockerfile`.
 
 | Command | Layers Built | When to Use |
 |---------|-------------|-------------|
-| `terok build <project>` | L2 only | Project config changes |
-| `terok build <project> --refresh-agents` | L0 + L1 + L2 | Bust the agent-install cache |
-| `terok build <project> --full-rebuild` | L0 + L1 + L2 (no cache) | Refresh base image + system packages |
-| `terok build <project> --agents <list>\|all` | L0 + L1 + L2 | One-shot override of which agents bake into L1 |
-| `terok build <project> --dev` | + L2-dev image | Manual debugging container |
+| `terok project build <project>` | L2 only | Project config changes |
+| `terok project build <project> --refresh-agents` | L0 + L1 + L2 | Bust the agent-install cache |
+| `terok project build <project> --full-rebuild` | L0 + L1 + L2 (no cache) | Refresh base image + system packages |
+| `terok project build <project> --agents <list>\|all` | L0 + L1 + L2 | One-shot override of which agents bake into L1 |
+| `terok project build <project> --dev` | + L2-dev image | Manual debugging container |
 
 `--refresh-agents` rebuilds from L0 with a fresh `AGENT_CACHE_BUST` build-arg; the per-agent install layers below the cache-bust point are re-executed, the system-package layer above it is reused.
 

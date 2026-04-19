@@ -45,7 +45,7 @@ All shared dirs use `:z` (shared SELinux label); the workspace uses `:Z` (privat
 
 > **Note:** SSH keys are **not** mounted into containers.  The vault's
 > SSH signer serves keys over TCP — private keys never enter the
-> container.  See `terok ssh-init` for key generation.
+> container.  See `terok project ssh-init` for key generation.
 
 ## SSH Key Management
 
@@ -56,7 +56,7 @@ authenticated).  Public HTTPS repos don't need SSH setup at all.
 ### Setup
 
 ```bash
-terok ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--force]
+terok project ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--force]
 ```
 
 This generates an ed25519 keypair stored at `<state_dir>/ssh-keys/<project_id>/`
@@ -102,7 +102,7 @@ static marker in the file works around this limitation.
   — you cannot have per-project or per-task Claude OAuth credentials.
 - The static marker token is not revoked between tasks.  The real OAuth
   token is still protected by the proxy and refreshed automatically.
-- API key auth for Claude (`terok auth claude` → option 2) remains
+- API key auth for Claude (`terok project auth claude` → option 2) remains
   per-task and is unaffected.
 
 ## Git Identity

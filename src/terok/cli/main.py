@@ -95,10 +95,10 @@ def main(prog: str = "terok") -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start:\n"
-            f"  1. Bootstrap:  {prog} setup                        (install host services)\n"
-            f"  2. Project:    {prog} project-wizard                (create a project)\n"
-            f"  3. Auth:       {prog} auth claude <project>         (authenticate agents)\n"
-            f"  4. Work:       {prog} task start <project_id>       (new CLI task)\n"
+            f"  1. Bootstrap:  {prog} setup                          (install host services)\n"
+            f"  2. Project:    {prog} project wizard                 (create a project)\n"
+            f"  3. Auth:       {prog} project auth claude <project>  (authenticate agents)\n"
+            f"  4. Work:       {prog} task start <project_id>        (new CLI task)\n"
             f"  5. Login:      {prog} login <project_id> <task_id>\n"
             "\n"
             "Standalone agent (no project):\n"

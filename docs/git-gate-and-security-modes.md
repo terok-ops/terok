@@ -60,7 +60,7 @@ Agent pushes are **directed to the gate** rather than upstream:
 
 ### Options
 
-**SSH agent access** (when SSH key is registered via `terok ssh-init`):
+**SSH agent access** (when SSH key is registered via `terok project ssh-init`):
 The vault's SSH signer is available even in gatekeeping mode. Useful for repos with private submodules. Ensure the key has no write access to upstream — otherwise the agent could push to upstream despite the gate configuration.
 
 **External remote** (`gatekeeping.expose_external_remote: true`):
@@ -92,8 +92,8 @@ gatekeeping:
 
 ## Gate Lifecycle
 
-1. `terok ssh-init <project>` — generate a per-project SSH key (optional for public HTTPS repos). The key is only useful if the user registers it as a deploy key on the upstream remote.
-2. `terok gate-sync <project>` — initialize or update the gate mirror (`--force-reinit` to recreate)
+1. `terok project ssh-init <project>` — generate a per-project SSH key (optional for public HTTPS repos). The key is only useful if the user registers it as a deploy key on the upstream remote.
+2. `terok project gate-sync <project>` — initialize or update the gate mirror (`--force-reinit` to recreate)
 3. Run tasks — online containers clone from gate then talk to upstream; gatekeeping containers use the gate as their default origin
 
 ---

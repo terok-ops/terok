@@ -157,11 +157,11 @@ Auth containers are ephemeral because:
 
 | Command | What it builds | When to use |
 |---------|---------------|-------------|
-| `terok build <project>` | L2 only | Normal use (reuses L0/L1) |
-| `terok build <project> --refresh-agents` | L0 + L1 + L2 | Bust the agent-install cache |
-| `terok build <project> --full-rebuild` | L0 + L1 + L2 (no cache) | Refresh base image + system packages |
-| `terok build <project> --agents <list>\|all` | L0 + L1 + L2 | One-shot override of which agents bake into L1 |
-| `terok build <project> --dev` | + L2-dev image | Manual debugging container |
+| `terok project build <project>` | L2 only | Normal use (reuses L0/L1) |
+| `terok project build <project> --refresh-agents` | L0 + L1 + L2 | Bust the agent-install cache |
+| `terok project build <project> --full-rebuild` | L0 + L1 + L2 (no cache) | Refresh base image + system packages |
+| `terok project build <project> --agents <list>\|all` | L0 + L1 + L2 | One-shot override of which agents bake into L1 |
+| `terok project build <project> --dev` | + L2-dev image | Manual debugging container |
 
 ### Image Staleness Detection
 
@@ -174,7 +174,7 @@ Container image hash ≠ Current project build hash
   "Image: old" warning in TUI
         │
         ▼
-  User should: terok build <project>
+  User should: terok project build <project>
                then: task delete + task run-cli
                or:   task stop + podman rm <container> + task run-cli
 ```

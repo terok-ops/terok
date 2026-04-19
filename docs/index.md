@@ -68,8 +68,8 @@ terok tui
 Or do the same from the command line:
 
 ```bash
-terok project-wizard                    # interactive setup
-terok auth claude myproj                # authenticate agent
+terok project wizard                    # interactive setup
+terok project auth claude myproj                # authenticate agent
 terok task start myproj                 # start a CLI agent task
 terok task start myproj --toad          # Toad multi-agent TUI (browser access)
 terok login myproj a3                   # attach to a running task by hex ID prefix
@@ -81,13 +81,13 @@ For manual project configuration or CI, see the [User Guide](usage.md).
 
 ```bash
 # Run an agent headlessly with a prompt
-terok run myproj "Fix the authentication bug"
+terok task run myproj "Fix the authentication bug"
 
 # With model override and timeout
-terok run myproj "Add tests" --model opus --timeout 3600
+terok task run myproj "Add tests" --model opus --timeout 3600
 
 # Use a specific provider
-terok run myproj "Fix the bug" --provider codex
+terok task run myproj "Fix the bug" --provider codex
 ```
 
 ### Presets
@@ -95,9 +95,9 @@ terok run myproj "Fix the bug" --provider codex
 Three presets work out of the box — no config needed:
 
 ```bash
-terok run myproj "Fix the typo" --preset solo          # single fast agent
-terok run myproj "Review auth module" --preset review   # read-only analysis
-terok run myproj "Add pagination" --preset team         # multi-agent team
+terok task run myproj "Fix the typo" --preset solo          # single fast agent
+terok task run myproj "Review auth module" --preset review   # read-only analysis
+terok task run myproj "Add pagination" --preset team         # multi-agent team
 ```
 
 Create your own in `~/.config/terok/presets/` (shared across projects) or

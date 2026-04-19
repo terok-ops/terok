@@ -78,8 +78,8 @@ terok tui
 Or do the same from the command line:
 
 ```bash
-terok project-wizard                    # interactive setup
-terok auth claude myproj                # authenticate agent
+terok project wizard                    # interactive setup
+terok project auth claude myproj                # authenticate agent
 terok task start myproj                 # start a CLI agent task
 terok task start myproj --toad          # Toad multi-agent TUI (browser access)
 terok login myproj a3                   # attach to a running task by hex ID prefix
@@ -91,13 +91,13 @@ For manual project configuration or CI, see the [User Guide](docs/usage.md).
 
 ```bash
 # Run an agent headlessly with a prompt (uses default_agent config; falls back to claude)
-terok run myproj "Fix the authentication bug"
+terok task run myproj "Fix the authentication bug"
 
 # With model override and timeout
-terok run myproj "Add tests" --model opus --timeout 3600
+terok task run myproj "Add tests" --model opus --timeout 3600
 
 # Use a specific provider
-terok run myproj "Fix the bug" --provider codex
+terok task run myproj "Fix the bug" --provider codex
 ```
 
 ### Presets
@@ -105,9 +105,9 @@ terok run myproj "Fix the bug" --provider codex
 Three presets work out of the box — no config needed:
 
 ```bash
-terok run myproj "Fix the typo" --preset solo          # single fast agent
-terok run myproj "Review auth module" --preset review   # read-only analysis
-terok run myproj "Add pagination" --preset team         # multi-agent team
+terok task run myproj "Fix the typo" --preset solo          # single fast agent
+terok task run myproj "Review auth module" --preset review   # read-only analysis
+terok task run myproj "Add pagination" --preset team         # multi-agent team
 ```
 
 Create your own in `~/.config/terok/presets/` (shared across projects) or
@@ -117,13 +117,13 @@ per-project in `<project>/presets/`. See the
 ### Common Commands
 
 ```bash
-terok projects                          # List projects
-terok config                            # Show resolved paths and config
+terok project list                          # List projects
+terok config paths                      # Show resolved paths and config
 terok task list <project>               # List tasks (hex IDs)
 terok task delete <project> <task_id>   # Delete a task
 terok login <project> <id_prefix>       # Attach to running task
-terok project-init <project>            # Full setup: ssh + generate + build + gate
-terok project-wizard                    # Interactive project creation
+terok project init <project>            # Full setup: ssh + generate + build + gate
+terok project wizard                    # Interactive project creation
 terok image usage                       # Disk usage across projects and images
 terok sickbay                           # In-container health checks
 terok panic                             # Emergency kill-switch

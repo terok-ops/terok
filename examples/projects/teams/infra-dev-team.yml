@@ -6,8 +6,8 @@
 # cross-cutting refactors, and similar medium-to-large scoped tasks.
 #
 # Usage:
-#   terok run <project> "<prompt>" --config examples/projects/teams/infra-dev-team.yml
-#   terok run <project> "<prompt>" --config examples/projects/teams/infra-dev-team.yml --provider claude --agent cli-engineer
+#   terok task run <project> "<prompt>" --config examples/projects/teams/infra-dev-team.yml
+#   terok task run <project> "<prompt>" --config examples/projects/teams/infra-dev-team.yml --provider claude --agent cli-engineer
 #
 # Or copy into a project preset:
 #   cp examples/projects/teams/infra-dev-team.yml ~/.config/terok/projects/<id>/presets/infra-team.yml

@@ -198,27 +198,27 @@ This text is pasted near the end of your project image (L2) Dockerfile.
 ### Step 4: Generate Dockerfiles
 
 ```bash
-terok generate myproj
+terok project generate myproj
 ```
 
 ### Step 5: Build Images
 
 ```bash
 # Build only L2 project images (fast, reuses existing L0/L1 layers)
-terok build myproj
+terok project build myproj
 
 # Refresh just the agent-install layers (cache bust from the AGENT_CACHE_BUST point)
-terok build myproj --refresh-agents
+terok project build myproj --refresh-agents
 
 # Rebuild from L0 (no cache) (includes base image pull and system packages)
-terok build myproj --full-rebuild
+terok project build myproj --full-rebuild
 
 # Pick which agents get baked into L1 for this build (one-shot override)
-terok build myproj --agents claude,codex
-terok build myproj --agents all
+terok project build myproj --agents claude,codex
+terok project build myproj --agents all
 
 # Optional: build a dev image from L0 as well
-terok build myproj --dev
+terok project build myproj --dev
 ```
 
 Build modes:
@@ -231,7 +231,7 @@ Build modes:
 
 The L1 (agent) image can be built with a subset of the roster instead of "everything". The selection flows from (narrowest wins):
 
-1. **Per-build CLI override** — `terok build --agents claude,codex` (above).
+1. **Per-build CLI override** — `terok project build --agents claude,codex` (above).
 2. **Per-project default** — `project.yml`:
    ```yaml
    image:
@@ -250,7 +250,7 @@ Transitive dependencies are expanded automatically — picking `blablador` or `k
 ### Step 6: Initialize SSH (for private repos)
 
 ```bash
-terok ssh-init myproj
+terok project ssh-init myproj
 ```
 
 This creates:
@@ -371,17 +371,17 @@ Supported providers: `claude`, `codex`, `copilot`, `vibe`, `blablador`, `opencod
 
 ```bash
 # Run with a prompt (uses default provider — claude unless configured otherwise)
-terok run myproj "Fix the authentication bug in login.py"
+terok task run myproj "Fix the authentication bug in login.py"
 
 # Override model and set a timeout
-terok run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
+terok task run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
 
 # Detach immediately (don't stream output)
-terok run myproj "Refactor the database layer" --no-follow
+terok task run myproj "Refactor the database layer" --no-follow
 
 # Use a specific provider
-terok run myproj "Fix the auth bug" --provider codex
-terok run myproj "Add tests" --provider copilot
+terok task run myproj "Fix the auth bug" --provider codex
+terok task run myproj "Add tests" --provider copilot
 ```
 
 The command creates a new task, starts a container, runs the agent with the given
@@ -462,10 +462,10 @@ file writes or shell commands).
 
 ```bash
 # Run restricted (agent uses vendor defaults — asks before dangerous ops)
-terok run myproj "Fix the bug" --restricted
+terok task run myproj "Fix the bug" --restricted
 
 # Explicitly unrestricted (default behavior)
-terok run myproj "Fix the bug" --unrestricted
+terok task run myproj "Fix the bug" --unrestricted
 ```
 
 The flags are mutually exclusive.  When neither is given, the value comes from
@@ -562,10 +562,10 @@ agent:
 
 ```bash
 # Include the debugger agent for this run (sub-agents require --provider claude)
-terok run myproj "Find and fix the memory leak" --provider claude --agent debugger
+terok task run myproj "Find and fix the memory leak" --provider claude --agent debugger
 
 # Include multiple non-default agents
-terok run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
+terok task run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
 ```
 
 The `--agent` flag also works with interactive modes:
@@ -597,7 +597,7 @@ Reference them in `project.yml` with `file:` (paths relative to project root).
 Pass an additional YAML file with `--config` to add more sub-agents at runtime:
 
 ```bash
-terok run myproj "Review the PR" --config /path/to/extra-agents.yml
+terok task run myproj "Review the PR" --config /path/to/extra-agents.yml
 ```
 
 The file should contain a `subagents:` list in the same format as `project.yml`.
@@ -634,8 +634,8 @@ Every task container receives instructions explaining the workspace layout, avai
 
 - **Claude**: injected via `--append-system-prompt` (system-level context)
 - **Codex**: loaded from `/home/dev/.terok/instructions.md` via `-c model_instructions_file=...`
-  in the wrapper (applies to both `terok run` and `terok task run-cli`)
-- **Other providers**: prepended to the task prompt (headless `terok run`)
+  in the wrapper (applies to both `terok task run` and `terok task run-cli`)
+- **Other providers**: prepended to the task prompt (headless `terok task run`)
 
 ### Scenarios
 
@@ -711,7 +711,7 @@ agent:
 Override all config-stack instructions with a file:
 
 ```bash
-terok run myproj "Fix the bug" --instructions path/to/instructions.md
+terok task run myproj "Fix the bug" --instructions path/to/instructions.md
 ```
 
 ### TUI
@@ -746,7 +746,7 @@ Three are bundled and work immediately — no setup needed.
 
 ### Bundled Presets
 
-The current bundled set is a starting point — run `terok presets list <project>`
+The current bundled set is a starting point — run `terok project presets <project>`
 to see what's available. The names and contents may change in future versions;
 global presets you create will shadow them automatically.
 
@@ -758,16 +758,16 @@ global presets you create will shadow them automatically.
 
 ```bash
 # Quick fix — single fast agent
-terok run myproj "Fix the typo in login.py" --preset solo
+terok task run myproj "Fix the typo in login.py" --preset solo
 
 # Code review — read-only analysis
-terok run myproj "Review the auth module for security issues" --preset review
+terok task run myproj "Review the auth module for security issues" --preset review
 
 # Full dev team — architect plans, engineers implement, testers verify
-terok run myproj "Add pagination to the /users endpoint" --preset team
+terok task run myproj "Add pagination to the /users endpoint" --preset team
 
 # Team preset with an on-demand agent enabled
-terok run myproj "Update the CLI help text" --preset team --agent cli-engineer
+terok task run myproj "Update the CLI help text" --preset team --agent cli-engineer
 ```
 
 Presets work with all task modes:
@@ -781,7 +781,7 @@ terok task run-cli myproj 1 --preset team
 
 ```bash
 # List all presets (bundled + global + project)
-terok presets list myproj
+terok project presets myproj
 
 # Show what a preset resolves to
 terok config show myproj --preset team
@@ -819,7 +819,7 @@ subagents:
 EOF
 ```
 
-Now use it anywhere: `terok run anyproject "Review PR #42" --preset quick-review`
+Now use it anywhere: `terok task run anyproject "Review PR #42" --preset quick-review`
 
 ### Preset Search Order
 
@@ -944,10 +944,10 @@ Remove a project and all its associated data (tasks, containers, images):
 
 ```bash
 # Delete with confirmation prompt
-terok project-delete myproj
+terok project delete myproj
 
 # Skip confirmation
-terok project-delete myproj --force
+terok project delete myproj --force
 ```
 
 ### Deriving a Project
@@ -955,7 +955,7 @@ terok project-delete myproj --force
 Create a new project from an existing one (shared infrastructure, fresh agent config):
 
 ```bash
-terok project-derive myproj myproj-v2
+terok project derive myproj myproj-v2
 ```
 
 ### OpenCode Config Import
