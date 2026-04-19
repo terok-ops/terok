@@ -154,13 +154,7 @@ def main(prog: str = "terok") -> None:
 
     from ..lib.core.config import make_sandbox_config
 
-    wire_group(
-        sub,
-        "executor",
-        AGENT_COMMANDS,
-        help="Task container executor commands",
-        rename={"ls": "list"},  # align with other list-style verbs
-    )
+    wire_group(sub, "executor", AGENT_COMMANDS, help="Task container executor commands")
     wire_group(
         sub,
         "gate",
@@ -185,7 +179,6 @@ def main(prog: str = "terok") -> None:
         SSH_COMMANDS,
         help="SSH key management",
         config_factory=make_sandbox_config,
-        rename={"add-key": "add", "remove-key": "remove"},
     )
 
     # Dev / shell niceties at the bottom of the help listing.

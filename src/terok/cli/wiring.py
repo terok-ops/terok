@@ -66,23 +66,6 @@ def _arg_key(arg: ArgProto) -> str:
     return arg.dest or arg.name.lstrip("-").replace("-", "_")
 
 
-class _RenamedCmd:
-    """Proxy over a :class:`CmdProto` that presents a different ``name``.
-
-    Used by :func:`wire_group` to rename sibling-package commands at wire
-    time without requiring upstream changes.  All non-``name`` attributes
-    delegate to the wrapped command — including ``handler`` and ``args``,
-    so dispatch is unaffected.
-    """
-
-    def __init__(self, inner: CmdProto, new_name: str) -> None:
-        self._inner = inner
-        self.name = new_name
-
-    def __getattr__(self, attr: str) -> Any:
-        return getattr(self._inner, attr)
-
-
 def wire(sub: argparse._SubParsersAction, cmd: CmdProto) -> None:  # type: ignore[type-arg]
     """Add a single command definition to an argparse subparser group."""
     p = sub.add_parser(cmd.name, help=cmd.help)
@@ -114,12 +97,17 @@ def wire_group(
     help: str = "",
     config_factory: Any = None,
     return_action: bool = False,
-    rename: dict[str, str] | None = None,
 ) -> tuple[argparse.ArgumentParser, argparse._SubParsersAction] | None:  # type: ignore[type-arg]
     """Mount a tuple of command definitions under a named subparser group.
 
     Creates ``<prog> <name> <subcommand>`` paths for each command in *commands*.
     When the group name is given without a subcommand, prints help.
+
+    Sibling commands flow through verbatim — terok does not cosmetically
+    rename them.  Naming consistency across the ecosystem belongs in the
+    sibling packages themselves; "minimise the special-treatment code that
+    surfaces lower-level package CLI functionality in a higher-level
+    package" is the architectural ground rule.
 
     When *config_factory* is set, ``config_factory()`` is called at dispatch
     time and the result injected as ``cfg``.  Handlers that declare ``cfg``
@@ -132,16 +120,10 @@ def wire_group(
     sentinel attribute for their own dispatcher to recognise them, and set
     ``_wired_cmd=None`` so :func:`wire_dispatch` doesn't short-circuit with
     group help.
-
-    When *rename* is set, it maps upstream command names to the names they
-    should present under in terok's CLI.  Lets terok polish sibling-package
-    verbiage (e.g. ``ls`` → ``list``) without requiring upstream coordination.
     """
     group = sub.add_parser(name, help=help)
     group_sub = group.add_subparsers(dest=f"{name}_cmd")
     for cmd in commands:
-        if rename and cmd.name in rename:
-            cmd = _RenamedCmd(cmd, rename[cmd.name])
         wire(group_sub, cmd)
     group.set_defaults(_group_help=group, _config_factory=config_factory)
     if return_action:
