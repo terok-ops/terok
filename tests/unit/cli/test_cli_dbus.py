@@ -26,27 +26,27 @@ def dbus_parser() -> argparse.ArgumentParser:
     ("argv", "expected"),
     [
         pytest.param(
-            ["dbus", "notify", "Hello"],
+            ["dbus-debug", "notify", "Hello"],
             {"dbus_cmd": "notify", "summary": "Hello", "body": "", "timeout": -1},
             id="notify-summary-only",
         ),
         pytest.param(
-            ["dbus", "notify", "Hello", "World"],
+            ["dbus-debug", "notify", "Hello", "World"],
             {"dbus_cmd": "notify", "summary": "Hello", "body": "World", "timeout": -1},
             id="notify-with-body",
         ),
         pytest.param(
-            ["dbus", "notify", "Hello", "-t", "5000"],
+            ["dbus-debug", "notify", "Hello", "-t", "5000"],
             {"dbus_cmd": "notify", "summary": "Hello", "body": "", "timeout": 5000},
             id="notify-short-timeout",
         ),
         pytest.param(
-            ["dbus", "notify", "Hello", "--timeout", "3000"],
+            ["dbus-debug", "notify", "Hello", "--timeout", "3000"],
             {"dbus_cmd": "notify", "summary": "Hello", "body": "", "timeout": 3000},
             id="notify-long-timeout",
         ),
         pytest.param(
-            ["dbus", "subscribe"],
+            ["dbus-debug", "subscribe"],
             {"dbus_cmd": "subscribe"},
             id="subscribe",
         ),
@@ -87,7 +87,7 @@ def test_dispatch_notify() -> None:
         CommandDef(name="subscribe", handler=None),
     )
     args = argparse.Namespace(
-        cmd="dbus", dbus_cmd="notify", summary="Test", body="Body", timeout=5000
+        cmd="dbus-debug", dbus_cmd="notify", summary="Test", body="Body", timeout=5000
     )
     with patch("terok.cli.commands.dbus.COMMANDS", stub_commands):
         assert dispatch(args)
@@ -105,7 +105,7 @@ def test_dispatch_subscribe() -> None:
         CommandDef(name="notify", handler=None),
         CommandDef(name="subscribe", handler=stub_subscribe, args=_real_args("subscribe")),
     )
-    args = argparse.Namespace(cmd="dbus", dbus_cmd="subscribe")
+    args = argparse.Namespace(cmd="dbus-debug", dbus_cmd="subscribe")
     with patch("terok.cli.commands.dbus.COMMANDS", stub_commands):
         assert dispatch(args)
     assert calls == [{}]
@@ -113,4 +113,4 @@ def test_dispatch_subscribe() -> None:
 
 def test_dispatch_unknown_subcommand_returns_false() -> None:
     """Unknown dbus subcommand returns False (not handled)."""
-    assert not dispatch(argparse.Namespace(cmd="dbus", dbus_cmd="nonexistent"))
+    assert not dispatch(argparse.Namespace(cmd="dbus-debug", dbus_cmd="nonexistent"))

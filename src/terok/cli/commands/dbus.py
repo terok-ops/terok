@@ -4,8 +4,11 @@
 """D-Bus desktop notification subcommands.
 
 Wires terok-dbus's :data:`COMMANDS` registry into terok's CLI as
-``terok dbus notify`` and ``terok dbus subscribe``.  Handlers are
-async coroutines dispatched via :func:`asyncio.run`.
+``terok dbus-debug notify`` and ``terok dbus-debug subscribe``.
+Handlers are async coroutines dispatched via :func:`asyncio.run`.
+
+Exposed under the ``dbus-debug`` group so end users can see it's
+internal/temporary until the notifications feature matures.
 """
 
 from __future__ import annotations
@@ -32,8 +35,11 @@ def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register the ``dbus`` subcommand group from the terok-dbus registry."""
-    p = subparsers.add_parser("dbus", help="D-Bus desktop notification tools (terok-dbus)")
+    """Register the ``dbus-debug`` subcommand group from the terok-dbus registry."""
+    p = subparsers.add_parser(
+        "dbus-debug",
+        help="Debug D-Bus notifications (internal; kept until the feature matures)",
+    )
     sub = p.add_subparsers(dest="dbus_cmd", required=True)
 
     for cmd in COMMANDS:
@@ -43,8 +49,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 
 def dispatch(args: argparse.Namespace) -> bool:
-    """Handle dbus commands.  Returns True if handled."""
-    if getattr(args, "cmd", None) != "dbus":
+    """Handle dbus-debug commands.  Returns True if handled."""
+    if getattr(args, "cmd", None) != "dbus-debug":
         return False
 
     cmd_name = getattr(args, "dbus_cmd", None)
