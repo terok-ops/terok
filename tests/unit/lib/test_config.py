@@ -631,6 +631,22 @@ def test_is_experimental_cli_flag_wins(monkeypatch: pytest.MonkeyPatch, tmp_path
 # ---------- Claude agent config getters ----------
 
 
+def test_vault_transport_defaults_to_socket(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Empty config → ``services.mode=socket`` → vault transport ``"socket"``."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_vault_transport() == "socket"
+
+
+def test_vault_transport_follows_services_mode_tcp(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``services.mode=tcp`` → vault transport ``"direct"`` (container connects via TCP)."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "services:\n  mode: tcp\n")))
+    assert cfg.get_vault_transport() == "direct"
+
+
 def test_claude_allow_oauth_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """``get_claude_allow_oauth()`` defaults to False."""
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
