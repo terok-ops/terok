@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
@@ -17,7 +16,13 @@ import pytest
 from terok.lib.core.projects import load_project
 from terok.lib.domain.task_logs import LogViewOptions, task_logs
 from terok.lib.orchestration.environment import build_task_env_and_volumes
-from terok.lib.orchestration.task_runners import task_run_cli, task_run_toad
+from terok.lib.orchestration.task_runners import (
+    _ensure_toad_token,
+    _rehydrate_toad_token,
+    _toad_browser_url,
+    task_run_cli,
+    task_run_toad,
+)
 from terok.lib.orchestration.tasks import (
     TaskDeleteResult,
     get_tasks,
@@ -26,6 +31,7 @@ from terok.lib.orchestration.tasks import (
     task_list,
     task_new,
 )
+from terok.lib.util.net import url_host
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from terok.tui.clipboard import (
     copy_to_clipboard_detailed,
@@ -534,10 +540,13 @@ class TestTask:
 
             spec = captured_runspec(sandbox_factory)
             bash_cmd = spec.command[-1]
+            # The in-container supervisor (``terok-toad-entry``) now owns
+            # the port wiring; terok only passes --public-url through.
+            assert bash_cmd.startswith("terok-toad-entry")
             assert "--public-url http://127.0.0.1:7861" in bash_cmd
-            assert "-p 8080" in bash_cmd
 
-            # Port forwarding maps host port to container toad port
+            # Host publishes port 8080 (Caddy); toad listens on loopback
+            # 8081 inside the container and is not published.
             extra = list(spec.extra_args)
             port_idx = extra.index("-p")
             assert extra[port_idx + 1] == "127.0.0.1:7861:8080"
@@ -940,6 +949,230 @@ class TestTask:
             # Verify gatekeeping mode settings are still correct
             assert "http://" in env["CODE_REPO"]
             assert _gate_repo_fragment(project_id) in env["CODE_REPO"]
+
+
+class TestToadHelpers:
+    """Tests for the toad-token + URL helpers that gate Caddy ingress."""
+
+    def test_url_host_brackets_ipv6(self) -> None:
+        """IPv6 literals get wrapped in square brackets, others pass through."""
+        assert url_host("127.0.0.1") == "127.0.0.1"
+        assert url_host("example.com") == "example.com"
+        assert url_host("::1") == "[::1]"
+        assert url_host("2001:db8::1") == "[2001:db8::1]"
+        # Already-bracketed input is left alone (no double-bracketing).
+        assert url_host("[::1]") == "[::1]"
+
+    def test_toad_browser_url_embeds_token_and_brackets_ipv6(self) -> None:
+        """The first-hit URL seeds the Caddy cookie and brackets IPv6 hosts."""
+        assert _toad_browser_url("127.0.0.1", 8080, "abc") == "http://127.0.0.1:8080/?token=abc"
+        assert _toad_browser_url("::1", 8080, "abc") == "http://[::1]:8080/?token=abc"
+
+    def test_ensure_toad_token_creates_file_with_0600(self, tmp_path: Path) -> None:
+        """Fresh call mints a urlsafe token, writes it 0600, returns it."""
+        token = _ensure_toad_token(tmp_path)
+        path = tmp_path / "toad.token"
+        import stat as _stat
+
+        assert path.read_text() == token
+        assert _stat.S_IMODE(path.stat().st_mode) == 0o600
+        # 32-byte urlsafe token → at least 43 chars, plain `[A-Za-z0-9_-]`.
+        assert len(token) >= 43
+        assert re.match(r"^[A-Za-z0-9_\-]+$", token)
+
+    def test_ensure_toad_token_reuses_existing(self, tmp_path: Path) -> None:
+        """Passing *existing* rewrites the same value (restart path)."""
+        token = _ensure_toad_token(tmp_path, existing="deadbeef")
+        assert token == "deadbeef"
+        assert (tmp_path / "toad.token").read_text() == "deadbeef"
+
+    def test_ensure_toad_token_replaces_symlink_without_clobbering_victim(
+        self, tmp_path: Path
+    ) -> None:
+        """A pre-staged symlink at the token path is atomically replaced — victim untouched."""
+        victim = tmp_path / "victim"
+        victim.write_text("sensitive")
+        (tmp_path / "toad.token").symlink_to(victim)
+
+        token = _ensure_toad_token(tmp_path)
+
+        # The symlink is gone, replaced by a real 0600 regular file.
+        import stat as _stat
+
+        st = (tmp_path / "toad.token").lstat()
+        assert _stat.S_ISREG(st.st_mode)
+        assert _stat.S_IMODE(st.st_mode) == 0o600
+        assert (tmp_path / "toad.token").read_text() == token
+        # Crucially, the victim's content stayed intact (no truncation).
+        assert victim.read_text() == "sensitive"
+
+    def test_ensure_toad_token_replaces_hardlink_without_clobbering_peer(
+        self, tmp_path: Path
+    ) -> None:
+        """A pre-staged hardlink at the token path doesn't leak into the peer."""
+        victim = tmp_path / "victim"
+        victim.write_text("sensitive")
+        os.link(victim, tmp_path / "toad.token")
+
+        token = _ensure_toad_token(tmp_path)
+
+        assert (tmp_path / "toad.token").read_text() == token
+        # The peer file (another hardlink to the original inode) still holds
+        # its own content — the atomic rename gave us a fresh inode.
+        assert victim.read_text() == "sensitive"
+
+    def test_rehydrate_toad_token_writes_file_from_metadata(self, tmp_path: Path) -> None:
+        """Saved token in ``meta`` is returned and rewritten to disk."""
+        project_id = "proj_rehydrate"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ):
+            task_id = task_new(project_id)
+            project = load_project(project_id)
+            agent_cfg = project.tasks_root / str(task_id) / "agent-config"
+            agent_cfg.mkdir(parents=True, exist_ok=True)
+
+            out = _rehydrate_toad_token(
+                project, task_id, {"web_token": "persisted-value"}, cname="c1"
+            )
+            assert out == "persisted-value"
+            assert (agent_cfg / "toad.token").read_text() == "persisted-value"
+
+    def test_rehydrate_toad_token_requires_metadata(self) -> None:
+        """Missing ``web_token`` raises a clear SystemExit — tells the user to re-create."""
+        project_id = "proj_no_token"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ):
+            task_id = task_new(project_id)
+            project = load_project(project_id)
+            with pytest.raises(SystemExit, match="no saved web_token"):
+                _rehydrate_toad_token(project, task_id, {}, cname="c1")
+
+
+class TestResumeToadContainer:
+    """End-to-end tests for the existing-container resume branch of ``task_run_toad``."""
+
+    @staticmethod
+    def _seed_toad_meta(project_id: str, task_id: str, *, port: int, token: str) -> None:
+        """Preload task metadata as if a toad launch had already succeeded."""
+        project = load_project(project_id)
+        from terok.lib.orchestration.tasks import load_task_meta
+
+        _, meta_path = load_task_meta(project.id, task_id, "toad")
+        meta = yaml_load(meta_path.read_text(encoding="utf-8"))
+        meta.update({"mode": "toad", "web_port": port, "web_token": token})
+        meta_path.write_text(yaml_dump(meta))
+        (project.tasks_root / str(task_id) / "agent-config").mkdir(parents=True, exist_ok=True)
+
+    def test_resume_running_container_prints_tokenized_url(self) -> None:
+        """A running container short-circuits with the printed ``?token=…`` URL."""
+        project_id = "proj_resume_running"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ):
+            tid = task_new(project_id)
+            self._seed_toad_meta(project_id, tid, port=7862, token="tok-running")
+            buf = StringIO()
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.get_container_state",
+                    return_value="running",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.assign_web_port",
+                    return_value=7862,
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.ensure_vault",
+                ),
+                redirect_stdout(buf),
+            ):
+                task_run_toad(project_id, tid)
+            out = buf.getvalue()
+            assert "is already running" in out
+            assert "?token=tok-running" in out
+            # Token file rehydrated even though the container was already up.
+            project = load_project(project_id)
+            assert (
+                project.tasks_root / str(tid) / "agent-config" / "toad.token"
+            ).read_text() == "tok-running"
+
+    def test_resume_stopped_container_restarts_and_prints_url(self) -> None:
+        """An existing-but-stopped container is started again with the same token."""
+        project_id = "proj_resume_stopped"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ):
+            tid = task_new(project_id)
+            self._seed_toad_meta(project_id, tid, port=7863, token="tok-stopped")
+            buf = StringIO()
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.get_container_state",
+                    return_value="exited",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.assign_web_port",
+                    return_value=7863,
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.ensure_vault",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners._podman_start",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners._assert_running",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners._apply_shield_policy",
+                ),
+                redirect_stdout(buf),
+            ):
+                task_run_toad(project_id, tid)
+            out = buf.getvalue()
+            assert "Starting existing container" in out
+            assert "Container started" in out
+            assert "?token=tok-stopped" in out
+
+    def test_resume_rejects_changed_port(self) -> None:
+        """If the saved port is taken by another user, fail fast."""
+        project_id = "proj_resume_taken"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ):
+            tid = task_new(project_id)
+            self._seed_toad_meta(project_id, tid, port=7864, token="tok")
+            with (
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.get_container_state",
+                    return_value="running",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.assign_web_port",
+                    return_value=9999,  # allocator returned a different port
+                ),
+                pytest.raises(SystemExit, match="no longer available"),
+            ):
+                task_run_toad(project_id, tid)
 
 
 class TestTaskLogs:

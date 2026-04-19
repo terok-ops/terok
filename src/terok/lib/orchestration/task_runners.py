@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+import secrets
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -51,12 +53,13 @@ from ..util.ansi import (
     supports_color as _supports_color,
     yellow as _yellow,
 )
+from ..util.net import url_host
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .agent_config import resolve_agent_config
 from .container_exec import container_git_diff
 from .environment import build_task_env_and_volumes, ensure_vault
 from .hooks import run_hook
-from .ports import assign_web_port
+from .ports import assign_web_port, release_web_port
 from .tasks import (
     container_name,
     load_task_meta,
@@ -69,7 +72,11 @@ if TYPE_CHECKING:
 
 _LOCALHOST = "127.0.0.1"
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
-_TOAD_CONTAINER_PORT = 8080
+_TOAD_PUBLIC_PORT = 8080
+"""Port that Caddy binds inside the container — the one podman publishes."""
+_TOAD_INTERNAL_PORT = 8081
+"""Loopback port that toad binds inside the container — reached only via Caddy."""
+_TOAD_TOKEN_FILE_NAME = "toad.token"  # nosec B105 — filename, not a credential
 _ANTHROPIC_API_HOST = "api.anthropic.com"
 _FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
 _CONTAINER_TEROK_CONFIG = "/home/dev/.terok"
@@ -96,6 +103,123 @@ def _apply_unrestricted_env(env: dict[str, str]) -> None:
 
     env["TEROK_UNRESTRICTED"] = "1"
     env.update(collect_all_auto_approve_env())
+
+
+def _ensure_toad_token(agent_config_dir: Path, existing: str | None = None) -> str:
+    """Per-task auth token for Caddy, written 0600 to ``toad.token`` and returned.
+
+    Reuses *existing* (restart path) or mints a fresh 32-byte urlsafe
+    string.  The write goes through a same-directory temp file + atomic
+    ``os.replace``: ``agent-config`` is a bind mount, and a stopped
+    container could pre-stage a symlink *or a hardlink* at
+    ``toad.token`` — ``O_NOFOLLOW`` protects against the former, but
+    only a rename that never touches the destination inode protects
+    against the latter (truncating a hardlink clobbers the peer's
+    content).
+    """
+    token = existing or secrets.token_urlsafe(32)
+    dir_fd = os.open(agent_config_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    tmp_name = f".{_TOAD_TOKEN_FILE_NAME}.{secrets.token_hex(8)}"
+    try:
+        fd = os.open(
+            tmp_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=dir_fd,
+        )
+        try:
+            os.write(fd, token.encode())
+        finally:
+            os.close(fd)
+        try:
+            os.replace(tmp_name, _TOAD_TOKEN_FILE_NAME, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        except BaseException:
+            # Clean up the temp file if replace failed for any reason.
+            try:
+                os.unlink(tmp_name, dir_fd=dir_fd)
+            except FileNotFoundError:
+                pass
+            raise
+    finally:
+        os.close(dir_fd)
+    return token
+
+
+def _toad_browser_url(public_host: str, port: int, token: str) -> str:
+    """Return the first-hit URL that seeds the Caddy-set auth cookie."""
+    return f"http://{url_host(public_host)}:{port}/?token={token}"
+
+
+def _agent_config_dir(project: ProjectConfig, task_id: str) -> Path:
+    """Return the agent-config mount path for *task_id* under *project*."""
+    return project.tasks_root / str(task_id) / "agent-config"
+
+
+def _rehydrate_toad_token(project: ProjectConfig, task_id: str, meta: dict, cname: str) -> str:
+    """Saved toad token from *meta*, rewritten to ``agent-config/toad.token``.
+
+    The file may have been cleaned up between runs even when the token
+    persists in metadata; rewriting on every reuse is cheap insurance.
+    """
+    saved_token = meta.get("web_token")
+    if not isinstance(saved_token, str):
+        raise SystemExit(
+            f"Existing toad container {cname} has no saved web_token in metadata "
+            f"(created before the Caddy auth gate landed).  Re-create the task."
+        )
+    _ensure_toad_token(_agent_config_dir(project, task_id), existing=saved_token)
+    return saved_token
+
+
+def _resume_toad_container(
+    *,
+    project: ProjectConfig,
+    task_id: str,
+    cname: str,
+    container_state: str,
+    meta: dict,
+    meta_path: Path,
+    pub_host: str,
+) -> None:
+    """Fast-path for a toad task whose container already exists: rehydrate the token, start it if stopped, print the URL."""
+    saved_port = meta.get("web_port")
+    if not isinstance(saved_port, int):
+        raise SystemExit(f"Existing toad container {cname} has no saved web_port in metadata.")
+    actual = assign_web_port(project.id, task_id, preferred=saved_port)
+    if actual != saved_port:
+        # The registry handed us a fallback port — release it so the task
+        # doesn't leak a claim we'll never publish.
+        release_web_port(project.id, task_id)
+        raise SystemExit(
+            f"Port {saved_port} for {project.id}/{task_id} is no longer available "
+            f"(got {actual}).  Re-create the task to use the new port."
+        )
+    ensure_vault()
+    saved_token = _rehydrate_toad_token(project, task_id, meta, cname)
+    color_enabled = _supports_color()
+    url = _toad_browser_url(pub_host, saved_port, saved_token)
+    if container_state == "running":
+        print(f"Container {_green(cname, color_enabled)} is already running.")
+        print(f"Toad: {_blue(url, color_enabled)}")
+        return
+    print(f"Starting existing container {_green(cname, color_enabled)}...")
+    task_dir = project.tasks_root / str(task_id)
+    _podman_start(cname)
+    _assert_running(cname)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="toad",
+        cname=cname,
+        web_port=saved_port,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
+    _apply_shield_policy(project, cname, task_dir, is_restart=True)
+    print("Container started.")
+    print(f"Toad: {_blue(url, color_enabled)}")
 
 
 @dataclass(frozen=True)
@@ -537,10 +661,13 @@ def task_run_toad(
     preset: str | None = None,
     unrestricted: bool | None = None,
 ) -> None:
-    """Launch Toad multi-agent TUI served over the web for browser access.
+    """Launch the Toad multi-agent TUI behind Caddy for token-gated browser access.
 
-    Uses the same CLI image as interactive tasks but with ``toad --serve``
-    as the entrypoint and a forwarded port for browser access.
+    Same CLI image as interactive tasks, but the container entrypoint is
+    ``terok-toad-entry``: it starts Caddy on the published port, toad on
+    an internal loopback port, and emits ``TEROK_READY`` once both are
+    listening.  Caddy enforces the per-task token (see
+    :func:`_ensure_toad_token`) on every request.
     """
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id, "toad")
@@ -551,41 +678,15 @@ def task_run_toad(
     pub_host = get_public_host()
 
     if container_state is not None:
-        # Existing container — reuse its saved port (can't change the mapping).
-        saved_port = meta.get("web_port")
-        if not isinstance(saved_port, int):
-            raise SystemExit(f"Existing toad container {cname} has no saved web_port in metadata.")
-        actual = assign_web_port(project.id, task_id, preferred=saved_port)
-        if actual != saved_port:
-            raise SystemExit(
-                f"Port {saved_port} for {project.id}/{task_id} is no longer available "
-                f"(got {actual}).  Re-create the task to use the new port."
-            )
-        ensure_vault()
-        color_enabled = _supports_color()
-        url = f"http://{pub_host}:{saved_port}/"
-        if container_state == "running":
-            print(f"Container {_green(cname, color_enabled)} is already running.")
-            print(f"Toad: {_blue(url, color_enabled)}")
-            return
-        print(f"Starting existing container {_green(cname, color_enabled)}...")
-        task_dir = project.tasks_root / str(task_id)
-        _podman_start(cname)
-        _assert_running(cname)
-        run_hook(
-            "post_start",
-            project.hook_post_start,
-            project_id=project.id,
+        _resume_toad_container(
+            project=project,
             task_id=task_id,
-            mode="toad",
             cname=cname,
-            web_port=saved_port,
-            task_dir=task_dir,
+            container_state=container_state,
+            meta=meta,
             meta_path=meta_path,
+            pub_host=pub_host,
         )
-        _apply_shield_policy(project, cname, task_dir, is_restart=True)
-        print("Container started.")
-        print(f"Toad: {_blue(url, color_enabled)}")
         return
 
     # New container — allocate a fresh port.
@@ -596,6 +697,12 @@ def task_run_toad(
 
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(VolumeSpec(agent_config_dir, _CONTAINER_TEROK_CONFIG, sharing=Sharing.PRIVATE))
+
+    token = _ensure_toad_token(agent_config_dir)
+    meta["web_token"] = token
+
+    env["TOAD_PUBLIC_PORT"] = str(_TOAD_PUBLIC_PORT)
+    env["TOAD_INTERNAL_PORT"] = str(_TOAD_INTERNAL_PORT)
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
     if unrestricted is None:
@@ -618,16 +725,22 @@ def task_run_toad(
         meta["preset"] = preset
     meta_path.write_text(_yaml_dump(meta))
 
-    # Bind to all interfaces when serving to LAN (non-loopback public host).
-    bind_addr = _LOCALHOST if pub_host in _LOOPBACK_HOSTS else "0.0.0.0"  # nosec B104
+    # Preserve the address family when the public host is a loopback — binding
+    # ::1 to 127.0.0.1 would make the URL we print (``http://[::1]:…``)
+    # unreachable.  LAN exposure still goes to ``0.0.0.0``.
+    if pub_host == "::1":
+        bind_addr = "[::1]"
+    elif pub_host in _LOOPBACK_HOSTS:
+        bind_addr = _LOCALHOST
+    else:
+        bind_addr = "0.0.0.0"  # nosec B104
 
     task_dir = project.tasks_root / str(task_id)
-    toad_cmd = (
-        f"init-ssh-and-repo.sh"
-        f" && toad --serve -H 0.0.0.0 -p {_TOAD_CONTAINER_PORT}"
-        f" --public-url http://{pub_host}:{port}"
-        f" /workspace"
-    )
+    # ``terok-toad-entry`` (from the caddy/toad roster entries) owns the
+    # in-container choreography: it starts Caddy on ``_TOAD_PUBLIC_PORT``,
+    # launches toad on loopback ``_TOAD_INTERNAL_PORT``, waits for both to
+    # bind, and emits the ``TEROK_READY`` readiness marker.
+    toad_cmd = f"terok-toad-entry --public-url http://{url_host(pub_host)}:{port} /workspace"
     run_hook(
         "pre_start",
         project.hook_pre_start,
@@ -646,7 +759,7 @@ def task_run_toad(
         volumes=volumes,
         project=project,
         task_dir=task_dir,
-        extra_args=["-p", f"{bind_addr}:{port}:{_TOAD_CONTAINER_PORT}"],
+        extra_args=["-p", f"{bind_addr}:{port}:{_TOAD_PUBLIC_PORT}"],
         command=["bash", "-lc", toad_cmd],
     )
     _apply_shield_policy(project, cname, task_dir, is_restart=False)
@@ -663,8 +776,8 @@ def task_run_toad(
     )
 
     def _toad_ready(line: str) -> bool:
-        """Return True when textual-serve reports it is serving."""
-        return "Serving " in line
+        """Return True when the supervisor wrapper reports both listeners are up."""
+        return "TEROK_READY" in line
 
     ready = stream_initial_logs(
         container_name=cname,
@@ -692,7 +805,7 @@ def task_run_toad(
     meta_path.write_text(_yaml_dump(meta))
 
     color_enabled = _supports_color()
-    url = f"http://{pub_host}:{port}/"
+    url = _toad_browser_url(pub_host, port, token)
     print(
         f"\n>> Toad is serving."
         f"\n- Name: {_green(cname, color_enabled)}"
@@ -1063,6 +1176,22 @@ def task_restart(project_id: str, task_id: str) -> None:
     print(f"Restarting task {project_id}/{task_id} ({mode})...")
     ensure_vault()
 
+    # Validate the preconditions that would fail the restart *before*
+    # stopping a healthy container — taking down a working service only
+    # to then error out is a worse outcome than refusing to stop.
+    if container_state is not None:
+        web_port = meta.get("web_port")
+        if isinstance(web_port, int):
+            actual = assign_web_port(project.id, task_id, preferred=web_port)
+            if actual != web_port:
+                release_web_port(project.id, task_id)
+                raise SystemExit(
+                    f"Port {web_port} for {project.id}/{task_id} is no longer available "
+                    f"(got {actual}).  Re-create the task to use the new port."
+                )
+        if mode == "toad":
+            _rehydrate_toad_token(project, task_id, meta, cname)
+
     if container_state == "running":
         # Container is running - stop it first, then start it again
         try:
@@ -1086,15 +1215,6 @@ def task_restart(project_id: str, task_id: str) -> None:
         )
 
     if container_state is not None:
-        # Container exists (stopped/exited, or just stopped above) - start it
-        web_port = meta.get("web_port")
-        if isinstance(web_port, int):
-            actual = assign_web_port(project.id, task_id, preferred=web_port)
-            if actual != web_port:
-                raise SystemExit(
-                    f"Port {web_port} for {project.id}/{task_id} is no longer available "
-                    f"(got {actual}).  Re-create the task to use the new port."
-                )
         task_dir = project.tasks_root / str(task_id)
         _podman_start(cname)
         _assert_running(cname)
@@ -1116,8 +1236,9 @@ def task_restart(project_id: str, task_id: str) -> None:
             _print_login_instructions(project_id, task_id, cname, color_enabled)
         elif mode == "toad":
             port = meta.get("web_port")
-            if port:
-                print(f"Toad: http://{get_public_host()}:{port}/")
+            token = meta.get("web_token")
+            if isinstance(port, int) and isinstance(token, str):
+                print(f"Toad: {_toad_browser_url(get_public_host(), port, token)}")
     else:
         # Container is gone — restart can't recreate it.  User must start
         # a fresh task with ``task run``.

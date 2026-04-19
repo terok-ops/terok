@@ -16,7 +16,7 @@ You are running inside an isolated Podman container managed by terok.
 
 ## Pre-installed tools
 
-git, gh (GitHub CLI), glab (GitLab CLI), rg (ripgrep), fd-find, jq, yq, ast-grep (structural code search/rewrite using AST patterns; `ast-grep run -p 'PATTERN' -l LANG` to search), toad (multi-agent TUI via ACP; `toad` to launch, `toad -a claude` to skip agent selection).
+git, gh (GitHub CLI), glab (GitLab CLI), rg (ripgrep), fd-find, jq, yq, ast-grep (structural code search/rewrite using AST patterns; `ast-grep run -p 'PATTERN' -l LANG` to search).
 
 Python 3 and Node.js are available. Use `sudo apt install` or `pip`/`npm` for anything else.
 

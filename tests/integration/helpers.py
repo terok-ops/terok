@@ -342,8 +342,8 @@ def write_fake_podman(bin_dir: Path, state_path: Path) -> Path:
 
             def ready_marker(args: list[str]) -> str:
                 joined = " ".join(args)
-                if "toad --serve" in joined:
-                    return "Serving http://0.0.0.0:8080"
+                if "terok-toad-entry" in joined:
+                    return "TEROK_READY"
                 if any(arg == "-p" for arg in args):
                     return "Terok Web UI started"
                 return "__CLI_READY__"

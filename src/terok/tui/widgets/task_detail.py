@@ -14,6 +14,7 @@ from ...lib.core.config import SHIELD_SECURITY_HINT, get_public_host
 from ...lib.core.task_display import STATUS_DISPLAY, mode_info
 from ...lib.orchestration.tasks import TaskMeta
 from ...lib.util.emoji import render_emoji
+from ...lib.util.net import url_host
 
 
 def _get_css_variables(widget: Static) -> dict[str, str]:
@@ -67,12 +68,17 @@ def render_task_details(
     if task.status == "running" and image_old:
         lines.append(Text.assemble("Image:     ", Text("old", style=warning_style)))
     if task.web_port:
-        lines.append(
-            Text.assemble(
-                "Web URL:   ",
-                Text(f"http://{get_public_host()}:{task.web_port}/", style=accent_style),
-            )
-        )
+        base_url = f"http://{url_host(get_public_host())}:{task.web_port}/"
+        # Token in the query is what Caddy trades for its auth cookie.
+        # Render the full URL verbatim so users without OSC-8 support
+        # (and copy-paste) still get the tokenised URL.
+        link_url = f"{base_url}?token={task.web_token}" if task.web_token else base_url
+        # Route clicks through Textual's ``open_url`` action instead of
+        # an OSC-8 hyperlink — xterm.js's OSC handler shows a "could be
+        # dangerous" confirm dialog for every click, but the ``open_url``
+        # meta-message goes straight to ``window.open`` on the client.
+        click_style = accent_style + Style.from_meta({"@click": f"open_link({link_url!r})"})
+        lines.append(Text.assemble("Web URL:   ", Text(link_url, style=click_style)))
     if task.mode == "cli" and project_id:
         lines.append(
             Text.assemble(
@@ -177,3 +183,7 @@ class TaskDetails(Static):
             shield_hooks_ok=hooks_ok,
         )
         content.update(rendered)
+
+    def action_open_link(self, href: str) -> None:
+        """Open *href* via the app's URL driver — no xterm.js confirm dialog."""
+        self.app.open_url(href)

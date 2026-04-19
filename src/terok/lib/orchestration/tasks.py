@@ -115,6 +115,7 @@ class TaskMeta(TaskState):
     mode: str | None
     workspace: str
     web_port: int | None
+    web_token: str | None = None
     backend: str | None = None
     preset: str | None = None
     name: str = ""
@@ -255,6 +256,7 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
         mode=mode,
         workspace=raw.get("workspace", ""),
         web_port=raw.get("web_port"),
+        web_token=raw.get("web_token"),
         backend=raw.get("backend"),
         container_state=live_state,
         exit_code=raw.get("exit_code"),
@@ -503,6 +505,7 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     mode=mode,
                     workspace=meta.get("workspace", ""),
                     web_port=meta.get("web_port"),
+                    web_token=meta.get("web_token"),
                     backend=meta.get("backend"),
                     exit_code=meta.get("exit_code"),
                     deleting=bool(meta.get("deleting")),
@@ -981,6 +984,7 @@ def task_status(project_id: str, task_id: str) -> None:
         mode=mode,
         workspace=meta.get("workspace", ""),
         web_port=web_port,
+        web_token=meta.get("web_token"),
         backend=meta.get("backend"),
         exit_code=exit_code,
         deleting=bool(meta.get("deleting")),
