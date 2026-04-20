@@ -32,7 +32,7 @@ from terok.lib.orchestration.task_runners import (
     task_followup_headless,
     task_run_headless,
 )
-from tests.test_utils import assert_hex_id, captured_runspec, mock_git_config, write_project
+from tests.test_utils import assert_task_id, captured_runspec, mock_git_config, write_project
 
 
 @dataclass
@@ -339,7 +339,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_hl", "Fix the auth bug"),
             )
 
-            assert_hex_id(result.task_id)
+            assert_task_id(result.task_id)
             agent_config_dir, _meta_path = task_paths(base, "proj_hl", result.task_id)
             prompt_file = agent_config_dir / "prompt.txt"
             assert prompt_file.is_file()
@@ -453,7 +453,7 @@ class TestTaskRunHeadless:
                 write_runner_project(base, "proj_name"),
                 HeadlessRunRequest("proj_name", "test"),
             )
-            assert_hex_id(result.task_id)
+            assert_task_id(result.task_id)
             assert result.last_spec.container_name == f"proj_name-run-{result.task_id}"
 
     def test_headless_metadata_updated(self) -> None:
@@ -483,7 +483,7 @@ class TestTaskRunHeadless:
 
             result.wait_mock.assert_not_called()
             assert "detached" in result.output.lower()
-            assert_hex_id(result.task_id)
+            assert_task_id(result.task_id)
             assert f"proj_nf-run-{result.task_id}" in result.output
 
     def test_headless_uses_claude_function_in_command(self) -> None:

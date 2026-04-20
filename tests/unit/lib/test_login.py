@@ -77,13 +77,11 @@ class TestLogin:
     ) -> None:
         mock_runtime.container.return_value.state = container_state
         with project_env(project_yaml(project_id), project_id=project_id) as ctx:
-            task_id = "deadbeef"  # nonexistent by default
+            task_id = "k3v8h"  # nonexistent by default
             if project_id != "proj_login_unknown":
                 task_id = setup_task_with_mode(ctx, project_id, mode=mode)
             with pytest.raises(SystemExit) as exc_ctx:
-                task_login(
-                    project_id, "deadbeef" if project_id == "proj_login_unknown" else task_id
-                )
+                task_login(project_id, "k3v8h" if project_id == "proj_login_unknown" else task_id)
             assert error_text in str(exc_ctx.value)
 
     def test_task_login_success(self, mock_runtime) -> None:

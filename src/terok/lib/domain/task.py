@@ -79,7 +79,7 @@ class Task:
 
     @property
     def id(self) -> str:
-        """Return the task's hex ID."""
+        """Return the task's ID."""
         return self._meta.task_id
 
     @property

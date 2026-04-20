@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from tests.test_utils import assert_hex_id
+from tests.test_utils import assert_task_id
 from tests.testnet import EXAMPLE_UPSTREAM_URL
 
 from ..helpers import NEW_TASK_MARKER, TerokIntegrationEnv
@@ -26,8 +26,8 @@ git:
 
 
 def _extract_task_id(stdout: str) -> str:
-    """Extract the hex task ID from 'Created task <id> ...' output."""
-    match = re.search(r"Created task ([0-9a-f]{8})", stdout)
+    """Extract the task ID from 'Created task <id> ...' output."""
+    match = re.search(r"Created task ([ghjkmnp-tv-z][0-9][0-9a-hjkmnp-tv-z]{3})", stdout)
     assert match, f"Could not extract task ID from: {stdout!r}"
     return match.group(1)
 
@@ -49,7 +49,7 @@ class TestTaskLifecycle:
         terok_env.run_cli("task", "new", "demo", "--name", "Docs Sweep", prog="terokctl")
 
         tid = _extract_task_id(created.stdout)
-        assert_hex_id(tid)
+        assert_task_id(tid)
         workspace = terok_env.task_workspace("demo", tid)
         assert f"Created task {tid} (fix-login-bug)" in created.stdout
         assert workspace.is_dir()

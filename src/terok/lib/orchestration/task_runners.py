@@ -471,6 +471,7 @@ def _run_container(
             sealed=project.is_sealed,
             hooks=hooks,
             extra_args=merged_args,
+            hostname=cname,
         )
     except FileNotFoundError as exc:
         raise SystemExit(f"podman not found; please install podman ({exc})") from exc

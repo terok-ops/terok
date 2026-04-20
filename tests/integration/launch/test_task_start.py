@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from terok.lib.util.yaml import load as yaml_load
-from tests.test_utils import assert_hex_id
+from tests.test_utils import assert_task_id
 from tests.testnet import EXAMPLE_UPSTREAM_URL, LOCALHOST, localhost_url
 
 from ..helpers import TerokIntegrationEnv, write_fake_podman
@@ -74,8 +74,8 @@ def _env_entries(args: list[str]) -> set[str]:
 
 
 def _extract_task_id(stdout: str) -> str:
-    """Extract the hex task ID from 'Created task <id> ...' output."""
-    match = re.search(r"Created task ([0-9a-f]{8})", stdout)
+    """Extract the task ID from 'Created task <id> ...' output."""
+    match = re.search(r"Created task ([ghjkmnp-tv-z][0-9][0-9a-hjkmnp-tv-z]{3})", stdout)
     assert match, f"Could not extract task ID from: {stdout!r}"
     return match.group(1)
 
@@ -107,7 +107,7 @@ class TestLaunchWorkflows:
         )
 
         tid = _extract_task_id(result.stdout)
-        assert_hex_id(tid)
+        assert_task_id(tid)
         cli_container = f"{PROJECT_ID}-cli-{tid}"
         meta = yaml_load(terok_env.task_meta_path(PROJECT_ID, tid).read_text(encoding="utf-8"))
         state = _load_fake_podman_state(state_path)

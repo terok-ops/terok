@@ -65,24 +65,24 @@ class TestCompleteTaskIds:
         assert complete_task_ids("", argparse.Namespace(project_id=None)) == []
 
     def test_lists_tasks_for_project(self) -> None:
-        tasks = [SimpleNamespace(task_id="ab12cd34"), SimpleNamespace(task_id="cd56ef78")]
+        tasks = [SimpleNamespace(task_id="k3v8h"), SimpleNamespace(task_id="p7fmn")]
         with patch("terok.cli.commands._completers.get_tasks", return_value=tasks) as mock:
             result = complete_task_ids("", argparse.Namespace(project_id="myproj"))
         mock.assert_called_once_with("myproj")
-        assert sorted(result) == ["ab12cd34", "cd56ef78"]
+        assert sorted(result) == ["k3v8h", "p7fmn"]
 
     def test_filters_by_prefix(self) -> None:
-        tasks = [SimpleNamespace(task_id="ab12cd34"), SimpleNamespace(task_id="cd56ef78")]
+        tasks = [SimpleNamespace(task_id="k3v8h"), SimpleNamespace(task_id="p7fmn")]
         with patch("terok.cli.commands._completers.get_tasks", return_value=tasks):
-            result = complete_task_ids("ab", argparse.Namespace(project_id="p"))
-        assert result == ["ab12cd34"]
+            result = complete_task_ids("k", argparse.Namespace(project_id="p"))
+        assert result == ["k3v8h"]
 
     def test_skips_tasks_without_ids(self) -> None:
         """Tasks with a falsy ``task_id`` (defensive: shouldn't happen) are skipped."""
-        tasks = [SimpleNamespace(task_id="ab12cd34"), SimpleNamespace(task_id="")]
+        tasks = [SimpleNamespace(task_id="k3v8h"), SimpleNamespace(task_id="")]
         with patch("terok.cli.commands._completers.get_tasks", return_value=tasks):
             result = complete_task_ids("", argparse.Namespace(project_id="p"))
-        assert result == ["ab12cd34"]
+        assert result == ["k3v8h"]
 
     def test_returns_empty_on_failure(self) -> None:
         with patch(

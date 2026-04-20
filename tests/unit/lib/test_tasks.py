@@ -38,7 +38,7 @@ from terok.tui.clipboard import (
     get_clipboard_helper_status,
 )
 from tests.test_utils import (
-    assert_hex_id,
+    assert_task_id,
     captured_runspec,
     mock_git_config,
     parse_meta_value,
@@ -111,7 +111,7 @@ class TestTask:
             project_id=project_id,
         ) as ctx:
             returned_id = task_new(project_id)
-            assert_hex_id(returned_id)
+            assert_task_id(returned_id)
             meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
             meta_path = meta_dir / f"{returned_id}.yml"
             assert meta_path.is_file()
@@ -126,7 +126,7 @@ class TestTask:
 
             # Verify second task returns a different hex ID
             second_id = task_new(project_id)
-            assert_hex_id(second_id)
+            assert_task_id(second_id)
             assert second_id != returned_id
 
             with (

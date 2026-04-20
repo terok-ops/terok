@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import tempfile
 import types
 import unittest.mock
@@ -112,11 +113,17 @@ def make_staleness_info(**overrides: Any) -> GateStalenessInfo:
     return GateStalenessInfo(**defaults)
 
 
-def assert_hex_id(task_id: str | None) -> None:
-    """Assert that *task_id* is a valid 8-char hex string."""
+_TASK_ID_FULL_RE = re.compile(r"[ghjkmnp-tv-z][0-9][0-9a-hjkmnp-tv-z]{3}")
+
+
+def assert_task_id(task_id: str | None) -> None:
+    """Assert that *task_id* is a valid Crockford-format task ID.
+
+    Format: ``[g-z minus i,l,o,u][0-9][Crockford]{3}`` — 5 chars total.
+    See :mod:`terok.lib.orchestration.tasks` for the generator.
+    """
     assert isinstance(task_id, str), f"Expected task ID string, got {task_id!r}"
-    assert len(task_id) == 8, f"Expected 8-char hex ID, got {task_id!r}"
-    assert all(c in "0123456789abcdef" for c in task_id), f"Not a hex string: {task_id!r}"
+    assert _TASK_ID_FULL_RE.fullmatch(task_id), f"Not a valid task ID: {task_id!r}"
 
 
 def make_mock_http_response(data: dict[str, object]) -> unittest.mock.Mock:
@@ -153,4 +160,5 @@ def captured_runspec(agent_runner_mock: unittest.mock.Mock) -> Any:
         extra_args=tuple(kwargs.get("extra_args") or ()),
         unrestricted=kwargs.get("unrestricted", True),
         sealed=kwargs.get("sealed", False),
+        hostname=kwargs.get("hostname"),
     )
