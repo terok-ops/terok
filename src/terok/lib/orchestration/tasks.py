@@ -70,11 +70,30 @@ _TASK_ID_LEN = 5
 effectively Crockford-4.5 by entropy) — ample for the retry-on-collision
 loop given realistic project sizes."""
 
+_TASK_ID_CROCKFORD_4_5_RE = re.compile(r"[ghjkmnp-tv-z][0-9][0-9a-hjkmnp-tv-z]{3}")
+"""Canonical full-form validator for current-format task IDs.
+
+Called *Crockford-4.5* because the structural-signature chars at
+positions 1–2 (16-letter head, 10 digits) carry only 4.64 bits
+instead of 10 — total entropy 22.32 bits, equivalent to 4.46 full
+Crockford chars rather than 5.
+"""
+
 _TASK_ID_RE = re.compile(r"[ghjkmnp-tv-z](?:[0-9][0-9a-hjkmnp-tv-z]{0,3})?")
 """Prefix-match regex for a current-format task ID (1 to :data:`_TASK_ID_LEN` chars)."""
 
 _LEGACY_HEX_TASK_ID_RE = re.compile(r"[0-9a-f]{1,8}")
 """Prefix-match regex for pre-0.8.0 hex task IDs.  Deprecated in 0.8.0; removal in 0.9.0."""
+
+_LEGACY_HEX_TASK_ID_FULL_RE = re.compile(r"[0-9a-f]{8}")
+"""Full-form validator for pre-0.8.0 hex task IDs.  Deprecated; removal in 0.9.0."""
+
+
+def _is_task_filename(stem: str) -> bool:
+    """Return True if *stem* is a well-formed task-id filename (current or legacy)."""
+    return bool(
+        _TASK_ID_CROCKFORD_4_5_RE.fullmatch(stem) or _LEGACY_HEX_TASK_ID_FULL_RE.fullmatch(stem)
+    )
 
 
 def _gen_task_id() -> str:
@@ -82,7 +101,9 @@ def _gen_task_id() -> str:
     alphabets = (_TASK_ID_HEAD_CHARS, _TASK_ID_BODY_CHARS[:10]) + (_TASK_ID_BODY_CHARS,) * (
         _TASK_ID_LEN - 2
     )
-    return "".join(map(secrets.choice, alphabets))
+    tid = "".join(map(secrets.choice, alphabets))
+    assert _TASK_ID_CROCKFORD_4_5_RE.fullmatch(tid), tid  # generator-output invariant
+    return tid
 
 
 def _generate_unique_id(existing: set[str]) -> str:
@@ -131,7 +152,11 @@ def resolve_task_id(project_id: str, prefix: str) -> str:
         raise SystemExit(f"No tasks found for project {project_id}")
     if (meta_dir / f"{prefix}.yml").is_file():
         return prefix
-    matches = [p.stem for p in meta_dir.glob(_META_GLOB) if p.stem.startswith(prefix)]
+    matches = [
+        p.stem
+        for p in meta_dir.glob(_META_GLOB)
+        if _is_task_filename(p.stem) and p.stem.startswith(prefix)
+    ]
     if len(matches) == 1:
         return matches[0]
     if not matches:
@@ -532,6 +557,8 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     except SystemExit:
         tasks_root = None
     for f in meta_dir.glob(_META_GLOB):
+        if not _is_task_filename(f.stem):
+            continue
         try:
             meta = _yaml_load(f.read_text()) or {}
             tid = str(meta.get("task_id", ""))

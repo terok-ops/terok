@@ -3,7 +3,6 @@
 
 import json
 import os
-import re
 import tempfile
 import types
 import unittest.mock
@@ -13,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from terok_sandbox import GateStalenessInfo
+
+from terok.lib.orchestration.tasks import _TASK_ID_CROCKFORD_4_5_RE
 
 
 def mock_git_config():
@@ -111,9 +112,6 @@ def make_staleness_info(**overrides: Any) -> GateStalenessInfo:
     }
     defaults.update(overrides)
     return GateStalenessInfo(**defaults)
-
-
-_TASK_ID_CROCKFORD_4_5_RE = re.compile(r"[ghjkmnp-tv-z][0-9][0-9a-hjkmnp-tv-z]{3}")
 
 
 def assert_task_id(task_id: str | None) -> None:
