@@ -66,8 +66,9 @@ _TASK_ID_BODY_CHARS = "0123456789abcdefghjkmnpqrstvwxyz"
 """Full Crockford base32 alphabet, lowercase (``0-9 a-z`` minus ``i l o u``, 32 chars)."""
 
 _TASK_ID_LEN = 5
-"""Task ID length.  16 · 10 · 32^3 ≈ 5.2M ids per project — ample for the
-retry-on-collision loop given realistic project sizes."""
+"""Task ID length.  16 · 10 · 32^3 ≈ 5.2M ids per project (~22.3 bits,
+effectively Crockford-4.5 by entropy) — ample for the retry-on-collision
+loop given realistic project sizes."""
 
 _TASK_ID_RE = re.compile(r"[ghjkmnp-tv-z](?:[0-9][0-9a-hjkmnp-tv-z]{0,3})?")
 """Prefix-match regex for a current-format task ID (1 to :data:`_TASK_ID_LEN` chars)."""
@@ -101,8 +102,8 @@ def _is_initialized(meta: dict) -> bool:
 def resolve_task_id(project_id: str, prefix: str) -> str:
     """Resolve a (possibly partial) task ID to its full form.
 
-    Accepts both the current Crockford-5 format and legacy pre-0.8.0 hex-8
-    IDs.  Matching against the two alphabets is unambiguous — Crockford IDs
+    Accepts both the current Crockford-4.5 format and legacy pre-0.8.0
+    hex-8 IDs.  Matching against the two alphabets is unambiguous — Crockford IDs
     always start with ``[g-z]`` minus ``i l o u``, which is disjoint from
     hex.  Legacy IDs emit a :class:`DeprecationWarning`; removal is scheduled
     for 0.9.0.

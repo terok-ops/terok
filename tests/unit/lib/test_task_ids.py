@@ -232,7 +232,7 @@ class TestAssertTaskId:
     """Tests for the test utility itself."""
 
     def test_valid_id(self) -> None:
-        """Should pass for a valid Crockford-5 task ID."""
+        """Should pass for a valid Crockford-4.5 task ID."""
         assert_task_id(ID_A)
 
     def test_rejects_none(self) -> None:
