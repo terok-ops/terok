@@ -5,14 +5,22 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from terok_sandbox import SelinuxCheckResult, SelinuxStatus, VaultUnreachableError
 
 from terok.cli.commands.setup import (
+    _check_dbus_send,
     _check_host_binaries,
     _check_selinux_policy,
+    _disable_dbus_bridge,
+    _disable_user_service,
+    _enable_user_service,
+    _ensure_bridge_reader,
+    _ensure_dbus_bridge,
+    _ensure_dbus_hub,
     _ensure_gate,
     _ensure_shield,
     _ensure_vault,
@@ -610,3 +618,289 @@ class TestDispatch:
         with patch("terok.cli.commands.setup.cmd_setup") as mock:
             assert dispatch(args) is True
         mock.assert_called_once_with(check_only=False, no_dbus_bridge=False)
+
+
+# ── D-Bus clearance bridge phase ────────────────────────────────────────
+
+
+class TestEnsureDbusBridge:
+    """``_ensure_dbus_bridge`` composes the reader + hub stages when enabled."""
+
+    @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
+    def test_enabled_all_ok(self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock) -> None:
+        """Both sub-stages green → bridge ok."""
+        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is True
+
+    @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=False)
+    @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
+    def test_enabled_reader_fail_propagates(
+        self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
+    ) -> None:
+        """Reader failure must surface as a failed bridge stage."""
+        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is False
+
+    @patch("terok.cli.commands.setup._check_dbus_send", return_value=False)
+    @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
+    def test_enabled_missing_dbus_send_does_not_mask_success(
+        self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
+    ) -> None:
+        """dbus-send absence warns only — it must not mask a clean install."""
+        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is True
+
+    @patch("terok.cli.commands.setup._disable_dbus_bridge", return_value=True)
+    def test_disabled_routes_to_teardown(self, mock_disable: MagicMock) -> None:
+        """``enabled=False`` delegates to ``_disable_dbus_bridge``."""
+        assert _ensure_dbus_bridge(check_only=False, enabled=False, color=False) is True
+        mock_disable.assert_called_once_with(check_only=False, color=False)
+
+
+class TestEnsureBridgeReader:
+    """``_ensure_bridge_reader`` installs the stdlib-only NFLOG reader script."""
+
+    def test_check_only_present(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """check_only reports ok when the reader script exists on disk."""
+        dest = tmp_path / ".local/share/terok-shield/nflog-reader.py"
+        dest.parent.mkdir(parents=True)
+        dest.write_text("#!/usr/bin/env python3\n")
+        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
+            assert _ensure_bridge_reader(check_only=True, color=False) is True
+        out = capsys.readouterr().out
+        assert "installed" in out
+
+    def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """check_only reports false when the reader script is absent."""
+        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
+            assert _ensure_bridge_reader(check_only=True, color=False) is False
+        out = capsys.readouterr().out
+        assert "not installed" in out
+
+    @patch("terok_sandbox.install_shield_bridge")
+    def test_install_success(
+        self, mock_install: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Successful install reports ok and calls the sandbox helper once."""
+        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
+            assert _ensure_bridge_reader(check_only=False, color=False) is True
+        mock_install.assert_called_once()
+        assert "installed" in capsys.readouterr().out
+
+    @patch("terok_sandbox.install_shield_bridge", side_effect=RuntimeError("copy failed"))
+    def test_install_failure(
+        self, _install: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Install raising → caught, reported, returns False."""
+        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
+            assert _ensure_bridge_reader(check_only=False, color=False) is False
+        assert "copy failed" in capsys.readouterr().out
+
+
+class TestEnsureDbusHub:
+    """``_ensure_dbus_hub`` installs the systemd user unit that owns org.terok.Shield1."""
+
+    def test_check_only_present(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """check_only reports ok when the unit file exists."""
+        unit_dir = tmp_path / "systemd/user"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "terok-dbus.service").write_text("[Service]\n")
+        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}):
+            assert _ensure_dbus_hub(check_only=True, color=False) is True
+        assert "installed" in capsys.readouterr().out
+
+    def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """check_only reports false when the unit file is absent."""
+        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}):
+            assert _ensure_dbus_hub(check_only=True, color=False) is False
+        assert "not installed" in capsys.readouterr().out
+
+    def test_install_success(self, capsys: pytest.CaptureFixture) -> None:
+        """install_service + enable path reports ok."""
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/terok-dbus"),
+            patch("terok_dbus._install.install_service") as mock_install,
+            patch("terok.cli.commands.setup._enable_user_service") as mock_enable,
+        ):
+            assert _ensure_dbus_hub(check_only=False, color=False) is True
+        mock_install.assert_called_once_with("/bin/terok-dbus")
+        mock_enable.assert_called_once_with("terok-dbus")
+        assert "installed" in capsys.readouterr().out
+
+    def test_install_uses_module_fallback_when_bin_missing(self) -> None:
+        """If ``terok-dbus`` isn't on PATH, fall back to ``python -m terok_dbus._cli``."""
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value=None),
+            patch("terok_dbus._install.install_service") as mock_install,
+            patch("terok.cli.commands.setup._enable_user_service"),
+        ):
+            _ensure_dbus_hub(check_only=False, color=False)
+        (bin_path,) = mock_install.call_args[0]
+        assert "terok_dbus._cli" in bin_path
+
+    def test_import_failure_soft_fails(self, capsys: pytest.CaptureFixture) -> None:
+        """An ImportError out of terok_dbus._install must not crash setup."""
+        with patch.dict(
+            "sys.modules",
+            {"terok_dbus._install": None},
+        ):
+            assert _ensure_dbus_hub(check_only=False, color=False) is False
+        assert "import failed" in capsys.readouterr().out
+
+    def test_install_raises_returns_false(self, capsys: pytest.CaptureFixture) -> None:
+        """install_service exceptions are caught, reported, return False."""
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/terok-dbus"),
+            patch(
+                "terok_dbus._install.install_service",
+                side_effect=RuntimeError("template missing"),
+            ),
+            patch("terok.cli.commands.setup._enable_user_service"),
+        ):
+            assert _ensure_dbus_hub(check_only=False, color=False) is False
+        assert "template missing" in capsys.readouterr().out
+
+
+class TestDisableDbusBridge:
+    """``_disable_dbus_bridge`` idempotently removes the bridge + hub artifacts."""
+
+    def test_check_only_reports_opt_out(self, capsys: pytest.CaptureFixture) -> None:
+        """check_only prints an informational WARN and returns True."""
+        assert _disable_dbus_bridge(check_only=True, color=False) is True
+        out = capsys.readouterr().out
+        assert "opted out" in out
+
+    def test_clean_teardown_reports_ok(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """No unit on disk + sandbox uninstall succeeds → True."""
+        with (
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch("terok_sandbox.uninstall_shield_bridge") as mock_uninstall,
+        ):
+            assert _disable_dbus_bridge(check_only=False, color=False) is True
+        mock_uninstall.assert_called_once()
+        assert "disabled" in capsys.readouterr().out
+
+    def test_teardown_with_unit_removes_and_disables(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Present unit → unlinked + systemctl disable invoked."""
+        unit_dir = tmp_path / "systemd/user"
+        unit_dir.mkdir(parents=True)
+        unit = unit_dir / "terok-dbus.service"
+        unit.write_text("[Service]\n")
+        with (
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch("terok_sandbox.uninstall_shield_bridge"),
+            patch("terok.cli.commands.setup._disable_user_service") as mock_disable,
+        ):
+            assert _disable_dbus_bridge(check_only=False, color=False) is True
+        assert not unit.exists()
+        mock_disable.assert_called_once_with("terok-dbus")
+
+    def test_uninstall_exception_returns_false(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Reader uninstall raising → WARN line + False."""
+        with (
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch(
+                "terok_sandbox.uninstall_shield_bridge",
+                side_effect=RuntimeError("permission denied"),
+            ),
+        ):
+            assert _disable_dbus_bridge(check_only=False, color=False) is False
+        out = capsys.readouterr().out
+        assert "reader uninstall" in out
+        assert "permission denied" in out
+
+    def test_unit_removal_oserror_returns_false(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Unit file present but unlink raises OSError → WARN line + False."""
+        unit_dir = tmp_path / "systemd/user"
+        unit_dir.mkdir(parents=True)
+        unit = unit_dir / "terok-dbus.service"
+        unit.write_text("[Service]\n")
+        with (
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch("terok_sandbox.uninstall_shield_bridge"),
+            patch("pathlib.Path.unlink", side_effect=OSError("read-only fs")),
+        ):
+            assert _disable_dbus_bridge(check_only=False, color=False) is False
+        out = capsys.readouterr().out
+        assert "unit removal" in out
+
+
+class TestCheckDbusSend:
+    """``_check_dbus_send`` warns the operator when the host tool is absent."""
+
+    def test_present_returns_true_silently(self, capsys: pytest.CaptureFixture) -> None:
+        """Binary on PATH → True, no output."""
+        with patch("terok.cli.commands.setup.shutil.which", return_value="/usr/bin/dbus-send"):
+            assert _check_dbus_send(color=False) is True
+        assert capsys.readouterr().out == ""
+
+    def test_missing_emits_warning_and_returns_false(self, capsys: pytest.CaptureFixture) -> None:
+        """Binary absent → WARN line mentioning package names and returns False."""
+        with patch("terok.cli.commands.setup.shutil.which", return_value=None):
+            assert _check_dbus_send(color=False) is False
+        out = capsys.readouterr().out
+        assert "dbus-send" in out
+        assert "dbus-tools" in out
+
+
+class TestUserServiceHelpers:
+    """``_enable_user_service`` / ``_disable_user_service`` wrap ``systemctl --user``."""
+
+    def test_enable_invokes_three_systemctl_calls(self) -> None:
+        """daemon-reload + enable + restart — each as a separate run()."""
+        import subprocess as sp
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/systemctl"),
+            patch.object(sp, "run") as mock_run,
+        ):
+            _enable_user_service("terok-dbus")
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        verbs = [cmd[2] for cmd in commands]
+        assert verbs == ["daemon-reload", "enable", "restart"]
+        for cmd in commands:
+            assert cmd[0] == "/bin/systemctl"
+
+    def test_enable_noop_when_systemctl_missing(self) -> None:
+        """Missing systemctl → no subprocess calls issued."""
+        import subprocess as sp
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value=None),
+            patch.object(sp, "run") as mock_run,
+        ):
+            _enable_user_service("terok-dbus")
+        mock_run.assert_not_called()
+
+    def test_disable_invokes_single_systemctl_call(self) -> None:
+        """``disable --now`` is one call; no daemon-reload needed on teardown."""
+        import subprocess as sp
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/systemctl"),
+            patch.object(sp, "run") as mock_run,
+        ):
+            _disable_user_service("terok-dbus")
+        mock_run.assert_called_once()
+        argv = mock_run.call_args.args[0]
+        assert argv[0] == "/bin/systemctl"
+        assert "disable" in argv
+        assert "--now" in argv
+
+    def test_disable_noop_when_systemctl_missing(self) -> None:
+        """Missing systemctl → no subprocess calls issued."""
+        import subprocess as sp
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value=None),
+            patch.object(sp, "run") as mock_run,
+        ):
+            _disable_user_service("terok-dbus")
+        mock_run.assert_not_called()

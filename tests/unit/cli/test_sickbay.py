@@ -595,3 +595,236 @@ class TestCheckDbusHubStateDir:
         assert sev == "warn"
         assert "/shell" in detail
         assert "/unit" in detail
+
+    def test_warn_when_read_unit_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unit read raising an OSError → graceful WARN, not a crash."""
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.delenv("TEROK_SHIELD_STATE_DIR", raising=False)
+        with unittest.mock.patch(
+            "terok_dbus._install.read_installed_unit", side_effect=OSError("denied")
+        ):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "warn"
+        assert "failed to read hub unit" in detail
+
+    def test_warn_when_extract_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unit parse raising → WARN telling the operator the parse failed."""
+        from terok.cli.commands.sickbay import _check_dbus_hub_state_dir
+
+        monkeypatch.delenv("TEROK_SHIELD_STATE_DIR", raising=False)
+        with (
+            unittest.mock.patch(
+                "terok_dbus._install.read_installed_unit",
+                return_value="[Service]\n",
+            ),
+            unittest.mock.patch(
+                "terok_dbus._install.extract_baked_state_dir",
+                side_effect=ValueError("malformed env"),
+            ),
+        ):
+            sev, _, detail = _check_dbus_hub_state_dir()
+        assert sev == "warn"
+        assert "failed to parse hub unit" in detail
+
+
+class TestCheckTaskShieldAnnotation:
+    """``_check_task_shield_annotation`` cross-checks task_dir ↔ container annotation."""
+
+    def _project(self, tasks_root: Path) -> unittest.mock.MagicMock:
+        project = unittest.mock.MagicMock()
+        project.tasks_root = tasks_root
+        return project
+
+    def test_missing_meta_file_returns_none(self, tmp_path: Path) -> None:
+        """No metadata YAML → skipped (not a sickbay concern)."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        project = self._project(tmp_path)
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+    def test_malformed_yaml_returns_none(self, tmp_path: Path) -> None:
+        """Bad metadata → skipped silently (_check_task_hook owns the warn)."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        (tmp_path / "1.yml").write_bytes(b"\x80\x81")  # invalid UTF-8
+        project = self._project(tmp_path)
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+    def test_no_mode_returns_none(self, tmp_path: Path) -> None:
+        """Meta without ``mode`` → nothing to check."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        _write_meta(tmp_path, "1", {"status": "created"})
+        project = self._project(tmp_path.parent)
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+    def test_non_running_container_returns_none(self, tmp_path: Path, mock_runtime) -> None:
+        """Stopped container is post_stop's territory, not annotation-drift territory."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        _write_meta(tmp_path, "1", {"mode": "cli"})
+        project = self._project(tmp_path.parent)
+        mock_runtime.container.return_value.state = "exited"
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+    def test_shield_dir_absent_returns_none(self, tmp_path: Path, mock_runtime) -> None:
+        """Unshielded task → no expectation to compare against."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        _write_meta(tmp_path, "1", {"mode": "cli"})
+        project = self._project(tmp_path.parent)
+        mock_runtime.container.return_value.state = "running"
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+    def test_missing_annotation_warns(self, tmp_path: Path, mock_runtime) -> None:
+        """Shield dir present but container has no annotation → WARN."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        tasks_root = tmp_path / "tasks"
+        task_dir = tasks_root / "1"
+        (task_dir / "shield").mkdir(parents=True)
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "1", {"mode": "cli"})
+        project = self._project(tasks_root)
+        mock_runtime.container.return_value.state = "running"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_state_dir",
+                return_value=None,
+            ),
+        ):
+            result = _check_task_shield_annotation("p", "1", project)
+        assert result is not None
+        assert result[0] == "warn"
+        assert "no terok.shield.state_dir" in result[2] or "annotation" in result[2]
+
+    def test_annotation_mismatch_warns(self, tmp_path: Path, mock_runtime) -> None:
+        """Annotation pointing elsewhere → WARN with both paths named."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        tasks_root = tmp_path / "tasks"
+        task_dir = tasks_root / "1"
+        expected_sd = task_dir / "shield"
+        expected_sd.mkdir(parents=True)
+        actual_sd = tmp_path / "elsewhere"
+        actual_sd.mkdir()
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "1", {"mode": "cli"})
+        project = self._project(tasks_root)
+        mock_runtime.container.return_value.state = "running"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_state_dir",
+                return_value=actual_sd,
+            ),
+        ):
+            result = _check_task_shield_annotation("p", "1", project)
+        assert result is not None
+        assert result[0] == "warn"
+        assert str(actual_sd) in result[2]
+        assert str(expected_sd) in result[2]
+
+    def test_annotation_matches_returns_none(self, tmp_path: Path, mock_runtime) -> None:
+        """Annotation resolves to the same path → consistent, no result."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        tasks_root = tmp_path / "tasks"
+        task_dir = tasks_root / "1"
+        sd = task_dir / "shield"
+        sd.mkdir(parents=True)
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "1", {"mode": "cli"})
+        project = self._project(tasks_root)
+        mock_runtime.container.return_value.state = "running"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_state_dir",
+                return_value=sd,
+            ),
+        ):
+            assert _check_task_shield_annotation("p", "1", project) is None
+
+
+class TestCheckShieldAnnotations:
+    """``_check_shield_annotations`` iterates task metadata + single-task paths."""
+
+    def test_single_project_no_meta_dir(self, tmp_path: Path) -> None:
+        """Missing metadata dir → empty result, no iteration crash."""
+        from terok.cli.commands.sickbay import _check_shield_annotations
+
+        project = unittest.mock.MagicMock()
+        project.id = "p"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.load_project", return_value=project),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.tasks_meta_dir",
+                return_value=tmp_path / "nonexistent",
+            ),
+        ):
+            assert _check_shield_annotations("p", None) == []
+
+    def test_global_scope_iterates_projects(self, tmp_path: Path) -> None:
+        """No project scope → iterate list_projects, aggregate WARN results."""
+        from terok.cli.commands.sickbay import _check_shield_annotations
+
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "1", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        project.id = "proj"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.list_projects", return_value=[project]),
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._check_task_shield_annotation",
+                return_value=("warn", "Task proj/1 shield", "drift"),
+            ),
+        ):
+            results = _check_shield_annotations(None, None)
+        assert len(results) == 1
+        assert results[0][0] == "warn"
+
+    def test_single_task_scope_does_not_glob(self, tmp_path: Path) -> None:
+        """When task_id is provided, only that task is examined."""
+        from terok.cli.commands.sickbay import _check_shield_annotations
+
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "1", {"mode": "cli"})
+        _write_meta(meta_dir, "2", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        project.id = "p"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.load_project", return_value=project),
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._check_task_shield_annotation",
+                return_value=None,
+            ) as mock_check,
+        ):
+            _check_shield_annotations("p", "1")
+        # Only the named task, not the globbed pair
+        assert mock_check.call_count == 1
+        assert mock_check.call_args.args[1] == "1"
