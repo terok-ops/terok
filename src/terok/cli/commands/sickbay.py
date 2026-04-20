@@ -33,6 +33,7 @@ from terok_sandbox import (
     is_systemd_available,
     is_vault_socket_active,
     is_vault_systemd_available,
+    resolve_container_state_dir,
 )
 
 from ...lib.core import runtime as _rt
@@ -211,6 +212,59 @@ def _reconcile_post_stop(
         return ("error", label, f"post_stop hook failed: {exc}")
 
 
+def _check_task_shield_annotation(
+    pid: str, tid: str, project: ProjectConfig
+) -> _CheckResult | None:
+    """Cross-check terok's task dir against the container's ``terok.shield.state_dir``.
+
+    Two orchestrators own the data on either side of this handoff — terok
+    writes ``<task_dir>/shield/`` at pre_start, and podman stores the
+    annotation back on the container.  If they disagree, a verdict
+    dispatched from the bottom-up path (hub or TUI, which only know the
+    container name) will write to the wrong state — or fail to find
+    anything at all.  This check catches the drift before it bites.
+
+    Fires only when the container is actually running with a shield state
+    dir present — skips non-shielded containers, skips stopped ones (those
+    are the post_stop hook's territory).
+    """
+    meta_path = tasks_meta_dir(pid) / f"{tid}.yml"
+    if not meta_path.is_file():
+        return None
+    try:
+        meta = _yaml_load(meta_path.read_text()) or {}
+    except Exception:  # noqa: BLE001 — malformed metadata is another check's problem
+        return None
+    mode = meta.get("mode")
+    if not mode:
+        return None
+    cname = container_name(pid, mode, tid)
+    if _rt.get_runtime().container(cname).state != "running":
+        return None
+
+    expected = (project.tasks_root / tid / "shield").resolve()
+    if not expected.is_dir():
+        return None  # task isn't shielded — nothing to compare against
+
+    label = f"Task {pid}/{tid} shield"
+    actual = resolve_container_state_dir(cname)
+    if actual is None:
+        return (
+            "warn",
+            label,
+            f"shield dir {expected} exists but container {cname!r} carries no "
+            "terok.shield.state_dir annotation — verdict dispatch will miss",
+        )
+    if actual.resolve() != expected:
+        return (
+            "warn",
+            label,
+            f"shield annotation on {cname!r} points at {actual}, expected {expected} "
+            "— filesystem moved without re-running pre_start?",
+        )
+    return None
+
+
 def _check_unfired_hooks(
     project_id: str | None, task_id: str | None, *, fix: bool
 ) -> list[_CheckResult]:
@@ -232,6 +286,28 @@ def _check_unfired_hooks(
         task_ids = [f.stem for f in meta_dir.glob("*.yml")] if task_id is None else [task_id]
         for tid in task_ids:
             result = _check_task_hook(pid, tid, project, fix=fix)
+            if result:
+                results.append(result)
+
+    return results
+
+
+def _check_shield_annotations(project_id: str | None, task_id: str | None) -> list[_CheckResult]:
+    """Verify every running task's container carries the expected shield annotation."""
+    results: list[_CheckResult] = []
+
+    if project_id:
+        projects = [(project_id, load_project(project_id))]
+    else:
+        projects = [(p.id, p) for p in list_projects()]
+
+    for pid, project in projects:
+        meta_dir = tasks_meta_dir(pid)
+        if not meta_dir.is_dir():
+            continue
+        task_ids = [f.stem for f in meta_dir.glob("*.yml")] if task_id is None else [task_id]
+        for tid in task_ids:
+            result = _check_task_shield_annotation(pid, tid, project)
             if result:
                 results.append(result)
 
@@ -553,6 +629,11 @@ def _cmd_sickbay(
         print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
         worst = _update_worst(worst, status)
 
+    annotation_results = _check_shield_annotations(project_id, task_id)
+    for status, label, detail in annotation_results:
+        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
+        worst = _update_worst(worst, status)
+
     # In-container diagnostics for running tasks
     container_results = _check_containers(project_id, task_id, fix=fix)
     for status, label, detail in container_results:
@@ -560,7 +641,7 @@ def _cmd_sickbay(
         worst = _update_worst(worst, status)
 
     # Print "ok (consistent)" only when scoped to a single task and every result is "ok"
-    all_ok = all(s == "ok" for s, _, _ in hook_results + container_results)
+    all_ok = all(s == "ok" for s, _, _ in hook_results + annotation_results + container_results)
     if task_id and all_ok:
         print(f"  Task {project_id}/{task_id} .... ok (consistent)")
 
