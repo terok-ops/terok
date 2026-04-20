@@ -16,6 +16,7 @@ import os
 import re
 import secrets
 import shutil
+import string
 import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -48,7 +49,7 @@ from ..util.logging_utils import _log_debug
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .container_exec import container_git_diff
 
-# ---------- Task ID generation ----------
+# ---------- Task IDs ----------
 
 
 _META_GLOB = "*.yml"
@@ -79,28 +80,26 @@ instead of 10 — total entropy 22.32 bits, equivalent to 4.46 full
 Crockford chars rather than 5.
 """
 
-_TASK_ID_RE = re.compile(r"[ghjkmnp-tv-z](?:[0-9][0-9a-hjkmnp-tv-z]{0,3})?")
+_TASK_ID_PREFIX_RE = re.compile(r"[ghjkmnp-tv-z](?:[0-9][0-9a-hjkmnp-tv-z]{0,3})?")
 """Prefix-match regex for a current-format task ID (1 to :data:`_TASK_ID_LEN` chars)."""
 
-_LEGACY_HEX_TASK_ID_RE = re.compile(r"[0-9a-f]{1,8}")
+_LEGACY_HEX_TASK_ID_PREFIX_RE = re.compile(r"[0-9a-f]{1,8}")
 """Prefix-match regex for pre-0.8.0 hex task IDs.  Deprecated in 0.8.0; removal in 0.9.0."""
 
 _LEGACY_HEX_TASK_ID_FULL_RE = re.compile(r"[0-9a-f]{8}")
 """Full-form validator for pre-0.8.0 hex task IDs.  Deprecated; removal in 0.9.0."""
 
 
-def _is_task_filename(stem: str) -> bool:
-    """Return True if *stem* is a well-formed task-id filename (current or legacy)."""
+def _is_task_id(text: str) -> bool:
+    """Return True if *text* is a well-formed task ID (current or legacy)."""
     return bool(
-        _TASK_ID_CROCKFORD_4_5_RE.fullmatch(stem) or _LEGACY_HEX_TASK_ID_FULL_RE.fullmatch(stem)
+        _TASK_ID_CROCKFORD_4_5_RE.fullmatch(text) or _LEGACY_HEX_TASK_ID_FULL_RE.fullmatch(text)
     )
 
 
 def _gen_task_id() -> str:
     """Return a fresh task ID: Crockford-letter head + digit + 3 Crockford chars."""
-    alphabets = (_TASK_ID_HEAD_CHARS, _TASK_ID_BODY_CHARS[:10]) + (_TASK_ID_BODY_CHARS,) * (
-        _TASK_ID_LEN - 2
-    )
+    alphabets = (_TASK_ID_HEAD_CHARS, string.digits) + (_TASK_ID_BODY_CHARS,) * (_TASK_ID_LEN - 2)
     tid = "".join(map(secrets.choice, alphabets))
     assert _TASK_ID_CROCKFORD_4_5_RE.fullmatch(tid), tid  # generator-output invariant
     return tid
@@ -120,33 +119,37 @@ def _is_initialized(meta: dict) -> bool:
     return "ready_at" in meta
 
 
-def resolve_task_id(project_id: str, prefix: str) -> str:
-    """Resolve a (possibly partial) task ID to its full form.
+def _validate_task_id_prefix(prefix: str) -> None:
+    """Validate *prefix* and warn on the deprecated legacy-hex format.
 
-    Accepts both the current Crockford-4.5 format and legacy pre-0.8.0
-    hex-8 IDs.  Matching against the two alphabets is unambiguous — Crockford IDs
-    always start with ``[g-z]`` minus ``i l o u``, which is disjoint from
-    hex.  Legacy IDs emit a :class:`DeprecationWarning`; removal is scheduled
-    for 0.9.0.
-
-    Raises ``SystemExit`` with an actionable message on zero or multiple matches.
+    Raises ``SystemExit`` if *prefix* matches neither the current
+    Crockford-4.5 format nor the legacy pre-0.8.0 hex format.  Dispatch
+    is unambiguous: Crockford IDs always start with ``[g-z]`` minus
+    ``i l o u``, which is disjoint from hex.
     """
-    if _TASK_ID_RE.fullmatch(prefix):
-        pass
-    elif _LEGACY_HEX_TASK_ID_RE.fullmatch(prefix):
+    if _TASK_ID_PREFIX_RE.fullmatch(prefix):
+        return
+    if _LEGACY_HEX_TASK_ID_PREFIX_RE.fullmatch(prefix):
         warnings.warn(
             f"Task ID {prefix!r} uses the pre-0.8.0 hex format; "
             "support will be removed in 0.9.0 — recreate the task to "
             "adopt the current format.",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=3,
         )
-    else:
-        raise SystemExit(
-            f"Invalid task ID prefix {prefix!r}; "
-            f"expected 1-{_TASK_ID_LEN} Crockford chars (e.g. 'k3v8h')"
-        )
+        return
+    raise SystemExit(
+        f"Invalid task ID prefix {prefix!r}; "
+        f"expected 1-{_TASK_ID_LEN} Crockford chars (e.g. 'k3v8h')"
+    )
 
+
+def resolve_task_id(project_id: str, prefix: str) -> str:
+    """Resolve a (possibly partial) task ID to its full form.
+
+    Raises ``SystemExit`` with an actionable message on zero or multiple matches.
+    """
+    _validate_task_id_prefix(prefix)
     meta_dir = tasks_meta_dir(project_id)
     if not meta_dir.is_dir():
         raise SystemExit(f"No tasks found for project {project_id}")
@@ -155,7 +158,7 @@ def resolve_task_id(project_id: str, prefix: str) -> str:
     matches = [
         p.stem
         for p in meta_dir.glob(_META_GLOB)
-        if _is_task_filename(p.stem) and p.stem.startswith(prefix)
+        if _is_task_id(p.stem) and p.stem.startswith(prefix)
     ]
     if len(matches) == 1:
         return matches[0]
@@ -557,7 +560,7 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     except SystemExit:
         tasks_root = None
     for f in meta_dir.glob(_META_GLOB):
-        if not _is_task_filename(f.stem):
+        if not _is_task_id(f.stem):
             continue
         try:
             meta = _yaml_load(f.read_text()) or {}

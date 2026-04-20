@@ -33,7 +33,7 @@ git:
 # (Crockford head + digit + 3 Crockford body chars).
 ID_A = "k3v8h"
 ID_B = "p7fmn"
-ID_D_SHARED_PREFIX = "k3v82"  # shares "k3v8" with ID_A for ambiguity tests
+ID_AMBIGUOUS_WITH_A = "k3v82"  # shares "k3v8" with ID_A for ambiguity tests
 
 
 # ---------- _generate_unique_id ----------
@@ -111,7 +111,7 @@ class TestResolveTaskId:
         """Should raise SystemExit listing the matches when prefix is ambiguous."""
         with project_env(MINIMAL_PROJECT) as _ctx:
             self._write_meta("test-proj", ID_A)
-            self._write_meta("test-proj", ID_D_SHARED_PREFIX)
+            self._write_meta("test-proj", ID_AMBIGUOUS_WITH_A)
             with pytest.raises(SystemExit, match=f"Ambiguous task ID '{ID_A[:4]}'"):
                 resolve_task_id("test-proj", ID_A[:4])
 
