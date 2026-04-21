@@ -891,6 +891,24 @@ class TestUserServiceHelpers:
         assert "disable" in argv
         assert "--now" in argv
 
+    def test_enable_writes_captured_output_to_setup_log(self, tmp_path: Path) -> None:
+        """Captured systemctl stdout/stderr land in ``setup.log`` under XDG_STATE_HOME."""
+        import subprocess as sp
+
+        fake = sp.CompletedProcess(args=[], returncode=1, stdout="", stderr="Unit not found\n")
+        with (
+            patch.dict("os.environ", {"XDG_STATE_HOME": str(tmp_path)}, clear=False),
+            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/systemctl"),
+            patch.object(sp, "run", return_value=fake),
+        ):
+            _enable_user_service("terok-dbus")
+
+        log = (tmp_path / "terok" / "log" / "setup.log").read_text()
+        assert "systemctl --user daemon-reload (rc=1)" in log
+        assert "systemctl --user enable terok-dbus (rc=1)" in log
+        assert "systemctl --user restart terok-dbus (rc=1)" in log
+        assert "Unit not found" in log
+
     def test_disable_noop_when_systemctl_missing(self) -> None:
         """Missing systemctl → no subprocess calls issued."""
         import subprocess as sp

@@ -494,7 +494,15 @@ def _disable_user_service(unit: str) -> None:
 
 
 def _run_systemctl(*args: str) -> None:
-    """Invoke ``systemctl`` with *args*, suppressing output; no-op if absent."""
+    """Invoke ``systemctl`` with *args*, capturing output to the setup log.
+
+    The progressive ``terok setup`` UI keeps the terminal quiet — every
+    stage renders one ``label … ok/FAIL`` line and anything systemctl
+    splutters onto stdout/stderr would break that layout.  Capture both
+    streams instead of discarding them, and append a timestamped block
+    to :func:`_setup_log_path` so an operator filing a weird-setup bug
+    has the raw output to attach.
+    """
     systemctl = shutil.which("systemctl")
     if not systemctl:
         return
@@ -502,7 +510,43 @@ def _run_systemctl(*args: str) -> None:
 
     # nosec B603 — argv is systemctl plus literal flags and unit names we
     # control; no shell involvement, no user-supplied tokens.
-    _sp.run([systemctl, *args], check=False, capture_output=True)  # noqa: S603
+    result = _sp.run([systemctl, *args], check=False, capture_output=True, text=True)  # noqa: S603
+    _append_setup_log(("systemctl", *args), result.returncode, result.stdout, result.stderr)
+
+
+def _setup_log_path() -> Path:
+    """Return the canonical ``terok setup`` log path (XDG state home, if set)."""
+    state_home = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(state_home) / "terok" / "log" / "setup.log"
+
+
+def _append_setup_log(argv: tuple[str, ...], rc: int, stdout: str, stderr: str) -> None:
+    """Append one subprocess run's argv + exit code + captured streams to the log.
+
+    Soft-fails on write errors — a read-only state dir or a disk-full
+    error must not derail ``terok setup``; the operator would still get
+    the terminal's pass/fail summary, which is the primary signal.
+    """
+    log_path = _setup_log_path()
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    from datetime import UTC, datetime
+
+    stamp = datetime.now(UTC).isoformat(timespec="seconds")
+    cmd = " ".join(argv)
+    lines = [f"[{stamp}] {cmd} (rc={rc})"]
+    if stdout.strip():
+        lines.append(f"  stdout: {stdout.strip()}")
+    if stderr.strip():
+        lines.append(f"  stderr: {stderr.strip()}")
+    lines.append("")  # trailing blank so entries are visually distinct
+    try:
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError:
+        return  # log is best-effort; never escalate into a setup failure
 
 
 def _check_selinux_policy() -> bool:

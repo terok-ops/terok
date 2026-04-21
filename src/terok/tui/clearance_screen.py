@@ -86,6 +86,21 @@ class _NotificationPosted(Message):
         self.replaces_id = replaces_id
 
 
+class _LifecyclePosted(Message):
+    """Posted when ``CallbackNotifier`` fires a ``ContainerStarted``/``Exited`` hook.
+
+    Rendered in the scrolling event log below the pending list — lifecycle
+    events are purely informational and don't belong in the verdict queue.
+    """
+
+    def __init__(self, event: str, container: str, reason: str = "") -> None:
+        """Store the event kind (``started``/``exited``) and its args."""
+        super().__init__()
+        self.event = event
+        self.container = container
+        self.reason = reason
+
+
 # ---------------------------------------------------------------------------
 # ClearanceScreen
 # ---------------------------------------------------------------------------
@@ -149,6 +164,14 @@ class ClearanceScreen(screen.Screen[None]):
             )
         )
 
+    def _on_container_started(self, container: str) -> None:
+        """Bridge ``ContainerStarted`` into a Textual message for the event log."""
+        self.post_message(_LifecyclePosted(event="started", container=container))
+
+    def _on_container_exited(self, container: str, reason: str) -> None:
+        """Bridge ``ContainerExited`` into a Textual message for the event log."""
+        self.post_message(_LifecyclePosted(event="exited", container=container, reason=reason))
+
     def compose(self) -> ComposeResult:
         """Build header, pending list, event log, and footer."""
         yield Static(" Shield Clearance", id="clearance-header")
@@ -167,7 +190,11 @@ class ClearanceScreen(screen.Screen[None]):
         try:
             from terok_dbus import CallbackNotifier, EventSubscriber
 
-            self._notifier = CallbackNotifier(on_notify=self._on_notify)
+            self._notifier = CallbackNotifier(
+                on_notify=self._on_notify,
+                on_container_started=self._on_container_started,
+                on_container_exited=self._on_container_exited,
+            )
             self._subscriber = EventSubscriber(self._notifier)
             await self._subscriber.start()
             log.write(Text("Listening on session bus...", style=_STYLE_INFO))
@@ -231,6 +258,18 @@ class ClearanceScreen(screen.Screen[None]):
             log.write(Text(f"{message.summary}  {message.body}", style=_STYLE_INFO))
 
         pending_list.border_title = f"Pending ({len(self._pending)})"
+
+    def on__lifecycle_posted(self, message: _LifecyclePosted) -> None:
+        """Render container-lifecycle events in the scrolling log."""
+        try:
+            log = self.query_one(_ID_EVENT_LOG, RichLog)
+        except NoMatches:
+            return
+        if message.event == "started":
+            log.write(Text(f"Container connected: {message.container}", style=_STYLE_INFO))
+        else:
+            tail = f" ({message.reason})" if message.reason else ""
+            log.write(Text(f"Container gone: {message.container}{tail}", style=_STYLE_INFO))
 
     def _remove_pending_item(self, nid: int) -> None:
         """Remove the ``ListItem`` tagged with the given notification ID."""

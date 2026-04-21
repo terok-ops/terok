@@ -94,6 +94,46 @@ class TestNotifyBridge:
         screen.post_message.assert_called_once()
 
 
+class TestLifecycleBridge:
+    """Container lifecycle signals land on the event log, not the pending list."""
+
+    def test_on_container_started_posts_lifecycle_message(self) -> None:
+        mod = _import_clearance()
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
+        screen._on_container_started("abc123")
+        screen.post_message.assert_called_once()
+        msg = screen.post_message.call_args[0][0]
+        assert msg.event == "started"
+        assert msg.container == "abc123"
+        assert msg.reason == ""
+
+    def test_on_container_exited_posts_lifecycle_message(self) -> None:
+        mod = _import_clearance()
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
+        screen._on_container_exited("abc123", "poststop")
+        msg = screen.post_message.call_args[0][0]
+        assert msg.event == "exited"
+        assert msg.container == "abc123"
+        assert msg.reason == "poststop"
+
+    def test_callback_notifier_wires_lifecycle_hooks(self) -> None:
+        """CallbackNotifier forwards both lifecycle hooks back into the screen."""
+        from terok_dbus import CallbackNotifier
+
+        mod = _import_clearance()
+        screen = mod.ClearanceScreen()
+        screen.post_message = mock.Mock()
+        notifier = CallbackNotifier(
+            on_container_started=screen._on_container_started,
+            on_container_exited=screen._on_container_exited,
+        )
+        notifier.on_container_started("abc123")
+        notifier.on_container_exited("abc123", "poststop")
+        assert screen.post_message.call_count == 2
+
+
 # ---------------------------------------------------------------------------
 # CLI integration
 # ---------------------------------------------------------------------------

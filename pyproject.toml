@@ -49,7 +49,7 @@ textual-serve = ">=1.1.0"
 terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.99/terok_executor-0.0.99-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.82/terok_sandbox-0.0.82-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.22/terok_shield-0.6.22-py3-none-any.whl"}
-terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.8/terok_dbus-0.5.8-py3-none-any.whl"}
+terok-dbus = {git = "https://github.com/sliwowitz/terok-dbus.git", branch = "feat/callbacknotifier-lifecycle"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"
