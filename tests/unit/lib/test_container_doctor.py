@@ -391,3 +391,217 @@ class TestRunContainerDoctor:
         assert results[0][0] == "warn"
         assert "unknown host-side check" in results[0][2]
         mock_exec.assert_not_called()
+
+
+class TestStreamingGrouping:
+    """Verify that the streaming path partitions checks by heading correctly."""
+
+    def test_group_key_maps_credentials_and_tokens(self) -> None:
+        """Labels inside known prefixes collapse to their heading; others pass through."""
+        from terok.lib.orchestration.container_doctor import _group_key
+
+        cred = DoctorCheck(
+            category="mount",
+            label="Credential file (claude)",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+        )
+        phantom = DoctorCheck(
+            category="env",
+            label="Phantom token (GH_TOKEN)",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+        )
+        base_url = DoctorCheck(
+            category="env",
+            label="Base URL (OPENAI_BASE_URL)",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+        )
+        shield = DoctorCheck(
+            category="shield",
+            label="Shield state",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+        )
+        assert _group_key(cred)[0] == "Credential files"
+        assert _group_key(phantom)[0] == "Phantom tokens"
+        assert _group_key(base_url)[0] == "Base URLs"
+        # Shield has no mapping — streams individually
+        assert _group_key(shield)[0] is None
+
+    def test_network_category_collapses_disjoint_contributors(
+        self,
+        mock_runtime,
+        tmp_path: Path,
+    ) -> None:
+        """Network checks from two layers (sandbox + terok) share one heading.
+
+        Without the grouping that partitions *then* emits, a category
+        contributed to by non-consecutive layers would produce two
+        separate "Port drift" heading lines.
+        """
+        from io import StringIO
+
+        from terok.lib.orchestration.container_doctor import (
+            run_container_doctor,
+        )
+        from terok.lib.util.check_reporter import CheckReporter
+
+        (tmp_path / "42.yml").write_text("mode: cli\n")
+
+        net_a = DoctorCheck(
+            category="network",
+            label="Token broker (TCP)",
+            probe_cmd=["true"],
+            evaluate=lambda *a: CheckVerdict("ok", "reachable"),
+        )
+        shield_check = DoctorCheck(
+            category="shield",
+            label="Shield state",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+            host_side=True,
+        )
+        net_b = DoctorCheck(
+            category="network",
+            label="Token broker port drift",
+            probe_cmd=["true"],
+            evaluate=lambda *a: CheckVerdict("ok", "matches"),
+        )
+
+        buf = StringIO()
+        reporter = CheckReporter(stream=buf)
+
+        with (
+            patch(
+                "terok.lib.orchestration.container_doctor.sandbox_doctor_checks",
+                return_value=[net_a, shield_check],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.agent_doctor_checks",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._terok_doctor_checks",
+                return_value=[net_b],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.tasks_meta_dir",
+                return_value=tmp_path,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.load_task_meta",
+                return_value=({"mode": "cli"}, tmp_path / "42.yml"),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.make_sandbox_config",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.get_token_broker_port",
+                return_value=8080,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.get_ssh_signer_port",
+                return_value=2222,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._read_desired_shield_state",
+                return_value=None,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.load_project",
+                return_value=MagicMock(tasks_root=tmp_path),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._check_shield_state",
+                return_value=("ok", "Shield state", "not managed"),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._exec_in_container",
+                return_value=ExecResult(exit_code=0, stdout="", stderr=""),
+            ),
+        ):
+            mock_runtime.container.return_value.state = "running"
+            run_container_doctor("proj", "42", reporter=reporter)
+
+        out = buf.getvalue()
+        # Single "Port drift" heading, both network checks counted under it.
+        assert out.count("Port drift") == 1
+        assert "ok (2 checks)" in out
+        # Shield state streams individually between the group members (it's
+        # the second check), and must still appear with its own line.
+        assert "Shield state" in out
+
+    def test_legacy_callers_still_receive_list(
+        self,
+        mock_runtime,
+        tmp_path: Path,
+    ) -> None:
+        """Calling without a reporter keeps the historical return shape."""
+        from terok.lib.orchestration.container_doctor import (
+            run_container_doctor,
+        )
+
+        (tmp_path / "42.yml").write_text("mode: cli\n")
+
+        only_check = DoctorCheck(
+            category="shield",
+            label="Shield state",
+            probe_cmd=[],
+            evaluate=lambda *a: CheckVerdict("ok", ""),
+            host_side=True,
+        )
+        with (
+            patch(
+                "terok.lib.orchestration.container_doctor.sandbox_doctor_checks",
+                return_value=[only_check],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.agent_doctor_checks",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._terok_doctor_checks",
+                return_value=[],
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.tasks_meta_dir",
+                return_value=tmp_path,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.load_task_meta",
+                return_value=({"mode": "cli"}, tmp_path / "42.yml"),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.make_sandbox_config",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.get_token_broker_port",
+                return_value=8080,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.get_ssh_signer_port",
+                return_value=2222,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._read_desired_shield_state",
+                return_value=None,
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor.load_project",
+                return_value=MagicMock(tasks_root=tmp_path),
+            ),
+            patch(
+                "terok.lib.orchestration.container_doctor._check_shield_state",
+                return_value=("ok", "Shield state", "not managed"),
+            ),
+        ):
+            mock_runtime.container.return_value.state = "running"
+            results = run_container_doctor("proj", "42")
+
+        # Legacy path returns the accumulated list; streaming path would
+        # have returned an empty list.
+        assert results == [("ok", "Shield state", "not managed")]

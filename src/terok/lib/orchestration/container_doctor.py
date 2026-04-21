@@ -30,6 +30,7 @@ from terok_sandbox.doctor import CheckVerdict, DoctorCheck, sandbox_doctor_check
 from ..core import runtime as _rt
 from ..core.config import make_sandbox_config
 from ..core.projects import load_project
+from ..util.check_reporter import CheckReporter
 from ..util.logging_utils import _log_debug
 from .tasks import container_name, load_task_meta, tasks_meta_dir
 
@@ -39,6 +40,22 @@ _CheckResult = tuple[str, str, str]
 _SHIELD_STATE_FILENAME = "shield_desired_state"
 _CONTAINER_WORKSPACE = "/workspace"  # nosec B108 — standard workspace mount point
 _SHIELD_STATE_LABEL = "Shield state"
+
+#: Map from per-check ``(category, label-prefix)`` → human-readable group
+#: heading.  Checks that match a row here are coalesced under one
+#: heading line; everything else streams individually.  The label-prefix
+#: match is "label starts with this string followed by a space and an
+#: opening paren" so ``Credential file (claude)`` maps to ``Credential
+#: file`` but not a hypothetical ``Credential file cache``.  ``None`` as
+#: the prefix matches any label within that category.
+_GROUP_HEADINGS: tuple[tuple[str, str | None, str], ...] = (
+    ("mount", "Credential file", "Credential files"),
+    ("env", "Phantom token", "Phantom tokens"),
+    ("env", "Base URL", "Base URLs"),
+    ("bridge", None, "Bridges"),
+    ("git", None, "Git config"),
+    ("network", None, "Port drift"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -341,28 +358,176 @@ def run_container_doctor(
     task_id: str,
     *,
     fix: bool = False,
+    reporter: CheckReporter | None = None,
+    label_prefix: str = "",
 ) -> list[_CheckResult]:
     """Run all layered in-container health checks for a specific task.
 
     Collects checks from sandbox, agent, and terok layers, executes probes
     via ``podman exec``, evaluates results, and optionally applies fixes.
 
-    Returns a list of ``(severity, label, detail)`` tuples for display.
+    When *reporter* is supplied, progress streams line-by-line through it
+    and noisy categories (``Credential file (...)``, ``Phantom token
+    (...)``, …) coalesce into a single group heading.  The returned list
+    is also populated for backwards-compatible callers that want the
+    aggregate; it is empty when *reporter* handled the streaming so the
+    caller doesn't re-print.
+
+    *label_prefix* is prepended to every emitted label — used by the
+    sickbay command to tag multi-task runs with ``"Task pid/tid: "``.
     """
     cname, task_dir, early = _resolve_running_container(project_id, task_id)
     if early:
+        if reporter is not None:
+            for status, label, detail in early:
+                reporter.emit(status, label, detail)
+            return []
         return early
 
-    results: list[_CheckResult] = []
-    for check in _collect_all_checks(project_id, task_dir):
-        if check.host_side:
-            results.append(_dispatch_host_side(check, task_dir, cname))
+    checks = list(_collect_all_checks(project_id, task_dir))
+
+    if reporter is None:
+        # Legacy path: collect-and-return.  No streaming, no grouping.
+        results: list[_CheckResult] = []
+        for check in checks:
+            results.extend(_execute_check(check, cname, task_dir, fix=fix))
+        return results
+
+    # Streaming path with grouping.
+    _stream_checks(checks, cname, task_dir, fix=fix, reporter=reporter, label_prefix=label_prefix)
+    return []
+
+
+def _execute_check(
+    check: DoctorCheck,
+    cname: str,
+    task_dir: Path,
+    *,
+    fix: bool,
+) -> list[_CheckResult]:
+    """Run one check and return ``[result]`` or ``[result, fix_result]``."""
+    if check.host_side:
+        return [_dispatch_host_side(check, task_dir, cname)]
+
+    verdict = _run_probe(cname, check)
+    out: list[_CheckResult] = [(verdict.severity, check.label, verdict.detail)]
+    if fix and verdict.fixable and check.fix_cmd:
+        out.append(_apply_fix(cname, check))
+    return out
+
+
+def _group_key(check: DoctorCheck) -> tuple[str | None, str]:
+    """Return ``(heading, member_label)`` — ``heading`` is ``None`` for ungrouped checks."""
+    for category, prefix, heading in _GROUP_HEADINGS:
+        if check.category != category:
             continue
+        if prefix is None:
+            return (heading, check.label)
+        # Match on "prefix (" so "Credential file (claude)" matches but
+        # something like "Credential file cache" would not.
+        if check.label.startswith(f"{prefix} ("):
+            return (heading, check.label)
+    return (None, check.label)
 
-        verdict = _run_probe(cname, check)
-        results.append((verdict.severity, check.label, verdict.detail))
 
-        if fix and verdict.fixable and check.fix_cmd:
-            results.append(_apply_fix(cname, check))
+def _stream_checks(
+    checks: list[DoctorCheck],
+    cname: str,
+    task_dir: Path,
+    *,
+    fix: bool,
+    reporter: CheckReporter,
+    label_prefix: str,
+) -> None:
+    """Emit check progress through *reporter* with per-heading grouping.
 
-    return results
+    Groups appear at the position of their *first* member and absorb any
+    later checks that share the same heading — so a category like
+    ``network`` that's contributed to by both the sandbox (TCP
+    reachability) and the terok layer (port-drift checks) produces a
+    single "Port drift" line instead of two separate ones.  Individual
+    (ungrouped) checks stream at the position where they appear.
+    """
+    # Build an ordered action list: each entry is either an individual
+    # check or a "slot" that a group will be accumulated into.  Group
+    # slots are keyed by heading so later checks with the same heading
+    # fall into the same list.
+    slots: dict[str, list[DoctorCheck]] = {}
+    plan: list[tuple[str, DoctorCheck | str]] = []  # ("one", check) | ("group", heading)
+    for check in checks:
+        heading, _ = _group_key(check)
+        if heading is None:
+            plan.append(("one", check))
+            continue
+        if heading not in slots:
+            slots[heading] = []
+            plan.append(("group", heading))
+        slots[heading].append(check)
+
+    for kind, payload in plan:
+        if kind == "one":
+            _emit_individual(
+                payload,  # type: ignore[arg-type]
+                cname,
+                task_dir,
+                fix=fix,
+                reporter=reporter,
+                label_prefix=label_prefix,
+            )
+        else:
+            heading = payload  # type: ignore[assignment]
+            _emit_group(
+                slots[heading],
+                heading,
+                cname,
+                task_dir,
+                fix=fix,
+                reporter=reporter,
+                label_prefix=label_prefix,
+            )
+
+
+def _emit_individual(
+    check: DoctorCheck,
+    cname: str,
+    task_dir: Path,
+    *,
+    fix: bool,
+    reporter: CheckReporter,
+    label_prefix: str,
+) -> None:
+    """Stream one check through the reporter (begin → run → end)."""
+    label = f"{label_prefix}{check.label}"
+    reporter.begin(label)
+    results = _execute_check(check, cname, task_dir, fix=fix)
+    # First tuple is the check itself; any extra is a fix follow-up.
+    status, _, detail = results[0]
+    reporter.end(status, detail)
+    for fix_status, fix_label, fix_detail in results[1:]:
+        reporter.emit(fix_status, f"{label_prefix}{fix_label}", fix_detail)
+
+
+def _emit_group(
+    members: list[DoctorCheck],
+    heading: str,
+    cname: str,
+    task_dir: Path,
+    *,
+    fix: bool,
+    reporter: CheckReporter,
+    label_prefix: str,
+) -> None:
+    """Run *members* silently under one heading line, then summarise."""
+    full_heading = f"{label_prefix}{heading}"
+    fix_followups: list[_CheckResult] = []
+    with reporter.group(full_heading) as g:
+        for check in members:
+            results = _execute_check(check, cname, task_dir, fix=fix)
+            status, _, detail = results[0]
+            g.track(status, check.label, detail)
+            # Fix follow-ups don't belong inside the group summary —
+            # they're separate informational lines.  Buffer and emit
+            # after the group closes.
+            fix_followups.extend(results[1:])
+    for fix_status, fix_label, fix_detail in fix_followups:
+        reporter.emit(fix_status, f"{label_prefix}{fix_label}", fix_detail)

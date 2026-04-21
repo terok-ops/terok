@@ -19,7 +19,6 @@ from terok.cli.commands.sickbay import (
     _check_vault,
     _check_vault_migration,
     _reconcile_post_stop,
-    _update_worst,
 )
 from terok.lib.util.yaml import dump as yaml_dump
 
@@ -39,23 +38,6 @@ def _write_meta(meta_dir: Path, tid: str, meta: dict) -> Path:
     p = meta_dir / f"{tid}.yml"
     p.write_text(yaml_dump(meta))
     return p
-
-
-class TestUpdateWorst:
-    def test_ok_stays_ok(self) -> None:
-        assert _update_worst("ok", "ok") == "ok"
-
-    def test_warn_upgrades_ok(self) -> None:
-        assert _update_worst("ok", "warn") == "warn"
-
-    def test_error_upgrades_warn(self) -> None:
-        assert _update_worst("warn", "error") == "error"
-
-    def test_error_stays_error(self) -> None:
-        assert _update_worst("error", "ok") == "error"
-
-    def test_warn_stays_warn(self) -> None:
-        assert _update_worst("warn", "ok") == "warn"
 
 
 class TestCheckSshSigner:

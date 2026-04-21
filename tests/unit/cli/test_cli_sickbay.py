@@ -121,8 +121,8 @@ def test_cmd_sickbay_reports_health(
         return ("ok", "Vault migration", "no legacy directory")
 
     patched_checks = [
-        _stub_vault_migration if fn.__name__ == "_check_vault_migration" else fn
-        for fn in _sickbay_module._GLOBAL_CHECKS
+        (label, _stub_vault_migration if fn.__name__ == "_check_vault_migration" else fn)
+        for label, fn in _sickbay_module._GLOBAL_CHECKS
     ]
     with (
         patch("terok.cli.commands.sickbay._GLOBAL_CHECKS", patched_checks),

@@ -44,6 +44,7 @@ from ...lib.core.yaml_schema import SERVICES_TCP_OPTOUT_YAML
 from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
 from ...lib.orchestration.tasks import container_name, is_task_id, tasks_meta_dir
+from ...lib.util.check_reporter import CheckReporter
 from ...lib.util.yaml import load as _yaml_load
 
 # Type alias for check results: (severity, label, detail)
@@ -422,25 +423,29 @@ def _check_keyring() -> _CheckResult:
     )
 
 
-def _check_containers(
+def _stream_containers(
     project_id: str | None,
     task_id: str | None,
     *,
     fix: bool,
-) -> list[_CheckResult]:
-    """Check running task containers via the in-container doctor.
+    reporter: CheckReporter,
+) -> None:
+    """Stream in-container diagnostics through *reporter*, one task at a time.
 
     The per-task running-state check is handled inside
-    ``run_container_doctor`` — it returns an informational result for
+    ``run_container_doctor`` — it emits an informational line for
     non-running containers, so we simply forward all tasks and let the
     orchestrator decide.
     """
-    results: list[_CheckResult] = []
-
     if project_id and task_id:
-        # Single task scope
-        results.extend(run_container_doctor(project_id, task_id, fix=fix))
-        return results
+        run_container_doctor(
+            project_id,
+            task_id,
+            fix=fix,
+            reporter=reporter,
+            label_prefix=f"Task {project_id}/{task_id}: ",
+        )
+        return
 
     # Project or global scope — iterate all known tasks
     if project_id:
@@ -454,14 +459,13 @@ def _check_containers(
             continue
         for meta_file in meta_dir.glob(_TASK_META_GLOB):
             tid = meta_file.stem
-            for severity, label, detail in run_container_doctor(pid, tid, fix=fix):
-                # Prefix bare check labels with task context so multi-task
-                # output is unambiguous (early-return labels already include it)
-                if not label.startswith(("Task ", "  fix:")):
-                    label = f"Task {pid}/{tid}: {label}"
-                results.append((severity, label, detail))
-
-    return results
+            run_container_doctor(
+                pid,
+                tid,
+                fix=fix,
+                reporter=reporter,
+                label_prefix=f"Task {pid}/{tid}: ",
+            )
 
 
 def _check_selinux_policy() -> _CheckResult:
@@ -551,30 +555,23 @@ def _check_vault_migration() -> _CheckResult:
 
 
 _GLOBAL_CHECKS = [
-    _check_gate_server,
-    _check_shield,
-    _check_vault,
-    _check_vault_migration,
-    _check_ssh_signer,
-    _check_keyring,
-    _check_selinux_policy,
+    ("Gate server", _check_gate_server),
+    ("Shield", _check_shield),
+    ("Vault", _check_vault),
+    ("Vault migration", _check_vault_migration),
+    ("SSH signer", _check_ssh_signer),
+    ("Keyring", _check_keyring),
+    ("SELinux policy", _check_selinux_policy),
 ]
+"""Global checks paired with the label shown while they run.
 
-_STATUS_MARKERS = {
-    "ok": "ok",
-    "info": "info",
-    "warn": "WARN",
-    "error": "ERROR",
-}
-
-
-def _update_worst(current: str, status: str) -> str:
-    """Return the more severe of *current* and *status*."""
-    if status == "error" or current == "error":
-        return "error"
-    if status == "warn" or current == "warn":
-        return "warn"
-    return "ok"
+The check functions return their own label inside the ``_CheckResult``
+tuple, but we want to stream ``"  Gate server …… "`` *before* the
+check runs — so the user sees progress even on slow probes.  The
+label printed up front should match the one the check returns; if it
+ever drifts, the streamed line and the final marker end up on different
+rows and the output looks broken.
+"""
 
 
 def _cmd_sickbay(
@@ -582,37 +579,30 @@ def _cmd_sickbay(
     task_id: str | None = None,
     fix: bool = False,
 ) -> None:
-    """Run health checks and report results."""
-    worst = "ok"
+    """Run health checks and report results, streaming progress line-by-line."""
+    reporter = CheckReporter()
 
     if not task_id:
-        for check in _GLOBAL_CHECKS:
-            status, label, detail = check()
-            print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
-            worst = _update_worst(worst, status)
+        for label, check in _GLOBAL_CHECKS:
+            reporter.begin(label)
+            status, _, detail = check()
+            reporter.end(status, detail)
 
-    hook_results = _check_unfired_hooks(project_id, task_id, fix=fix)
-    for status, label, detail in hook_results:
-        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
-        worst = _update_worst(worst, status)
+    for status, label, detail in _check_unfired_hooks(project_id, task_id, fix=fix):
+        reporter.emit(status, label, detail)
+    for status, label, detail in _check_shield_annotations(project_id, task_id):
+        reporter.emit(status, label, detail)
 
-    annotation_results = _check_shield_annotations(project_id, task_id)
-    for status, label, detail in annotation_results:
-        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
-        worst = _update_worst(worst, status)
+    _stream_containers(project_id, task_id, fix=fix, reporter=reporter)
 
-    # In-container diagnostics for running tasks
-    container_results = _check_containers(project_id, task_id, fix=fix)
-    for status, label, detail in container_results:
-        print(f"  {label} .... {_STATUS_MARKERS.get(status, status)} ({detail})")
-        worst = _update_worst(worst, status)
+    # Single-task summary: ``ok (consistent)`` iff every check for this
+    # task came back clean.  Globals aren't run in the ``task_id`` scope,
+    # so the reporter's worst-status at this point covers exactly the
+    # three task-scoped check sets.
+    if task_id and reporter.worst_status == "ok":
+        reporter.emit("ok", f"Task {project_id}/{task_id}", "consistent")
 
-    # Print "ok (consistent)" only when scoped to a single task and every result is "ok"
-    all_ok = all(s == "ok" for s, _, _ in hook_results + annotation_results + container_results)
-    if task_id and all_ok:
-        print(f"  Task {project_id}/{task_id} .... ok (consistent)")
-
-    if worst == "error":
+    if reporter.worst_status == "error":
         sys.exit(2)
-    elif worst == "warn":
+    elif reporter.worst_status == "warn":
         sys.exit(1)
