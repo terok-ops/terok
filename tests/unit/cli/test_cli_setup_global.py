@@ -603,22 +603,24 @@ class TestDispatch:
         assert dispatch(argparse.Namespace(cmd="task")) is False
 
     def test_setup_invokes_cmd_setup(self) -> None:
-        """``terok setup`` calls cmd_setup with the --check and --no-dbus-bridge flags."""
+        """``terok setup`` threads all three flags through to ``cmd_setup``."""
         import argparse
 
-        args = argparse.Namespace(cmd="setup", check=True, no_dbus_bridge=False)
+        args = argparse.Namespace(
+            cmd="setup", check=True, no_dbus_bridge=False, no_desktop_entry=False
+        )
         with patch("terok.cli.commands.setup.cmd_setup") as mock:
             assert dispatch(args) is True
-        mock.assert_called_once_with(check_only=True, no_dbus_bridge=False)
+        mock.assert_called_once_with(check_only=True, no_dbus_bridge=False, no_desktop_entry=False)
 
     def test_setup_defaults_check_to_false(self) -> None:
-        """Missing --check/--no-dbus-bridge attributes default to False."""
+        """Missing ``--check`` / opt-out attributes default to False."""
         import argparse
 
         args = argparse.Namespace(cmd="setup")
         with patch("terok.cli.commands.setup.cmd_setup") as mock:
             assert dispatch(args) is True
-        mock.assert_called_once_with(check_only=False, no_dbus_bridge=False)
+        mock.assert_called_once_with(check_only=False, no_dbus_bridge=False, no_desktop_entry=False)
 
 
 # ── D-Bus clearance bridge phase ────────────────────────────────────────
@@ -827,6 +829,93 @@ class TestDisableDbusBridge:
             assert _disable_dbus_bridge(check_only=False) is False
         out = capsys.readouterr().out
         assert "unit removal" in out
+
+
+class TestEnsureDesktopEntry:
+    """``_ensure_desktop_entry`` delegates to the resource installer."""
+
+    def test_check_only_reports_present(self, capsys: pytest.CaptureFixture) -> None:
+        """``check_only`` returns what ``is_desktop_entry_installed`` reports."""
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with patch("terok.resources.desktop.is_desktop_entry_installed", return_value=True):
+            assert _ensure_desktop_entry(check_only=True) is True
+        assert "installed" in capsys.readouterr().out
+
+    def test_check_only_reports_absent(self, capsys: pytest.CaptureFixture) -> None:
+        """``check_only`` with no entry present returns False."""
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with patch("terok.resources.desktop.is_desktop_entry_installed", return_value=False):
+            assert _ensure_desktop_entry(check_only=True) is False
+
+    def test_install_uses_absolute_terok_tui_when_on_path(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """``shutil.which`` hit → absolute path threaded into the installer."""
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/opt/venv/bin/terok-tui"),
+            patch("terok.resources.desktop.install_desktop_entry") as install,
+        ):
+            assert _ensure_desktop_entry(check_only=False) is True
+        install.assert_called_once_with("/opt/venv/bin/terok-tui")
+
+    def test_install_falls_back_to_bare_name_off_path(self, capsys: pytest.CaptureFixture) -> None:
+        """Nothing on PATH → installer still runs with the bare binary name."""
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value=None),
+            patch("terok.resources.desktop.install_desktop_entry") as install,
+        ):
+            _ensure_desktop_entry(check_only=False)
+        install.assert_called_once_with("terok-tui")
+
+    def test_install_failure_soft_fails_with_fail_status(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """A raising installer is caught, reported, returns False."""
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="terok-tui"),
+            patch(
+                "terok.resources.desktop.install_desktop_entry",
+                side_effect=OSError("read-only fs"),
+            ),
+        ):
+            assert _ensure_desktop_entry(check_only=False) is False
+        assert "read-only fs" in capsys.readouterr().out
+
+
+class TestDisableDesktopEntry:
+    """``_disable_desktop_entry`` tears down under ``--no-desktop-entry``."""
+
+    def test_check_only_reports_opted_out(self, capsys: pytest.CaptureFixture) -> None:
+        from terok.cli.commands.setup import _disable_desktop_entry
+
+        assert _disable_desktop_entry(check_only=True) is True
+        assert "opted out" in capsys.readouterr().out
+
+    def test_calls_uninstall_and_reports_disabled(self, capsys: pytest.CaptureFixture) -> None:
+        from terok.cli.commands.setup import _disable_desktop_entry
+
+        with patch("terok.resources.desktop.uninstall_desktop_entry") as uninstall:
+            assert _disable_desktop_entry(check_only=False) is True
+        uninstall.assert_called_once()
+        assert "disabled" in capsys.readouterr().out
+
+    def test_uninstall_failure_soft_fails_with_warn(self, capsys: pytest.CaptureFixture) -> None:
+        from terok.cli.commands.setup import _disable_desktop_entry
+
+        with patch(
+            "terok.resources.desktop.uninstall_desktop_entry",
+            side_effect=OSError("permission denied"),
+        ):
+            assert _disable_desktop_entry(check_only=False) is False
+        assert "permission denied" in capsys.readouterr().out
 
 
 class TestCheckDbusSend:

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Terok
+GenericName=AI Agent Task Manager
+Comment=Manage containerized AI coding agent tasks with Podman
+Exec={{BIN}}
+TryExec={{TRY_EXEC}}
+Icon=terok
+Terminal=true
+Categories=Development;System;
+Keywords=terok;podman;containers;agent;ai;
+StartupNotify=false
