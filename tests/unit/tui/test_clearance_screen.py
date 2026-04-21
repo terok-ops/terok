@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from typing import Any
 from unittest import mock
 
 from terok.cli.commands.clearance import dispatch, register
@@ -175,7 +176,7 @@ class TestRenderNotification:
 class TestOnNotificationPosted:
     """``on__notification_posted`` routes new blocks vs verdict updates vs info."""
 
-    def _screen_with_mocked_queries(self, mod):
+    def _screen_with_mocked_queries(self, mod: Any) -> tuple[Any, mock.Mock, mock.Mock]:
         """Return a screen whose query_one returns (log, pending_list) mocks."""
         screen = mod.ClearanceScreen()
         log = mock.Mock()
