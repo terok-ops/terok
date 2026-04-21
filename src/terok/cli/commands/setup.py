@@ -346,9 +346,14 @@ def _ensure_dbus_hub(*, check_only: bool, color: bool) -> bool:
         print(f"{_status_label(False, color)} (import failed: {exc})")
         return False
 
-    bin_path = shutil.which("terok-dbus") or f"{sys.executable} -m terok_dbus._cli"
+    # Avoid ``shutil.which("terok-dbus")`` here: a hostile PATH (shell rc,
+    # unexpected cwd) could otherwise poison the ExecStart= baked into the
+    # persistent user unit.  ``sys.executable`` is set by the running
+    # interpreter, not resolved through PATH, so the pipx venv's own Python
+    # — or whatever is actually executing this process — is the one the
+    # unit ends up invoking.
     try:
-        install_service(bin_path)
+        install_service([sys.executable, "-m", "terok_dbus._cli"])
     except Exception as exc:  # noqa: BLE001
         print(f"{_status_label(False, color)} ({exc})")
         return False
@@ -407,10 +412,24 @@ def _check_dbus_send(color: bool) -> bool:
 
 
 def _user_systemd_dir() -> Path:
-    """Resolve the user's systemd unit directory (XDG-aware)."""
+    """Resolve the user's systemd unit directory, refusing unsafe overrides.
+
+    terok is rootless by design: ``terok setup`` is never expected to run
+    as uid 0.  Honouring an env-supplied ``XDG_CONFIG_HOME`` while running
+    as root would let an attacker-controlled environment redirect unit
+    writes/unlinks to an arbitrary base directory.  Refuse both: bail out
+    if invoked as root, and refuse an ``XDG_CONFIG_HOME`` that resolves
+    outside the current user's home.
+    """
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        raise SystemExit("terok setup must not run as root — it is a rootless tool")
     xdg = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg) if xdg else Path.home() / ".config"
-    return base / "systemd" / "user"
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
+    resolved = base.resolve()
+    home = Path.home().resolve()
+    if resolved != home and home not in resolved.parents:
+        raise SystemExit(f"XDG_CONFIG_HOME={base} resolves outside {home}; refusing for safety")
+    return resolved / "systemd" / "user"
 
 
 def _enable_user_service(unit: str) -> None:

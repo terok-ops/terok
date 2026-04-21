@@ -706,38 +706,31 @@ class TestEnsureDbusHub:
         unit_dir = tmp_path / "systemd/user"
         unit_dir.mkdir(parents=True)
         (unit_dir / "terok-dbus.service").write_text("[Service]\n")
-        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}):
+        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
             assert _ensure_dbus_hub(check_only=True, color=False) is True
         assert "installed" in capsys.readouterr().out
 
     def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
         """check_only reports false when the unit file is absent."""
-        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}):
+        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
             assert _ensure_dbus_hub(check_only=True, color=False) is False
         assert "not installed" in capsys.readouterr().out
 
-    def test_install_success(self, capsys: pytest.CaptureFixture) -> None:
-        """install_service + enable path reports ok."""
+    def test_install_always_uses_sys_executable_module_form(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """PATH is ignored — unit is installed with the current interpreter's argv."""
+        import sys as _sys
+
         with (
-            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/terok-dbus"),
             patch("terok_dbus._install.install_service") as mock_install,
             patch("terok.cli.commands.setup._enable_user_service") as mock_enable,
         ):
             assert _ensure_dbus_hub(check_only=False, color=False) is True
-        mock_install.assert_called_once_with("/bin/terok-dbus")
+        (argv,) = mock_install.call_args[0]
+        assert argv == [_sys.executable, "-m", "terok_dbus._cli"]
         mock_enable.assert_called_once_with("terok-dbus")
         assert "installed" in capsys.readouterr().out
-
-    def test_install_uses_module_fallback_when_bin_missing(self) -> None:
-        """If ``terok-dbus`` isn't on PATH, fall back to ``python -m terok_dbus._cli``."""
-        with (
-            patch("terok.cli.commands.setup.shutil.which", return_value=None),
-            patch("terok_dbus._install.install_service") as mock_install,
-            patch("terok.cli.commands.setup._enable_user_service"),
-        ):
-            _ensure_dbus_hub(check_only=False, color=False)
-        (bin_path,) = mock_install.call_args[0]
-        assert "terok_dbus._cli" in bin_path
 
     def test_import_failure_soft_fails(self, capsys: pytest.CaptureFixture) -> None:
         """An ImportError out of terok_dbus._install must not crash setup."""
@@ -751,7 +744,6 @@ class TestEnsureDbusHub:
     def test_install_raises_returns_false(self, capsys: pytest.CaptureFixture) -> None:
         """install_service exceptions are caught, reported, return False."""
         with (
-            patch("terok.cli.commands.setup.shutil.which", return_value="/bin/terok-dbus"),
             patch(
                 "terok_dbus._install.install_service",
                 side_effect=RuntimeError("template missing"),
@@ -774,7 +766,7 @@ class TestDisableDbusBridge:
     def test_clean_teardown_reports_ok(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
         """No unit on disk + sandbox uninstall succeeds → True."""
         with (
-            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge") as mock_uninstall,
         ):
             assert _disable_dbus_bridge(check_only=False, color=False) is True
@@ -790,7 +782,7 @@ class TestDisableDbusBridge:
         unit = unit_dir / "terok-dbus.service"
         unit.write_text("[Service]\n")
         with (
-            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge"),
             patch("terok.cli.commands.setup._disable_user_service") as mock_disable,
         ):
@@ -803,7 +795,7 @@ class TestDisableDbusBridge:
     ) -> None:
         """Reader uninstall raising → WARN line + False."""
         with (
-            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch(
                 "terok_sandbox.uninstall_shield_bridge",
                 side_effect=RuntimeError("permission denied"),
@@ -823,7 +815,7 @@ class TestDisableDbusBridge:
         unit = unit_dir / "terok-dbus.service"
         unit.write_text("[Service]\n")
         with (
-            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path)}),
+            patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge"),
             patch("pathlib.Path.unlink", side_effect=OSError("read-only fs")),
         ):

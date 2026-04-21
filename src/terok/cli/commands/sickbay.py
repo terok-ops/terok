@@ -38,12 +38,12 @@ from terok_sandbox import (
 
 from ...lib.core import runtime as _rt
 from ...lib.core.config import get_services_mode, global_config_path, make_sandbox_config
-from ...lib.core.project_model import ProjectConfig
+from ...lib.core.project_model import ProjectConfig, is_valid_project_id
 from ...lib.core.projects import list_projects, load_project
 from ...lib.core.yaml_schema import SERVICES_TCP_OPTOUT_YAML
 from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
-from ...lib.orchestration.tasks import container_name, tasks_meta_dir
+from ...lib.orchestration.tasks import _is_task_id, container_name, tasks_meta_dir
 from ...lib.util.yaml import load as _yaml_load
 
 # Type alias for check results: (severity, label, detail)
@@ -160,12 +160,25 @@ def _check_vault() -> _CheckResult:
     return ("warn", label, "not running — run 'terok vault start'")
 
 
+def _task_meta_path(pid: str, tid: str) -> Path | None:
+    """Resolve a task's metadata YAML path, refusing traversal in *pid* / *tid*.
+
+    Both IDs arrive from CLI positional args (``terok sickbay <project>
+    <task>``).  A hostile value like ``../../etc/passwd`` would otherwise
+    escape ``tasks_meta_dir`` via ``Path`` join; reject anything that
+    doesn't match the established project/task-ID grammars.
+    """
+    if not is_valid_project_id(pid) or not _is_task_id(tid):
+        return None
+    return tasks_meta_dir(pid) / f"{tid}.yml"
+
+
 def _check_task_hook(
     pid: str, tid: str, project: ProjectConfig, *, fix: bool
 ) -> _CheckResult | None:
     """Check a single task for unfired post_stop hook.  Returns None if ok."""
-    meta_path = tasks_meta_dir(pid) / f"{tid}.yml"
-    if not meta_path.is_file():
+    meta_path = _task_meta_path(pid, tid)
+    if meta_path is None or not meta_path.is_file():
         return None
 
     try:
@@ -227,8 +240,8 @@ def _check_task_shield_annotation(
     TUI (which only know the container name) to the wrong state dir, or to
     nothing at all.  Non-shielded containers and stopped ones are skipped.
     """
-    meta_path = tasks_meta_dir(pid) / f"{tid}.yml"
-    if not meta_path.is_file():
+    meta_path = _task_meta_path(pid, tid)
+    if meta_path is None or not meta_path.is_file():
         return None
     try:
         meta = _yaml_load(meta_path.read_text()) or {}

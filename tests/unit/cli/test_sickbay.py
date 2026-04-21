@@ -151,48 +151,48 @@ class TestCheckTaskHook:
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_hook("proj", "99", project, fix=False) is None
+            assert _check_task_hook("proj", "g2xyz", project, fix=False) is None
 
     def test_no_mode_returns_none(self, task_meta_dir: Path) -> None:
-        _write_meta(task_meta_dir, "1", {"status": "created"})
+        _write_meta(task_meta_dir, "g1abc", {"status": "created"})
         project = unittest.mock.MagicMock()
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
         ):
-            assert _check_task_hook("proj", "1", project, fix=False) is None
+            assert _check_task_hook("proj", "g1abc", project, fix=False) is None
 
     def test_running_container_returns_none(self, task_meta_dir: Path, mock_runtime) -> None:
-        _write_meta(task_meta_dir, "1", {"mode": "cli"})
+        _write_meta(task_meta_dir, "g1abc", {"mode": "cli"})
         project = unittest.mock.MagicMock()
         mock_runtime.container.return_value.state = "running"
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
         ):
-            assert _check_task_hook("proj", "1", project, fix=False) is None
+            assert _check_task_hook("proj", "g1abc", project, fix=False) is None
 
     def test_already_fired_returns_none(self, task_meta_dir: Path, mock_runtime) -> None:
-        _write_meta(task_meta_dir, "1", {"mode": "cli", "hooks_fired": ["post_stop"]})
+        _write_meta(task_meta_dir, "g1abc", {"mode": "cli", "hooks_fired": ["post_stop"]})
         project = unittest.mock.MagicMock()
         mock_runtime.container.return_value.state = "exited"
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
         ):
-            assert _check_task_hook("proj", "1", project, fix=False) is None
+            assert _check_task_hook("proj", "g1abc", project, fix=False) is None
 
     def test_unfired_returns_warn(self, task_meta_dir: Path, mock_runtime) -> None:
-        _write_meta(task_meta_dir, "1", {"mode": "cli", "hooks_fired": ["post_start"]})
+        _write_meta(task_meta_dir, "g1abc", {"mode": "cli", "hooks_fired": ["post_start"]})
         project = unittest.mock.MagicMock()
         mock_runtime.container.return_value.state = "exited"
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
         ):
-            result = _check_task_hook("proj", "1", project, fix=False)
+            result = _check_task_hook("proj", "g1abc", project, fix=False)
             assert result is not None
             assert result[0] == "warn"
             assert "post_stop" in result[2]
 
     def test_fix_calls_reconcile(self, task_meta_dir: Path, mock_runtime) -> None:
-        _write_meta(task_meta_dir, "1", {"mode": "cli"})
+        _write_meta(task_meta_dir, "g1abc", {"mode": "cli"})
         project = unittest.mock.MagicMock()
         project.hook_post_stop = "echo cleanup"
         project.tasks_root = task_meta_dir.parent
@@ -203,20 +203,20 @@ class TestCheckTaskHook:
             ),
             unittest.mock.patch("terok.cli.commands.sickbay.run_hook") as mock_hook,
         ):
-            result = _check_task_hook("proj", "1", project, fix=True)
+            result = _check_task_hook("proj", "g1abc", project, fix=True)
             assert result is not None
             assert result[0] == "ok"
             assert "reconciled" in result[2]
             mock_hook.assert_called_once()
 
     def test_bad_metadata_returns_warn(self, task_meta_dir: Path) -> None:
-        bad_path = task_meta_dir / "1.yml"
+        bad_path = task_meta_dir / "g1abc.yml"
         bad_path.write_bytes(b"\x80\x81\x82")  # invalid UTF-8
         project = unittest.mock.MagicMock()
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=task_meta_dir
         ):
-            result = _check_task_hook("proj", "1", project, fix=False)
+            result = _check_task_hook("proj", "g1abc", project, fix=False)
             assert result is not None
             assert result[0] == "warn"
             assert "bad metadata" in result[2]
@@ -224,17 +224,19 @@ class TestCheckTaskHook:
 
 class TestReconcilePostStop:
     def test_success(self, tmp_path: Path) -> None:
-        meta_path = tmp_path / "1.yml"
+        meta_path = tmp_path / "g1abc.yml"
         meta_path.write_text(yaml_dump({"mode": "cli"}))
         project = unittest.mock.MagicMock()
         project.hook_post_stop = "echo done"
         project.tasks_root = tmp_path
         with unittest.mock.patch("terok.cli.commands.sickbay.run_hook"):
-            result = _reconcile_post_stop("p", "1", "cli", "c", project, meta_path, "Task p/1")
+            result = _reconcile_post_stop(
+                "p", "g1abc", "cli", "c", project, meta_path, "Task p/g1abc"
+            )
             assert result[0] == "ok"
 
     def test_failure(self, tmp_path: Path) -> None:
-        meta_path = tmp_path / "1.yml"
+        meta_path = tmp_path / "g1abc.yml"
         meta_path.write_text(yaml_dump({"mode": "cli"}))
         project = unittest.mock.MagicMock()
         project.hook_post_stop = "exit 1"
@@ -242,7 +244,9 @@ class TestReconcilePostStop:
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.run_hook", side_effect=RuntimeError("boom")
         ):
-            result = _reconcile_post_stop("p", "1", "cli", "c", project, meta_path, "Task p/1")
+            result = _reconcile_post_stop(
+                "p", "g1abc", "cli", "c", project, meta_path, "Task p/g1abc"
+            )
             assert result[0] == "error"
             assert "boom" in result[2]
 
@@ -541,64 +545,64 @@ class TestCheckTaskShieldAnnotation:
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
     def test_malformed_yaml_returns_none(self, tmp_path: Path) -> None:
         """Bad metadata → skipped silently (_check_task_hook owns the warn)."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
-        (tmp_path / "1.yml").write_bytes(b"\x80\x81")  # invalid UTF-8
+        (tmp_path / "g1abc.yml").write_bytes(b"\x80\x81")  # invalid UTF-8
         project = self._project(tmp_path)
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
     def test_no_mode_returns_none(self, tmp_path: Path) -> None:
         """Meta without ``mode`` → nothing to check."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
-        _write_meta(tmp_path, "1", {"status": "created"})
+        _write_meta(tmp_path, "g1abc", {"status": "created"})
         project = self._project(tmp_path.parent)
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
     def test_non_running_container_returns_none(self, tmp_path: Path, mock_runtime) -> None:
         """Stopped container is post_stop's territory, not annotation-drift territory."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
-        _write_meta(tmp_path, "1", {"mode": "cli"})
+        _write_meta(tmp_path, "g1abc", {"mode": "cli"})
         project = self._project(tmp_path.parent)
         mock_runtime.container.return_value.state = "exited"
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
     def test_shield_dir_absent_returns_none(self, tmp_path: Path, mock_runtime) -> None:
         """Unshielded task → no expectation to compare against."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
-        _write_meta(tmp_path, "1", {"mode": "cli"})
+        _write_meta(tmp_path, "g1abc", {"mode": "cli"})
         project = self._project(tmp_path.parent)
         mock_runtime.container.return_value.state = "running"
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
     def test_missing_annotation_warns(self, tmp_path: Path, mock_runtime) -> None:
         """Shield dir present but container has no annotation → WARN."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
         tasks_root = tmp_path / "tasks"
-        task_dir = tasks_root / "1"
+        task_dir = tasks_root / "g1abc"
         (task_dir / "shield").mkdir(parents=True)
         meta_dir = tmp_path / "meta"
         meta_dir.mkdir()
-        _write_meta(meta_dir, "1", {"mode": "cli"})
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
         project = self._project(tasks_root)
         mock_runtime.container.return_value.state = "running"
         with (
@@ -608,7 +612,7 @@ class TestCheckTaskShieldAnnotation:
                 return_value=None,
             ),
         ):
-            result = _check_task_shield_annotation("p", "1", project)
+            result = _check_task_shield_annotation("p", "g1abc", project)
         assert result is not None
         assert result[0] == "warn"
         assert "no terok.shield.state_dir" in result[2] or "annotation" in result[2]
@@ -618,14 +622,14 @@ class TestCheckTaskShieldAnnotation:
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
         tasks_root = tmp_path / "tasks"
-        task_dir = tasks_root / "1"
+        task_dir = tasks_root / "g1abc"
         expected_sd = task_dir / "shield"
         expected_sd.mkdir(parents=True)
         actual_sd = tmp_path / "elsewhere"
         actual_sd.mkdir()
         meta_dir = tmp_path / "meta"
         meta_dir.mkdir()
-        _write_meta(meta_dir, "1", {"mode": "cli"})
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
         project = self._project(tasks_root)
         mock_runtime.container.return_value.state = "running"
         with (
@@ -635,7 +639,7 @@ class TestCheckTaskShieldAnnotation:
                 return_value=actual_sd,
             ),
         ):
-            result = _check_task_shield_annotation("p", "1", project)
+            result = _check_task_shield_annotation("p", "g1abc", project)
         assert result is not None
         assert result[0] == "warn"
         assert str(actual_sd) in result[2]
@@ -646,12 +650,12 @@ class TestCheckTaskShieldAnnotation:
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
         tasks_root = tmp_path / "tasks"
-        task_dir = tasks_root / "1"
+        task_dir = tasks_root / "g1abc"
         sd = task_dir / "shield"
         sd.mkdir(parents=True)
         meta_dir = tmp_path / "meta"
         meta_dir.mkdir()
-        _write_meta(meta_dir, "1", {"mode": "cli"})
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
         project = self._project(tasks_root)
         mock_runtime.container.return_value.state = "running"
         with (
@@ -661,7 +665,7 @@ class TestCheckTaskShieldAnnotation:
                 return_value=sd,
             ),
         ):
-            assert _check_task_shield_annotation("p", "1", project) is None
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
 
 
 class TestCheckShieldAnnotations:
@@ -688,7 +692,7 @@ class TestCheckShieldAnnotations:
 
         meta_dir = tmp_path / "meta"
         meta_dir.mkdir()
-        _write_meta(meta_dir, "1", {"mode": "cli"})
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
         project = unittest.mock.MagicMock()
         project.id = "proj"
         with (
@@ -709,8 +713,8 @@ class TestCheckShieldAnnotations:
 
         meta_dir = tmp_path / "meta"
         meta_dir.mkdir()
-        _write_meta(meta_dir, "1", {"mode": "cli"})
-        _write_meta(meta_dir, "2", {"mode": "cli"})
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        _write_meta(meta_dir, "g2xyz", {"mode": "cli"})
         project = unittest.mock.MagicMock()
         project.id = "p"
         with (
@@ -721,7 +725,7 @@ class TestCheckShieldAnnotations:
                 return_value=None,
             ) as mock_check,
         ):
-            _check_shield_annotations("p", "1")
+            _check_shield_annotations("p", "g1abc")
         # Only the named task, not the globbed pair
         assert mock_check.call_count == 1
-        assert mock_check.call_args.args[1] == "1"
+        assert mock_check.call_args.args[1] == "g1abc"
