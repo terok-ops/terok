@@ -3058,13 +3058,13 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-dbus"
-version = "0.5.11"
+version = "0.5.12"
 description = "D-Bus desktop notification package for terok"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_dbus-0.5.11-py3-none-any.whl", hash = "sha256:63c72feec2c1f1c82705d39ae484b182b378b44480bbf1711340754e33dec087"},
+    {file = "terok_dbus-0.5.12-py3-none-any.whl", hash = "sha256:1b8840ea2a6ed44ffddda6dd152d3703d149264f94855c78577f82bb83ab6e63"},
 ]
 
 [package.dependencies]
@@ -3072,60 +3072,60 @@ dbus-fast = ">=2.0,<5.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.11/terok_dbus-0.5.11-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.12/terok_dbus-0.5.12-py3-none-any.whl"
 
 [[package]]
 name = "terok-executor"
-version = "0.0.103"
+version = "0.0.104"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_executor-0.0.103-py3-none-any.whl", hash = "sha256:fc716e5c19419200ba2cae55a9a5a855acb06b532ec5c17ca66f62fcf1d9fac2"},
+    {file = "terok_executor-0.0.104-py3-none-any.whl", hash = "sha256:516a4fa1a1cd855307e87972058d271bb9d3cf5842e0e9760b1370c6342ca790"},
 ]
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 pwinput = ">=1.0.3"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.85/terok_sandbox-0.0.85-py3-none-any.whl"}
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.86/terok_sandbox-0.0.86-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.103/terok_executor-0.0.103-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.104/terok_executor-0.0.104-py3-none-any.whl"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.85"
+version = "0.0.86"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_sandbox-0.0.85-py3-none-any.whl", hash = "sha256:6dabac7c7d29363714381e097ff3160ba7efe8caaae7d33aa662c46833d15126"},
+    {file = "terok_sandbox-0.0.86-py3-none-any.whl", hash = "sha256:a303d86a32673c4982be0acc2f50996d3d6a9776d0d5733dbbae1b81e9820a85"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.9"
 cryptography = ">=46.0.7"
 platformdirs = ">=4.9.6"
-terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.25/terok_shield-0.6.25-py3-none-any.whl"}
+terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.26/terok_shield-0.6.26-py3-none-any.whl"}
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.85/terok_sandbox-0.0.85-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.86/terok_sandbox-0.0.86-py3-none-any.whl"
 
 [[package]]
 name = "terok-shield"
-version = "0.6.25"
+version = "0.6.26"
 description = "nftables-based egress firewalling for Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_shield-0.6.25-py3-none-any.whl", hash = "sha256:ade2642a6f055d3f302ad3086b09a197ab08076efd7c04ce284c46d7bc3fc0df"},
+    {file = "terok_shield-0.6.26-py3-none-any.whl", hash = "sha256:789d5355522bd61e23262eb5fe180f25a7259c37651acefccd8736a65e6900a8"},
 ]
 
 [package.dependencies]
@@ -3134,7 +3134,7 @@ PyYAML = ">=6.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.25/terok_shield-0.6.25-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.26/terok_shield-0.6.26-py3-none-any.whl"
 
 [[package]]
 name = "textual"
@@ -3623,4 +3623,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "161eac9523761d8d6a69d572e2717edda580d5820bf54144c67811a13b00716d"
+content-hash = "bf868ff2aec31a55b37ddf81aa7282dd4368aecb86b53be5a0be5673772a5dc2"
