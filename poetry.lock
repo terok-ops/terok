@@ -3073,7 +3073,7 @@ dbus-fast = ">=2.0,<5.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-dbus.git"
 reference = "feat/dbus-clearance-bridge"
-resolved_reference = "03c389a760c383c9161a28163bbeadb926984a13"
+resolved_reference = "41c212882cb5136d988c6988e842fb55257e9cd9"
 
 [[package]]
 name = "terok-executor"
@@ -3096,7 +3096,7 @@ tomli-w = ">=1.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-executor.git"
 reference = "feat/dbus-clearance-bridge"
-resolved_reference = "bbc91484d5aae242b974c3f5a556c0c6fc3a4e26"
+resolved_reference = "8b3d49e91d63368414451af7f03577159a80d61a"
 
 [[package]]
 name = "terok-sandbox"
@@ -3118,7 +3118,7 @@ terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = 
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/dbus-clearance-bridge"
-resolved_reference = "140fbecd77ec1e7a198b2155f4f8dbdd6c93e7a9"
+resolved_reference = "cffbab329a9f3862769c42767b2737e4fae24cc9"
 
 [[package]]
 name = "terok-shield"
@@ -3138,7 +3138,7 @@ PyYAML = ">=6.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
 reference = "feat/dbus-clearance-bridge"
-resolved_reference = "9c169c0cf908f43f851cbeca1442518b0117e9fe"
+resolved_reference = "09c53013ad24b96027573e2a45c4638e94d426f8"
 
 [[package]]
 name = "textual"
