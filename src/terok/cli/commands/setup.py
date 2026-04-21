@@ -473,7 +473,7 @@ def _ensure_desktop_entry(*, check_only: bool) -> bool:
          its own, but the refresh makes it appear in the next-session
          menu without an X-server restart.
     """
-    from ._desktop_entry import install_desktop_entry, is_desktop_entry_installed
+    from ._desktop_entry import DesktopBackend, install_desktop_entry, is_desktop_entry_installed
 
     _stage_begin("Desktop entry")
     if check_only:
@@ -490,11 +490,22 @@ def _ensure_desktop_entry(*, check_only: bool) -> bool:
         # to the bare binary name so an updated PATH picks it up.
         bin_path = "terok-tui"
     try:
-        install_desktop_entry(bin_path)
+        backend = install_desktop_entry(bin_path)
     except Exception as exc:  # noqa: BLE001
         print(f"{_status_label(False)} ({exc})")
         return False
-    print(f"{_status_label(True)} (installed)")
+    if backend is DesktopBackend.XDG_UTILS:
+        print(f"{_status_label(True)} (installed)")
+    else:
+        # The fallback writes the right XDG paths on spec-compliant
+        # hosts but skips desktop-file-install validation and can't
+        # cover DE-specific layout drift — flag so the operator knows
+        # to install xdg-utils for the robust path.
+        print(
+            f"{_warn_label()} "
+            f"(installed via built-in fallback — xdg-utils not on PATH; "
+            f"install it for standard XDG registration)"
+        )
     return True
 
 

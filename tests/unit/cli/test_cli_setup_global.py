@@ -868,25 +868,71 @@ class TestEnsureDesktopEntry:
         self, capsys: pytest.CaptureFixture
     ) -> None:
         """``shutil.which`` hit → absolute path threaded into the installer."""
+        from terok.cli.commands._desktop_entry import DesktopBackend
         from terok.cli.commands.setup import _ensure_desktop_entry
 
         with (
             patch("terok.cli.commands.setup.shutil.which", return_value="/opt/venv/bin/terok-tui"),
-            patch("terok.cli.commands._desktop_entry.install_desktop_entry") as install,
+            patch(
+                "terok.cli.commands._desktop_entry.install_desktop_entry",
+                return_value=DesktopBackend.XDG_UTILS,
+            ) as install,
         ):
             assert _ensure_desktop_entry(check_only=False) is True
         install.assert_called_once_with("/opt/venv/bin/terok-tui")
 
     def test_install_falls_back_to_bare_name_off_path(self, capsys: pytest.CaptureFixture) -> None:
         """Nothing on PATH → installer still runs with the bare binary name."""
+        from terok.cli.commands._desktop_entry import DesktopBackend
         from terok.cli.commands.setup import _ensure_desktop_entry
 
         with (
             patch("terok.cli.commands.setup.shutil.which", return_value=None),
-            patch("terok.cli.commands._desktop_entry.install_desktop_entry") as install,
+            patch(
+                "terok.cli.commands._desktop_entry.install_desktop_entry",
+                return_value=DesktopBackend.XDG_UTILS,
+            ) as install,
         ):
             assert _ensure_desktop_entry(check_only=False) is True
         install.assert_called_once_with("terok-tui")
+
+    def test_xdg_utils_backend_reports_ok(self, capsys: pytest.CaptureFixture) -> None:
+        """xdg-utils path → green ``ok (installed)`` with no fallback blurb."""
+        from terok.cli.commands._desktop_entry import DesktopBackend
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/usr/bin/terok-tui"),
+            patch(
+                "terok.cli.commands._desktop_entry.install_desktop_entry",
+                return_value=DesktopBackend.XDG_UTILS,
+            ),
+        ):
+            assert _ensure_desktop_entry(check_only=False) is True
+        out = capsys.readouterr().out
+        assert "(installed)" in out
+        assert "fallback" not in out
+
+    def test_fallback_backend_warns_non_threateningly(self, capsys: pytest.CaptureFixture) -> None:
+        """Manual fallback → yellow warn line that names xdg-utils as the fix.
+
+        Install still succeeds (return True) — the operator just gets a
+        heads-up that the canonical XDG tooling was missing.
+        """
+        from terok.cli.commands._desktop_entry import DesktopBackend
+        from terok.cli.commands.setup import _ensure_desktop_entry
+
+        with (
+            patch("terok.cli.commands.setup.shutil.which", return_value="/usr/bin/terok-tui"),
+            patch(
+                "terok.cli.commands._desktop_entry.install_desktop_entry",
+                return_value=DesktopBackend.FALLBACK,
+            ),
+        ):
+            assert _ensure_desktop_entry(check_only=False) is True
+        out = capsys.readouterr().out
+        assert "fallback" in out
+        assert "xdg-utils" in out
 
     def test_install_failure_soft_fails_with_fail_status(
         self, capsys: pytest.CaptureFixture
