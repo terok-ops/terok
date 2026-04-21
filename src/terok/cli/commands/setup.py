@@ -343,7 +343,7 @@ def _ensure_dbus_bridge(*, check_only: bool, enabled: bool) -> bool:
 
 def _ensure_bridge_reader(*, check_only: bool) -> bool:
     """Copy the NFLOG reader script out of terok-shield into the user data dir."""
-    from terok_shield import reader_script_path
+    from terok_sandbox import reader_script_path
 
     _stage_begin("Bridge reader")
     dest = reader_script_path()

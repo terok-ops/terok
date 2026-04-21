@@ -3118,7 +3118,7 @@ terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = 
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/narrative-refactor-r2"
-resolved_reference = "e69ccbcdb1dcd8d7ec6cc3edb4897ae00544b364"
+resolved_reference = "be7c942c66e505bb1fc5289fb32c63b4a5b6ec87"
 
 [[package]]
 name = "terok-shield"
@@ -3138,7 +3138,7 @@ PyYAML = ">=6.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
 reference = "feat/narrative-refactor-r2"
-resolved_reference = "113b4436528684c62b321dec0c9a6c2ccd8af17b"
+resolved_reference = "16a918b6955dd659806504718676df7ce632962a"
 
 [[package]]
 name = "textual"
