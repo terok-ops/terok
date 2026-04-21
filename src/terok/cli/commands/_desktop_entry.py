@@ -26,6 +26,7 @@ import os
 import shutil
 import subprocess  # nosec B404 — cache refresh binaries are trusted
 from importlib import resources as importlib_resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 _log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ _APPS_SUBDIR = "apps"
 _DEFAULT_DATA_HOME = (".local", "share")  # $HOME/.local/share — XDG fallback
 
 
-def _resource_dir():
+def _resource_dir() -> Traversable:
     """Return a ``Traversable`` rooted at the passive ``resources/desktop/`` assets.
 
     Uses the namespace-package idiom already used by
