@@ -83,7 +83,13 @@ DEPS: dict[str, list[str]] = {
     "terok-shield": ["terok-dbus"],
     "terok-sandbox": ["terok-shield"],
     "terok-executor": ["terok-sandbox"],
-    "terok": ["terok-executor", "terok-sandbox", "terok-dbus"],
+    # terok pins terok-shield directly (src/terok/cli/commands/shield.py
+    # imports from it), so it must be in this list even though shield would
+    # also come transitively via sandbox.  Without it, a release that
+    # converts sandbox's branch-pin to a release-URL pin leaves shield as
+    # a leftover branch-pin, and Poetry can't reconcile the branch HEAD
+    # version against the shield version sandbox's release wheel declares.
+    "terok": ["terok-executor", "terok-sandbox", "terok-shield", "terok-dbus"],
 }
 
 ALIASES = {
