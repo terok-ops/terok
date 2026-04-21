@@ -119,7 +119,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=None,
         help=(
             "Comment embedded in the public key "
-            "(default: tk-main:<project> for the scope's first key, "
+            "(default: tk-main:<project> for the project's first key, "
             "tk-side:<project>:<n> for subsequent additive inits)"
         ),
     )

@@ -298,7 +298,7 @@ def _unassign_vault_ssh_keys(scope: str, deleted: list[str]) -> None:
     with vault_db() as db:
         count = db.unassign_all_ssh_keys(scope)
     if count:
-        deleted.append(f"{count} SSH key assignment(s) for scope {scope!r}")
+        deleted.append(f"{count} SSH key assignment(s) for project (scope) {scope!r}")
 
 
 def _rmtree_managed(path: Path, label: str, deleted: list[str], skipped: list[str]) -> None:

@@ -126,7 +126,7 @@ def provision_ssh_key(
     comment: str | None = None,
     force: bool = False,
 ) -> SSHInitResult:
-    """Mint a vault-backed keypair for *project_id* and bind it to the scope.
+    """Mint a vault-backed keypair for *project_id* and bind it to the project (scope).
 
     Single entry point for both the CLI and the TUI.  Rendering the
     result for the user is the caller's job — see :func:`summarize_ssh_init`.

@@ -81,7 +81,7 @@ class ProjectActionsMixin:
 
         pub_line = _lookup_vault_pub_line(project.id)
         if pub_line is None:
-            print(f"No SSH key assigned to scope {project.id!r} in the vault.")
+            print(f"No SSH key assigned to project (scope) {project.id!r} in the vault.")
             print(f"Run 'terok project ssh-init {project_id}' to generate one,")
             print("then register the printed public key as a deploy key upstream.")
         else:
