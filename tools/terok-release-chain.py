@@ -4,9 +4,9 @@
 """Cascading release chain for the terok package family.
 
 Plan-then-execute architecture: generate a release plan (JSON), validate
-it, then execute step-by-step with crash-recovery.  Replaces the bash
-script (tools/terok-release-chain.sh) with structured state and the
-"release from PR" workflow for chained feature branches.
+it, then execute step-by-step with crash-recovery.  Supports full and
+GitHub-prerelease releases, and the "release from PR" workflow for
+chained feature branches.
 
 Usage:
     python3 tools/terok-release-chain.py quick sandbox              # single package
@@ -44,6 +44,33 @@ if int(_pydantic_ver.split(".")[0]) < 2:
     raise SystemExit(f"pydantic >= 2 required (found {_pydantic_ver}): pip install 'pydantic>=2'")
 
 console = Console(stderr=True)
+
+
+# ── Attention-grabbing interactive prompts ────────────────────────────────
+#
+# Long stages (clones, CI waits) make it easy for the operator to wander
+# off.  Every confirmation/prompt goes through these helpers: terminal
+# bell + a reverse-video banner in the one colour the rest of the script
+# does not use, so the prompt stands out in peripheral vision.
+
+
+def _alert_banner(text: str) -> None:
+    """Emit terminal bell and an attention-styled banner line."""
+    console.bell()
+    console.print(f"\n[black on bright_yellow] {text} [/]")
+
+
+def alert_confirm(prompt: str, **kwargs: Any) -> bool:
+    """``click.confirm`` preceded by a bell + attention banner."""
+    _alert_banner("INPUT NEEDED")
+    return click.confirm(prompt, **kwargs)
+
+
+def alert_prompt(prompt: str, **kwargs: Any) -> Any:
+    """``click.prompt`` preceded by a bell + attention banner."""
+    _alert_banner("INPUT NEEDED")
+    return click.prompt(prompt, **kwargs)
+
 
 # ── Chain config ──────────────────────────────────────────────────────────
 #
@@ -179,6 +206,11 @@ class Plan(BaseModel):
     gh_org: str
     gh_fork: str
     release_name: str = ""
+    prerelease: bool = False
+    """When True, publish as a GitHub prerelease (hidden from the "Latest"
+    badge on the repo homepage).  Useful for batching half-done work that
+    downstream packages need to pin against, without promoting it to the
+    public release pointer."""
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -416,7 +448,7 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
             console.print(f"  {c['name']}: {c['bucket']}")
         if ctx.auto_yes:
             console.print("[yellow]Force-merging (--yes)[/]")
-        elif not click.confirm("Force merge anyway?", default=False):
+        elif not alert_confirm("Force merge anyway?", default=False):
             die("Aborted.")
         return "passed"
 
@@ -586,6 +618,7 @@ def generate_plan(
     stop_at: str | None = None,
     upgrade_pinned: bool = False,
     pr_specs: dict[str, int] | None = None,
+    prerelease: bool = False,
 ) -> Plan:
     """Build a complete release plan for the given chain."""
     packages, all_steps = [], []
@@ -660,6 +693,7 @@ def generate_plan(
         gh_org=org,
         gh_fork=fork,
         release_name=release_name,
+        prerelease=prerelease,
     )
 
 
@@ -832,7 +866,7 @@ def execute_step(step: Step, plan: Plan, ctx: Ctx):
             if r.returncode == 0:
                 console.print(f"[dim]Release {p['tag']} already exists — skipping.[/]")
             else:
-                sh(
+                cmd = [
                     "gh",
                     "release",
                     "create",
@@ -842,7 +876,10 @@ def execute_step(step: Step, plan: Plan, ctx: Ctx):
                     "--title",
                     p["title"],
                     "--generate-notes",
-                )
+                ]
+                if plan.prerelease:
+                    cmd.append("--prerelease")
+                sh(*cmd)
 
         case StepKind.WHEEL_POLL:
             wait_for_wheel(step.package, p["version"], plan.gh_org, ctx.wheel_timeout)
@@ -1030,6 +1067,11 @@ def cli():
 @click.option("--upgrade-pinned", is_flag=True)
 @click.option("--from-prs", default=None, help="repo:PR pairs (e.g. sandbox:42,executor:55)")
 @click.option("--open-top", is_flag=True, help="Top package: update deps only, no release")
+@click.option(
+    "--prerelease",
+    is_flag=True,
+    help="Publish as a GitHub prerelease (hidden from the repo's 'Latest' badge)",
+)
 @click.option("--org", default=_env("TEROK_GH_ORG", "terok-ai"))
 @click.option("--fork", default=_env("TEROK_GH_FORK"))
 @click.option(
@@ -1047,6 +1089,7 @@ def quick(
     upgrade_pinned,
     from_prs,
     open_top,
+    prerelease,
     org,
     fork,
     cache_dir,
@@ -1061,6 +1104,8 @@ def quick(
       quick --from-prs sandbox:155     Release from a PR
       quick --from-prs s:155,e:167,t:706 --open-top
                                        PR chain, terok gets deps updated only
+      quick sandbox..terok --prerelease
+                                       Chain, all releases marked prerelease
     """
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, pretend, yes, skip_checks, check_timeout)
 
@@ -1068,7 +1113,7 @@ def quick(
 
     # Prompt for release name if not given
     if not release_name and not pretend:
-        release_name = click.prompt("Release name (empty for version-only)", default="")
+        release_name = alert_prompt("Release name (empty for version-only)", default="")
 
     # Sync clones
     console.print("\n[bold]Syncing clones...[/]")
@@ -1086,10 +1131,12 @@ def quick(
         stop_at=stop_at,
         upgrade_pinned=upgrade_pinned,
         pr_specs=pr_specs,
+        prerelease=prerelease,
     )
 
     # Preview
-    console.print("\n[bold]Release plan:[/]\n")
+    kind_hint = "[yellow]prerelease[/]" if prerelease else "[green]release[/]"
+    console.print(f"\n[bold]Release plan ({kind_hint}):[/]\n")
     table = Table(show_header=True, header_style="bold")
     table.add_column("#", width=3)
     table.add_column("Package", style="cyan")
@@ -1107,7 +1154,7 @@ def quick(
     console.print(table)
 
     if not pretend and not yes:
-        click.confirm("\nProceed?", default=True, abort=True)
+        alert_confirm("Proceed?", default=True, abort=True)
 
     # Save plan
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1251,6 +1298,11 @@ def open_chain(branch, repos, pretend, org, fork, cache_dir):
 @click.option("--upgrade-pinned", is_flag=True)
 @click.option("--from-prs", default=None)
 @click.option("--open-top", is_flag=True, help="Top package: update deps only, no release")
+@click.option(
+    "--prerelease",
+    is_flag=True,
+    help="Publish as a GitHub prerelease (hidden from the repo's 'Latest' badge)",
+)
 @click.option("--org", default=_env("TEROK_GH_ORG", "terok-ai"))
 @click.option("--fork", default=_env("TEROK_GH_FORK"))
 @click.option(
@@ -1265,6 +1317,7 @@ def plan_cmd(
     upgrade_pinned,
     from_prs,
     open_top,
+    prerelease,
     org,
     fork,
     cache_dir,
@@ -1291,6 +1344,7 @@ def plan_cmd(
         stop_at=stop_at,
         upgrade_pinned=upgrade_pinned,
         pr_specs=pr_specs,
+        prerelease=prerelease,
     )
 
     out = Path(output) if output else cd / "plans" / f"{datetime.now():%Y%m%d-%H%M%S}.json"
