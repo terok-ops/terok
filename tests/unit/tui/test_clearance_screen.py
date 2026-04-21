@@ -134,6 +134,44 @@ class TestLifecycleBridge:
         assert screen.post_message.call_count == 2
 
 
+class TestRenderNotification:
+    """``_render_notification`` builds the log line from structured fields."""
+
+    def test_name_and_id_render_as_name_paren_id(self) -> None:
+        """When both name and id are present, show ``name (id)`` with protocol."""
+        mod = _import_clearance()
+        msg = mod._NotificationPosted(
+            nid=1,
+            summary="Blocked: seznam.cz:80",
+            body="Container: my-task\nProtocol: TCP",
+            actions=[("allow", "Allow"), ("deny", "Deny")],
+            replaces_id=0,
+            container_id="fa0905d97a1c",
+            container_name="my-task",
+        )
+        assert (
+            mod._render_notification(msg)
+            == "Blocked: seznam.cz:80  Container: my-task (fa0905d97a1c)\nProtocol: TCP"
+        )
+
+    def test_id_only_passes_body_through(self) -> None:
+        """Without a resolved name, the subscriber-built body reaches the log as-is."""
+        mod = _import_clearance()
+        msg = mod._NotificationPosted(
+            nid=1,
+            summary="Blocked: 1.2.3.4:443",
+            body="Container: fa0905d97a1c\nProtocol: TCP",
+            actions=[("allow", "Allow")],
+            replaces_id=0,
+            container_id="fa0905d97a1c",
+            container_name="",
+        )
+        assert (
+            mod._render_notification(msg)
+            == "Blocked: 1.2.3.4:443  Container: fa0905d97a1c\nProtocol: TCP"
+        )
+
+
 # ---------------------------------------------------------------------------
 # CLI integration
 # ---------------------------------------------------------------------------

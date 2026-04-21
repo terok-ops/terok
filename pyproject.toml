@@ -49,7 +49,7 @@ textual-serve = ">=1.1.0"
 terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.100/terok_executor-0.0.100-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.83/terok_sandbox-0.0.83-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.23/terok_shield-0.6.23-py3-none-any.whl"}
-terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.9/terok_dbus-0.5.9-py3-none-any.whl"}
+terok-dbus = {git = "https://github.com/sliwowitz/terok-dbus.git", branch = "feat/container-name-in-notifications"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"
