@@ -25,7 +25,7 @@ from tests.testfs import mock_wizard_project_file
 def wizard_values(
     *,
     security_class: str = "online",
-    base: str = "ubuntu",
+    base: str = "fedora",
     project_id: str = "test-proj",
     upstream_url: str = "https://github.com/user/repo.git",
     default_branch: str = "main",
@@ -83,33 +83,33 @@ def test_validate_project_id(project_id: str, valid: bool) -> None:
             id="gatekeeping-selection",
         ),
         pytest.param(
-            ["1", "2", "proj", "https://x.com/r.git", "", "n"],
+            ["1", "2", "proj", "https://example.com/r.git", "", "n"],
             wizard_values(
-                base="fedora",
+                base="nvidia",
                 project_id="proj",
-                upstream_url="https://x.com/r.git",
+                upstream_url="https://example.com/r.git",
                 default_branch="",
             ),
             id="empty-default-branch",
         ),
         pytest.param(
-            ["1", "2", "proj", "https://x.com/r.git", "dev", "n"],
+            ["1", "2", "proj", "https://example.com/r.git", "dev", "n"],
             wizard_values(
-                base="fedora",
+                base="nvidia",
                 project_id="proj",
-                upstream_url="https://x.com/r.git",
+                upstream_url="https://example.com/r.git",
                 default_branch="dev",
             ),
             id="custom-branch",
         ),
         pytest.param(
-            ["1", "1", "bad project", "good-id", "https://x.com/r.git", "main", "n"],
-            wizard_values(project_id="good-id", upstream_url="https://x.com/r.git"),
+            ["1", "1", "bad project", "good-id", "https://example.com/r.git", "main", "n"],
+            wizard_values(project_id="good-id", upstream_url="https://example.com/r.git"),
             id="retry-invalid-project-id",
         ),
         pytest.param(
-            ["1", "1", "proj", "", "https://x.com/r.git", "main", "n"],
-            wizard_values(project_id="proj", upstream_url="https://x.com/r.git"),
+            ["1", "1", "proj", "", "https://example.com/r.git", "main", "n"],
+            wizard_values(project_id="proj", upstream_url="https://example.com/r.git"),
             id="retry-empty-upstream-url",
         ),
     ],
@@ -148,13 +148,13 @@ def test_collect_wizard_inputs_lowercases_project_id() -> None:
     with (
         patch(
             "builtins.input",
-            side_effect=["1", "1", "MyProject", "https://x.com/r.git", "main", "n"],
+            side_effect=["1", "1", "MyProject", "https://example.com/r.git", "main", "n"],
         ),
         patch("builtins.print") as mock_print,
     ):
         result = collect_wizard_inputs()
 
-    assert result == wizard_values(project_id="myproject", upstream_url="https://x.com/r.git")
+    assert result == wizard_values(project_id="myproject", upstream_url="https://example.com/r.git")
     printed = [" ".join(str(arg) for arg in call.args) for call in mock_print.call_args_list]
     assert any("lowercased to 'myproject'" in line for line in printed)
 
@@ -182,7 +182,7 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
                 'default_branch: "main"',
                 'security_class: "online"',
             ],
-            id="online-ubuntu",
+            id="online-default",
         ),
         pytest.param(
             wizard_values(
@@ -198,13 +198,13 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
                 "RUN apt-get update",
                 "gatekeeping:",
             ],
-            id="gatekeeping-ubuntu",
+            id="gatekeeping-default",
         ),
         pytest.param(
             wizard_values(
                 base="nvidia",
                 project_id="gpu-proj",
-                upstream_url="https://x.com/r.git",
+                upstream_url="https://example.com/r.git",
             ),
             ["gpus: all", "nvcr.io/nvidia/"],
             id="online-nvidia",
@@ -213,7 +213,7 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
             wizard_values(
                 base="fedora",
                 project_id="fedora-proj",
-                upstream_url="https://x.com/r.git",
+                upstream_url="https://example.com/r.git",
             ),
             ['base_image: "fedora:43"', 'security_class: "online"'],
             id="online-fedora",
@@ -222,7 +222,7 @@ def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
             wizard_values(
                 base="podman",
                 project_id="podman-proj",
-                upstream_url="https://x.com/r.git",
+                upstream_url="https://example.com/r.git",
             ),
             ['base_image: "quay.io/podman/stable:latest"'],
             id="online-podman",
@@ -247,7 +247,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
                     security_class=sec_slug,
                     base=base_slug,
                     project_id=f"proj-{sec_slug}-{base_slug}",
-                    upstream_url="https://x.com/r.git",
+                    upstream_url="https://example.com/r.git",
                     user_snippet="RUN echo hi",
                 )
             )
@@ -271,7 +271,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
     ),
     [
         pytest.param(
-            wizard_values(project_id="proj1", upstream_url="https://x.com/r.git"),
+            wizard_values(project_id="proj1", upstream_url="https://example.com/r.git"),
             ["y", "y"],
             True,
             True,
@@ -280,7 +280,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             id="edit-and-init",
         ),
         pytest.param(
-            wizard_values(project_id="proj2", upstream_url="https://x.com/r.git"),
+            wizard_values(project_id="proj2", upstream_url="https://example.com/r.git"),
             ["n", "n"],
             True,
             True,
@@ -289,7 +289,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             id="skip-edit-and-init",
         ),
         pytest.param(
-            wizard_values(project_id="proj3", upstream_url="https://x.com/r.git"),
+            wizard_values(project_id="proj3", upstream_url="https://example.com/r.git"),
             ["n"],
             False,
             True,
@@ -298,7 +298,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
             id="no-init-fn",
         ),
         pytest.param(
-            wizard_values(project_id="proj4", upstream_url="https://x.com/r.git"),
+            wizard_values(project_id="proj4", upstream_url="https://example.com/r.git"),
             KeyboardInterrupt,
             False,
             True,

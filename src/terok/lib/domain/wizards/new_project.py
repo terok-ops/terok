@@ -24,12 +24,15 @@ SECURITY_CLASSES: list[tuple[str, str]] = [
     ("online", "Online (agent pushes directly to upstream)"),
     ("gatekeeping", "Gatekeeping (changes staged for human review)"),
 ]
-BASES: list[tuple[str, str]] = [
-    ("ubuntu", "Ubuntu 24.04"),
-    ("fedora", "Fedora 43"),
-    ("podman", "Podman (Fedora-based)"),
-    ("nvidia", "NVIDIA CUDA (GPU)"),
-]
+BASES: list[tuple[str, str]] = sorted(
+    [
+        ("ubuntu", "Ubuntu 24.04"),
+        ("fedora", "Fedora 43"),
+        ("podman", "Podman (Fedora-based)"),
+        ("nvidia", "NVIDIA CUDA (GPU)"),
+    ],
+    key=lambda b: b[1].casefold(),
+)
 
 _TEMPLATE_DIR: Traversable = resources.files("terok") / "resources" / "templates" / "projects"
 
