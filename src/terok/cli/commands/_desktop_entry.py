@@ -133,11 +133,12 @@ def uninstall_desktop_entry() -> DesktopBackend:
 
     Returns:
         The :class:`DesktopBackend` actually used — symmetric with
-        :func:`install_desktop_entry` so a caller can phrase the teardown
-        status line the same way.
+        :func:`install_desktop_entry`.  XDG_UTILS only when both
+        front-ends reported rc 0; on failure (or xdg-utils absent) we
+        retry via manual unlinks and report FALLBACK so the teardown
+        leaves no stragglers even when xdg-utils misbehaves.
     """
-    if _xdg_utils_available():
-        _uninstall_via_xdg_utils()
+    if _xdg_utils_available() and _uninstall_via_xdg_utils():
         return DesktopBackend.XDG_UTILS
     _uninstall_manually()
     return DesktopBackend.FALLBACK
@@ -207,10 +208,17 @@ def _install_via_xdg_utils(desktop_contents: str, logo_bytes: bytes) -> bool:
     return menu_ok and icon_ok
 
 
-def _uninstall_via_xdg_utils() -> None:
-    """Delegate removal + cache refresh to xdg-utils."""
-    _run_xdg(_XDG_MENU_BINARY, "uninstall", "--novendor", _DESKTOP_FILE)
-    _run_xdg(
+def _uninstall_via_xdg_utils() -> bool:
+    """Delegate removal + cache refresh to xdg-utils.
+
+    Returns:
+        True only when *both* front-ends reported success.  A half-
+        completed teardown (menu removed, icon theme still holds
+        ``terok`` — or vice versa) reads as False so the caller can
+        retry via the manual unlinks and actually clear the state.
+    """
+    menu_ok = _run_xdg(_XDG_MENU_BINARY, "uninstall", "--novendor", _DESKTOP_FILE)
+    icon_ok = _run_xdg(
         _XDG_ICON_RESOURCE_BINARY,
         "uninstall",
         "--size",
@@ -219,6 +227,7 @@ def _uninstall_via_xdg_utils() -> None:
         _XDG_ICON_CONTEXT,
         APP_NAME,
     )
+    return menu_ok and icon_ok
 
 
 def _run_xdg(binary: str, *args: str) -> bool:

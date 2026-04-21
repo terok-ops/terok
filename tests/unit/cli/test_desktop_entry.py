@@ -134,6 +134,52 @@ class TestInstallViaXdgUtils:
         ):
             assert desktop.install_desktop_entry("terok-tui") is desktop.DesktopBackend.XDG_UTILS
 
+    def test_uninstall_returns_xdg_utils_backend(self, xdg_data_home: Path) -> None:
+        """Successful xdg-utils uninstall reports XDG_UTILS."""
+        fake_proc = subprocess.CompletedProcess(args=[], returncode=0, stdout=b"", stderr=b"")
+        with (
+            mock.patch(
+                "terok.cli.commands._desktop_entry.shutil.which",
+                side_effect=_which_everything,
+            ),
+            mock.patch("terok.cli.commands._desktop_entry.subprocess.run", return_value=fake_proc),
+        ):
+            assert desktop.uninstall_desktop_entry() is desktop.DesktopBackend.XDG_UTILS
+
+    def test_uninstall_xdg_failure_falls_back_to_manual(self, xdg_data_home: Path) -> None:
+        """xdg-utils uninstall fails → manual unlinks clean up, backend is FALLBACK.
+
+        Same rationale as the install side: a half-completed teardown
+        (menu gone, icon still registered) is the trap — retry
+        manually so the caller's "did it work?" signal is honest.
+        """
+        # Seed the XDG tree the way a prior install would have.
+        with mock.patch(
+            "terok.cli.commands._desktop_entry.shutil.which", side_effect=_which_nothing
+        ):
+            desktop.install_desktop_entry("terok-tui")
+        assert desktop.is_desktop_entry_installed()
+
+        failing = subprocess.CompletedProcess(
+            args=[],
+            returncode=3,
+            stdout=b"",
+            stderr=b"xdg-desktop-menu: nothing to uninstall",
+        )
+        with (
+            mock.patch(
+                "terok.cli.commands._desktop_entry.shutil.which",
+                side_effect=_which_everything,
+            ),
+            mock.patch("terok.cli.commands._desktop_entry.subprocess.run", return_value=failing),
+        ):
+            backend = desktop.uninstall_desktop_entry()
+
+        assert backend is desktop.DesktopBackend.FALLBACK
+        # Manual unlinks ran, so both files are gone even though
+        # xdg-utils claimed failure.
+        assert not desktop.is_desktop_entry_installed()
+
     def test_uninstall_delegates_to_xdg_utils(self) -> None:
         """``uninstall`` invokes the matching xdg-utils ``uninstall`` subcommands."""
         calls: list[list[str]] = []
