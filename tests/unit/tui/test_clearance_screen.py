@@ -177,14 +177,25 @@ class TestOnNotificationPosted:
     """``on__notification_posted`` routes new blocks vs verdict updates vs info."""
 
     def _screen_with_mocked_queries(self, mod: Any) -> tuple[Any, mock.Mock, mock.Mock]:
-        """Return a screen whose query_one returns (log, pending_list) mocks."""
+        """Return a screen whose query_one returns (log, pending_list) mocks.
+
+        Unknown selectors are a test error — a production-code typo must
+        fail loudly rather than silently receive ``pending_list`` and
+        appear to work.
+        """
         screen = mod.ClearanceScreen()
         log = mock.Mock()
         pending_list = mock.Mock()
         pending_list.border_title = ""
-        screen.query_one = mock.Mock(
-            side_effect=lambda sel, *_args, **_kwargs: log if sel == "#event-log" else pending_list
-        )
+
+        def _query_one(sel: str, *_args: Any, **_kwargs: Any) -> mock.Mock:
+            if sel == "#event-log":
+                return log
+            if sel == "#pending-list":
+                return pending_list
+            raise AssertionError(f"unexpected selector: {sel!r}")
+
+        screen.query_one = mock.Mock(side_effect=_query_one)
         return screen, log, pending_list
 
     def test_new_block_writes_to_log_and_pending_list(self) -> None:
