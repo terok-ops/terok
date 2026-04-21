@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -40,7 +41,7 @@ MOCK_VAULT_DB = FAKE_CREDENTIALS_DIR / "credentials.db"
 def test_host_binaries_all_found(mock_which: MagicMock, capsys: pytest.CaptureFixture) -> None:
     """All mandatory and recommended binaries present."""
     mock_which.return_value = "/usr/bin/whatever"
-    assert _check_host_binaries(color=False) is True
+    assert _check_host_binaries() is True
     out = capsys.readouterr().out
     assert "podman" in out
     assert "git" in out
@@ -52,7 +53,7 @@ def test_host_binaries_mandatory_missing(
 ) -> None:
     """Missing mandatory binary returns False."""
     mock_which.side_effect = lambda name: None if name == "podman" else "/usr/bin/x"
-    assert _check_host_binaries(color=False) is False
+    assert _check_host_binaries() is False
     out = capsys.readouterr().out
     assert "FAIL" in out
 
@@ -63,7 +64,7 @@ def test_host_binaries_recommended_missing(
 ) -> None:
     """Missing recommended binary still returns True."""
     mock_which.side_effect = lambda name: None if name == "dnsmasq" else "/usr/bin/x"
-    assert _check_host_binaries(color=False) is True
+    assert _check_host_binaries() is True
     out = capsys.readouterr().out
     assert "WARN" in out
 
@@ -75,7 +76,7 @@ def test_host_binaries_recommended_missing(
 def test_shield_already_installed(mock_env: MagicMock, capsys: pytest.CaptureFixture) -> None:
     """Shield hooks present → skip."""
     mock_env.return_value = MagicMock(health="ok")
-    assert _ensure_shield(check_only=False, color=False) is True
+    assert _ensure_shield(check_only=False) is True
     out = capsys.readouterr().out
     assert "active" in out
 
@@ -86,7 +87,7 @@ def test_shield_check_only_missing(mock_env: MagicMock, capsys: pytest.CaptureFi
     mock_env.return_value = MagicMock(
         health="setup-needed", issues=["no hooks"], setup_hint="run X"
     )
-    assert _ensure_shield(check_only=True, color=False) is False
+    assert _ensure_shield(check_only=True) is False
     out = capsys.readouterr().out
     assert "FAIL" in out
 
@@ -101,7 +102,7 @@ def test_shield_install_and_verify(
         MagicMock(health="setup-needed", issues=[], setup_hint=""),
         MagicMock(health="ok"),
     ]
-    assert _ensure_shield(check_only=False, color=False) is True
+    assert _ensure_shield(check_only=False) is True
     mock_setup.assert_called_once_with(root=False)
     out = capsys.readouterr().out
     assert "installed" in out
@@ -117,7 +118,7 @@ def test_shield_install_verify_still_unhealthy(
         MagicMock(health="setup-needed", issues=[], setup_hint=""),
         MagicMock(health="stale-hooks"),
     ]
-    assert _ensure_shield(check_only=False, color=False) is False
+    assert _ensure_shield(check_only=False) is False
     out = capsys.readouterr().out
     assert "stale-hooks" in out
 
@@ -129,7 +130,7 @@ def test_shield_install_exception(
 ) -> None:
     """Shield install raises → caught, returns False."""
     mock_env.return_value = MagicMock(health="setup-needed", issues=[], setup_hint="")
-    assert _ensure_shield(check_only=False, color=False) is False
+    assert _ensure_shield(check_only=False) is False
     out = capsys.readouterr().out
     assert "FAIL" in out
 
@@ -138,7 +139,7 @@ def test_shield_install_exception(
 def test_shield_bypass_active(mock_env: MagicMock, capsys: pytest.CaptureFixture) -> None:
     """Shield in bypass mode → warn but succeed."""
     mock_env.return_value = MagicMock(health="bypass")
-    assert _ensure_shield(check_only=False, color=False) is True
+    assert _ensure_shield(check_only=False) is True
     out = capsys.readouterr().out
     assert "bypass" in out
 
@@ -161,7 +162,7 @@ def test_vault_check_reachable(
 ) -> None:
     """check_only mode: vault reachable → ok."""
     mock_status.return_value = _make_vault_status(running=True)
-    assert _ensure_vault(check_only=True, color=False) is True
+    assert _ensure_vault(check_only=True) is True
     out = capsys.readouterr().out
     assert "reachable" in out
 
@@ -175,7 +176,7 @@ def test_vault_check_unreachable(
     _sock: MagicMock, _reach: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
     """check_only mode: vault installed but unreachable → FAIL."""
-    assert _ensure_vault(check_only=True, color=False) is False
+    assert _ensure_vault(check_only=True) is False
     out = capsys.readouterr().out
     assert "NOT reachable" in out
 
@@ -189,7 +190,7 @@ def test_vault_check_not_installed(
     _sock: MagicMock, _reach: MagicMock, capsys: pytest.CaptureFixture
 ) -> None:
     """check_only mode: vault not even installed → reports 'not installed'."""
-    assert _ensure_vault(check_only=True, color=False) is False
+    assert _ensure_vault(check_only=True) is False
     out = capsys.readouterr().out
     assert "not installed" in out
 
@@ -212,7 +213,7 @@ def test_vault_reinstall_and_verify(
 ) -> None:
     """Install mode: clean reinstall → verify reachable → ok."""
     mock_status.return_value = _make_vault_status(running=True)
-    assert _ensure_vault(check_only=False, color=False) is True
+    assert _ensure_vault(check_only=False) is True
     _stop.assert_called_once()
     _uninstall.assert_called_once()
     _install.assert_called_once()
@@ -233,7 +234,7 @@ def test_vault_install_fails(
     capsys: pytest.CaptureFixture,
 ) -> None:
     """Install mode: install raises → returns False."""
-    assert _ensure_vault(check_only=False, color=False) is False
+    assert _ensure_vault(check_only=False) is False
     out = capsys.readouterr().out
     assert "install failed" in out
 
@@ -257,7 +258,7 @@ def test_vault_installed_but_unreachable(
     capsys: pytest.CaptureFixture,
 ) -> None:
     """Install mode: installed ok but TCP probe fails → returns False with journal hint."""
-    assert _ensure_vault(check_only=False, color=False) is False
+    assert _ensure_vault(check_only=False) is False
     out = capsys.readouterr().out
     assert "NOT reachable" in out
     assert "journalctl" in out
@@ -277,7 +278,7 @@ def test_gate_check_running_and_reachable(
 ) -> None:
     """check_only: gate running + reachable → ok."""
     mock_status.return_value = make_gate_server_status("systemd", running=True)
-    assert _ensure_gate(check_only=True, color=False) is True
+    assert _ensure_gate(check_only=True) is True
     mock_reach.assert_called_once()
     out = capsys.readouterr().out
     assert "reachable" in out
@@ -294,7 +295,7 @@ def test_gate_check_running_but_unreachable(
 ) -> None:
     """check_only: gate process exists but TCP unreachable → FAIL."""
     mock_status.return_value = make_gate_server_status("systemd", running=True)
-    assert _ensure_gate(check_only=True, color=False) is False
+    assert _ensure_gate(check_only=True) is False
     out = capsys.readouterr().out
     assert "NOT reachable" in out
 
@@ -310,7 +311,7 @@ def test_gate_check_systemd_socket_reachable(
 ) -> None:
     """check_only: gate socket installed (not running) + reachable after activation → ok."""
     mock_status.return_value = make_gate_server_status("systemd", running=False)
-    assert _ensure_gate(check_only=True, color=False) is True
+    assert _ensure_gate(check_only=True) is True
     mock_reach.assert_called_once()
 
 
@@ -325,7 +326,7 @@ def test_gate_check_systemd_unreachable(
 ) -> None:
     """check_only: gate socket installed but service won't start → FAIL."""
     mock_status.return_value = make_gate_server_status("systemd", running=False)
-    assert _ensure_gate(check_only=True, color=False) is False
+    assert _ensure_gate(check_only=True) is False
     out = capsys.readouterr().out
     assert "NOT reachable" in out
 
@@ -337,7 +338,7 @@ def test_gate_check_not_installed(
 ) -> None:
     """check_only: gate not installed → FAIL."""
     mock_status.return_value = make_gate_server_status("none")
-    assert _ensure_gate(check_only=True, color=False) is False
+    assert _ensure_gate(check_only=True) is False
     out = capsys.readouterr().out
     assert "not installed" in out
 
@@ -361,7 +362,7 @@ def test_gate_reinstall_and_verify(
 ) -> None:
     """Install mode: clean reinstall → verify reachable → ok."""
     mock_status.return_value = make_gate_server_status("none")
-    assert _ensure_gate(check_only=False, color=False) is True
+    assert _ensure_gate(check_only=False) is True
     _stop.assert_called_once()
     _uninstall.assert_called_once()
     _install.assert_called_once()
@@ -385,7 +386,7 @@ def test_gate_install_fails(
 ) -> None:
     """Install mode: install raises → returns False."""
     mock_status.return_value = make_gate_server_status("none")
-    assert _ensure_gate(check_only=False, color=False) is False
+    assert _ensure_gate(check_only=False) is False
     out = capsys.readouterr().out
     assert "install failed" in out
 
@@ -409,7 +410,7 @@ def test_gate_installed_but_unreachable(
 ) -> None:
     """Install mode: installed ok but TCP probe fails → returns False."""
     mock_status.return_value = make_gate_server_status("none")
-    assert _ensure_gate(check_only=False, color=False) is False
+    assert _ensure_gate(check_only=False) is False
     out = capsys.readouterr().out
     assert "NOT reachable" in out
 
@@ -422,7 +423,7 @@ def test_gate_no_systemd_skips(
 ) -> None:
     """Gate missing + no systemd → skip gracefully."""
     mock_status.return_value = make_gate_server_status("none")
-    assert _ensure_gate(check_only=False, color=False) is True
+    assert _ensure_gate(check_only=False) is True
     out = capsys.readouterr().out
     assert "systemd not available" in out
 
@@ -498,7 +499,7 @@ def _run_selinux_check(
     ``cmd_setup``'s non-zero exit.
     """
     with patch("terok_sandbox.check_selinux_status", return_value=result):
-        ok = _check_selinux_policy(color=False)
+        ok = _check_selinux_policy()
     return ok, capsys.readouterr().out
 
 
@@ -631,7 +632,7 @@ class TestEnsureDbusBridge:
     @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
     def test_enabled_all_ok(self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock) -> None:
         """Both sub-stages green → bridge ok."""
-        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is True
+        assert _ensure_dbus_bridge(check_only=False, enabled=True) is True
 
     @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
     @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=False)
@@ -640,7 +641,7 @@ class TestEnsureDbusBridge:
         self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
     ) -> None:
         """Reader failure must surface as a failed bridge stage."""
-        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is False
+        assert _ensure_dbus_bridge(check_only=False, enabled=True) is False
 
     @patch("terok.cli.commands.setup._check_dbus_send", return_value=False)
     @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
@@ -649,13 +650,13 @@ class TestEnsureDbusBridge:
         self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
     ) -> None:
         """dbus-send absence warns only — it must not mask a clean install."""
-        assert _ensure_dbus_bridge(check_only=False, enabled=True, color=False) is True
+        assert _ensure_dbus_bridge(check_only=False, enabled=True) is True
 
     @patch("terok.cli.commands.setup._disable_dbus_bridge", return_value=True)
     def test_disabled_routes_to_teardown(self, mock_disable: MagicMock) -> None:
         """``enabled=False`` delegates to ``_disable_dbus_bridge``."""
-        assert _ensure_dbus_bridge(check_only=False, enabled=False, color=False) is True
-        mock_disable.assert_called_once_with(check_only=False, color=False)
+        assert _ensure_dbus_bridge(check_only=False, enabled=False) is True
+        mock_disable.assert_called_once_with(check_only=False)
 
 
 class TestEnsureBridgeReader:
@@ -666,15 +667,17 @@ class TestEnsureBridgeReader:
         dest = tmp_path / ".local/share/terok-shield/nflog-reader.py"
         dest.parent.mkdir(parents=True)
         dest.write_text("#!/usr/bin/env python3\n")
-        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
-            assert _ensure_bridge_reader(check_only=True, color=False) is True
+        with patch.dict("os.environ", {"HOME": str(tmp_path)}, clear=False):
+            os.environ.pop("XDG_DATA_HOME", None)
+            assert _ensure_bridge_reader(check_only=True) is True
         out = capsys.readouterr().out
         assert "installed" in out
 
     def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
         """check_only reports false when the reader script is absent."""
-        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
-            assert _ensure_bridge_reader(check_only=True, color=False) is False
+        with patch.dict("os.environ", {"HOME": str(tmp_path)}, clear=False):
+            os.environ.pop("XDG_DATA_HOME", None)
+            assert _ensure_bridge_reader(check_only=True) is False
         out = capsys.readouterr().out
         assert "not installed" in out
 
@@ -683,8 +686,9 @@ class TestEnsureBridgeReader:
         self, mock_install: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
         """Successful install reports ok and calls the sandbox helper once."""
-        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
-            assert _ensure_bridge_reader(check_only=False, color=False) is True
+        with patch.dict("os.environ", {"HOME": str(tmp_path)}, clear=False):
+            os.environ.pop("XDG_DATA_HOME", None)
+            assert _ensure_bridge_reader(check_only=False) is True
         mock_install.assert_called_once()
         assert "installed" in capsys.readouterr().out
 
@@ -693,8 +697,9 @@ class TestEnsureBridgeReader:
         self, _install: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
         """Install raising → caught, reported, returns False."""
-        with patch("terok.cli.commands.setup.Path.home", return_value=tmp_path):
-            assert _ensure_bridge_reader(check_only=False, color=False) is False
+        with patch.dict("os.environ", {"HOME": str(tmp_path)}, clear=False):
+            os.environ.pop("XDG_DATA_HOME", None)
+            assert _ensure_bridge_reader(check_only=False) is False
         assert "copy failed" in capsys.readouterr().out
 
 
@@ -707,13 +712,13 @@ class TestEnsureDbusHub:
         unit_dir.mkdir(parents=True)
         (unit_dir / "terok-dbus.service").write_text("[Service]\n")
         with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
-            assert _ensure_dbus_hub(check_only=True, color=False) is True
+            assert _ensure_dbus_hub(check_only=True) is True
         assert "installed" in capsys.readouterr().out
 
     def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
         """check_only reports false when the unit file is absent."""
         with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
-            assert _ensure_dbus_hub(check_only=True, color=False) is False
+            assert _ensure_dbus_hub(check_only=True) is False
         assert "not installed" in capsys.readouterr().out
 
     def test_install_always_uses_sys_executable_module_form(
@@ -726,7 +731,7 @@ class TestEnsureDbusHub:
             patch("terok_dbus._install.install_service") as mock_install,
             patch("terok.cli.commands.setup._enable_user_service") as mock_enable,
         ):
-            assert _ensure_dbus_hub(check_only=False, color=False) is True
+            assert _ensure_dbus_hub(check_only=False) is True
         (argv,) = mock_install.call_args[0]
         assert argv == [_sys.executable, "-m", "terok_dbus._cli"]
         mock_enable.assert_called_once_with("terok-dbus")
@@ -738,7 +743,7 @@ class TestEnsureDbusHub:
             "sys.modules",
             {"terok_dbus._install": None},
         ):
-            assert _ensure_dbus_hub(check_only=False, color=False) is False
+            assert _ensure_dbus_hub(check_only=False) is False
         assert "import failed" in capsys.readouterr().out
 
     def test_install_raises_returns_false(self, capsys: pytest.CaptureFixture) -> None:
@@ -750,7 +755,7 @@ class TestEnsureDbusHub:
             ),
             patch("terok.cli.commands.setup._enable_user_service"),
         ):
-            assert _ensure_dbus_hub(check_only=False, color=False) is False
+            assert _ensure_dbus_hub(check_only=False) is False
         assert "template missing" in capsys.readouterr().out
 
 
@@ -759,7 +764,7 @@ class TestDisableDbusBridge:
 
     def test_check_only_reports_opt_out(self, capsys: pytest.CaptureFixture) -> None:
         """check_only prints an informational WARN and returns True."""
-        assert _disable_dbus_bridge(check_only=True, color=False) is True
+        assert _disable_dbus_bridge(check_only=True) is True
         out = capsys.readouterr().out
         assert "opted out" in out
 
@@ -769,7 +774,7 @@ class TestDisableDbusBridge:
             patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge") as mock_uninstall,
         ):
-            assert _disable_dbus_bridge(check_only=False, color=False) is True
+            assert _disable_dbus_bridge(check_only=False) is True
         mock_uninstall.assert_called_once()
         assert "disabled" in capsys.readouterr().out
 
@@ -786,7 +791,7 @@ class TestDisableDbusBridge:
             patch("terok_sandbox.uninstall_shield_bridge"),
             patch("terok.cli.commands.setup._disable_user_service") as mock_disable,
         ):
-            assert _disable_dbus_bridge(check_only=False, color=False) is True
+            assert _disable_dbus_bridge(check_only=False) is True
         assert not unit.exists()
         mock_disable.assert_called_once_with("terok-dbus")
 
@@ -801,7 +806,7 @@ class TestDisableDbusBridge:
                 side_effect=RuntimeError("permission denied"),
             ),
         ):
-            assert _disable_dbus_bridge(check_only=False, color=False) is False
+            assert _disable_dbus_bridge(check_only=False) is False
         out = capsys.readouterr().out
         assert "reader uninstall" in out
         assert "permission denied" in out
@@ -819,7 +824,7 @@ class TestDisableDbusBridge:
             patch("terok_sandbox.uninstall_shield_bridge"),
             patch("pathlib.Path.unlink", side_effect=OSError("read-only fs")),
         ):
-            assert _disable_dbus_bridge(check_only=False, color=False) is False
+            assert _disable_dbus_bridge(check_only=False) is False
         out = capsys.readouterr().out
         assert "unit removal" in out
 
@@ -830,13 +835,13 @@ class TestCheckDbusSend:
     def test_present_returns_true_silently(self, capsys: pytest.CaptureFixture) -> None:
         """Binary on PATH → True, no output."""
         with patch("terok.cli.commands.setup.shutil.which", return_value="/usr/bin/dbus-send"):
-            assert _check_dbus_send(color=False) is True
+            assert _check_dbus_send() is True
         assert capsys.readouterr().out == ""
 
     def test_missing_emits_warning_and_returns_false(self, capsys: pytest.CaptureFixture) -> None:
         """Binary absent → WARN line mentioning package names and returns False."""
         with patch("terok.cli.commands.setup.shutil.which", return_value=None):
-            assert _check_dbus_send(color=False) is False
+            assert _check_dbus_send() is False
         out = capsys.readouterr().out
         assert "dbus-send" in out
         assert "dbus-tools" in out

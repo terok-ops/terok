@@ -3058,7 +3058,7 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-dbus"
-version = "0.6.0"
+version = "0.5.7"
 description = "D-Bus desktop notification package for terok"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3072,12 +3072,12 @@ dbus-fast = ">=2.0,<5.0"
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-dbus.git"
-reference = "feat/clearance-bridge"
-resolved_reference = "f876c295ec5a91c0a806e8a4fc76916798593762"
+reference = "feat/narrative-refactor-r2"
+resolved_reference = "31efb49154282b38f845c86798fbb9fc08da64d7"
 
 [[package]]
 name = "terok-executor"
-version = "0.0.97"
+version = "0.0.98"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3089,18 +3089,18 @@ develop = false
 Jinja2 = ">=3.1"
 pwinput = ">=1.0.3"
 "ruamel.yaml" = ">=0.18"
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/clearance-bridge"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/narrative-refactor-r2"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-executor.git"
-reference = "feat/clearance-bridge"
-resolved_reference = "52b8723a610f8ab00b469c85bba83bd1184994e4"
+reference = "feat/narrative-refactor-r2"
+resolved_reference = "c56663f56077b466d8f536ff5432c09b5faa4ef6"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.80"
+version = "0.0.81"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3112,17 +3112,17 @@ develop = false
 aiohttp = ">=3.9"
 cryptography = ">=46.0.7"
 platformdirs = ">=4.9.6"
-terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = "feat/clearance-bridge"}
+terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = "feat/narrative-refactor-r2"}
 
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
-reference = "feat/clearance-bridge"
-resolved_reference = "7ab73b0b2969a9ceb9689a8c2172a479b445dd69"
+reference = "feat/narrative-refactor-r2"
+resolved_reference = "e69ccbcdb1dcd8d7ec6cc3edb4897ae00544b364"
 
 [[package]]
 name = "terok-shield"
-version = "0.7.0"
+version = "0.6.21"
 description = "nftables-based egress firewalling for Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3137,8 +3137,8 @@ PyYAML = ">=6.0"
 [package.source]
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
-reference = "feat/clearance-bridge"
-resolved_reference = "aca2aa9f4e1263e70beb098292782d8544c57e62"
+reference = "feat/narrative-refactor-r2"
+resolved_reference = "113b4436528684c62b321dec0c9a6c2ccd8af17b"
 
 [[package]]
 name = "textual"
@@ -3627,4 +3627,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "eba653ed2b5111211ba73427a33d8c550810e9e1795433600af954ac9c6bd37d"
+content-hash = "a693f069c2d002407ace6747e588aac1199028d2d07e6d220b76f0ba57735a59"

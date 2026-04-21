@@ -15,6 +15,7 @@ import argparse
 import os
 import shutil
 import sys
+from functools import cache
 from pathlib import Path
 
 from terok_executor import AUTH_PROVIDERS
@@ -30,7 +31,41 @@ from ...lib.domain.facade import (
     summarize_ssh_init,
 )
 from ...lib.domain.project import make_git_gate
-from ...lib.util.ansi import bold, green, red, supports_color, yellow
+from ...lib.util.ansi import (
+    bold as _ansi_bold,
+    green as _ansi_green,
+    red as _ansi_red,
+    supports_color,
+    yellow as _ansi_yellow,
+)
+
+# ── Palette ────────────────────────────────────────────────────────────
+#
+# The ``supports_color()`` verdict is stable for a process lifetime
+# (NO_COLOR / FORCE_COLOR / isatty() don't change mid-run), so every
+# phase below can render through colour-aware helpers that resolve the
+# flag once.  Tests force a deterministic verdict by clearing the cache.
+
+
+@cache
+def _colour_on() -> bool:
+    return supports_color()
+
+
+def _bold(text: str) -> str:
+    return _ansi_bold(text, _colour_on())
+
+
+def _green(text: str) -> str:
+    return _ansi_green(text, _colour_on())
+
+
+def _red(text: str) -> str:
+    return _ansi_red(text, _colour_on())
+
+
+def _yellow(text: str) -> str:
+    return _ansi_yellow(text, _colour_on())
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -78,14 +113,14 @@ _MANDATORY_BINARIES = ("podman", "git", "ssh-keygen")
 _RECOMMENDED_BINARIES = ("nft", "dnsmasq", "dig")
 
 
-def _status_label(ok: bool, color: bool) -> str:
+def _status_label(ok: bool) -> str:
     """Return a coloured status marker."""
-    return green("ok", color) if ok else red("FAIL", color)
+    return _green("ok") if ok else _red("FAIL")
 
 
-def _warn_label(color: bool) -> str:
+def _warn_label() -> str:
     """Return a coloured warning marker."""
-    return yellow("WARN", color)
+    return _yellow("WARN")
 
 
 def _stage_begin(label: str) -> None:
@@ -101,62 +136,61 @@ def _stage_begin(label: str) -> None:
     print(f"  {label:<17}", end="", flush=True)
 
 
-def _check_host_binaries(color: bool) -> bool:
+def _check_host_binaries() -> bool:
     """Verify mandatory and recommended host binaries.  Returns True if all mandatory found."""
     all_ok = True
 
     for name in _MANDATORY_BINARIES:
         found = shutil.which(name) is not None
-        status = _status_label(found, color)
-        print(f"  {name:<16} {status}")
+        print(f"  {name:<16} {_status_label(found)}")
         if not found:
             all_ok = False
 
     for name in _RECOMMENDED_BINARIES:
         found = shutil.which(name) is not None
         if found:
-            print(f"  {name:<16} {_status_label(True, color)}")
+            print(f"  {name:<16} {_status_label(True)}")
         else:
-            print(f"  {name:<16} {_warn_label(color)} (recommended but not required)")
+            print(f"  {name:<16} {_warn_label()} (recommended but not required)")
 
     return all_ok
 
 
-def _ensure_shield(*, check_only: bool, color: bool) -> bool:
+def _ensure_shield(*, check_only: bool) -> bool:
     """Install shield OCI hooks (user-local).  Returns True on success."""
     _stage_begin("Shield hooks")
     from terok_sandbox import check_environment, setup_hooks_direct
 
     ec = check_environment()
     if ec.health == "ok":
-        print(f"{_status_label(True, color)} (active)")
+        print(f"{_status_label(True)} (active)")
         return True
     if ec.health == "bypass":
-        print(f"{_warn_label(color)} (bypass_firewall_no_protection is active)")
+        print(f"{_warn_label()} (bypass_firewall_no_protection is active)")
         return True
     if check_only:
         hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else "needs setup"
-        print(f"{_status_label(False, color)} ({hint})")
+        print(f"{_status_label(False)} ({hint})")
         return False
 
     # Force-reinstall to ensure hooks match the current package version
     try:
         setup_hooks_direct(root=False)
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} ({exc})")
+        print(f"{_status_label(False)} ({exc})")
         return False
 
     # Verify installation took effect
     ec = check_environment()
     if ec.health == "ok":
-        print(f"{_status_label(True, color)} (installed)")
+        print(f"{_status_label(True)} (installed)")
         return True
 
-    print(f"{_status_label(False, color)} (install succeeded but health: {ec.health})")
+    print(f"{_status_label(False)} (install succeeded but health: {ec.health})")
     return False
 
 
-def _ensure_vault(*, check_only: bool, color: bool) -> bool:
+def _ensure_vault(*, check_only: bool) -> bool:
     """Install vault and verify it is reachable.  Returns True on success."""
     _stage_begin("Vault")
     from terok_sandbox import (
@@ -180,12 +214,12 @@ def _ensure_vault(*, check_only: bool, color: bool) -> bool:
             status = get_vault_status()
             mode = status.mode or "active"
             transport = status.transport or "tcp"
-            print(f"{_status_label(True, color)} ({mode}, {transport}, reachable)")
+            print(f"{_status_label(True)} ({mode}, {transport}, reachable)")
             return True
         except (VaultUnreachableError, SystemExit):
             installed = is_vault_socket_active()
             state = "installed but NOT reachable" if installed else "not installed"
-            print(f"{_status_label(False, color)} ({state})")
+            print(f"{_status_label(False)} ({state})")
             return False
 
     # Clean reinstall: stop → uninstall → install → verify reachability
@@ -208,7 +242,7 @@ def _ensure_vault(*, check_only: bool, color: bool) -> bool:
         ensure_vault_routes(cfg=cfg)
         install_vault_systemd(cfg=cfg, transport=transport)
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} (install failed: {exc})")
+        print(f"{_status_label(False)} (install failed: {exc})")
         return False
 
     # Verify actual TCP reachability (triggers systemd start)
@@ -217,16 +251,16 @@ def _ensure_vault(*, check_only: bool, color: bool) -> bool:
         status = get_vault_status()
         mode = status.mode or "active"
         transport_label = status.transport or "tcp"
-        print(f"{_status_label(True, color)} ({mode}, {transport_label}, reachable)")
+        print(f"{_status_label(True)} ({mode}, {transport_label}, reachable)")
         return True
     except (VaultUnreachableError, SystemExit) as exc:
-        print(f"{_status_label(False, color)} (installed but NOT reachable)")
+        print(f"{_status_label(False)} (installed but NOT reachable)")
         print(f"                   {exc}")
         print("                   Check: journalctl --user -u terok-vault")
         return False
 
 
-def _ensure_gate(*, check_only: bool, color: bool) -> bool:
+def _ensure_gate(*, check_only: bool) -> bool:
     """Install gate server via systemd socket activation.  Returns True on success."""
     _stage_begin("Gate server")
     from terok_sandbox import (
@@ -249,16 +283,16 @@ def _ensure_gate(*, check_only: bool, color: bool) -> bool:
             try:
                 ensure_server_reachable(cfg)
                 transport = status.transport or "tcp"
-                print(f"{_status_label(True, color)} ({status.mode}, {transport}, reachable)")
+                print(f"{_status_label(True)} ({status.mode}, {transport}, reachable)")
                 return True
             except SystemExit:
-                print(f"{_status_label(False, color)} (installed but NOT reachable)")
+                print(f"{_status_label(False)} (installed but NOT reachable)")
                 return False
-        print(f"{_status_label(False, color)} (not installed)")
+        print(f"{_status_label(False)} (not installed)")
         return False
 
     if not is_systemd_available():
-        print(f"{_warn_label(color)} (systemd not available, skipping)")
+        print(f"{_warn_label()} (systemd not available, skipping)")
         return True
 
     from ...lib.core.config import get_services_mode
@@ -278,28 +312,28 @@ def _ensure_gate(*, check_only: bool, color: bool) -> bool:
     try:
         install_systemd_units(cfg=cfg, transport=transport)
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} (install failed: {exc})")
+        print(f"{_status_label(False)} (install failed: {exc})")
         return False
 
     # Verify reachability (triggers socket activation)
     try:
         ensure_server_reachable(cfg)
-        print(f"{_status_label(True, color)} (systemd, {transport}, reachable)")
+        print(f"{_status_label(True)} (systemd, {transport}, reachable)")
         return True
     except SystemExit as exc:
-        print(f"{_status_label(False, color)} (installed but NOT reachable)")
+        print(f"{_status_label(False)} (installed but NOT reachable)")
         print(f"                   {exc}")
         return False
 
 
-def _ensure_dbus_bridge(*, check_only: bool, enabled: bool, color: bool) -> bool:
+def _ensure_dbus_bridge(*, check_only: bool, enabled: bool) -> bool:
     """Install the D-Bus clearance bridge: shield reader resource + dbus hub unit."""
     if not enabled:
-        return _disable_dbus_bridge(check_only=check_only, color=color)
+        return _disable_dbus_bridge(check_only=check_only)
 
-    _check_dbus_send(color)  # warning only — never affects the return value
-    reader_ok = _ensure_bridge_reader(check_only=check_only, color=color)
-    hub_ok = _ensure_dbus_hub(check_only=check_only, color=color)
+    _check_dbus_send()  # warning only — never affects the return value
+    reader_ok = _ensure_bridge_reader(check_only=check_only)
+    hub_ok = _ensure_dbus_hub(check_only=check_only)
     # dbus-send absence is reported as a WARN in its own stage line but must
     # not mask a real failure from the reader/hub stages — if either install
     # step errors out, ``terok setup`` has to surface that as a failed run
@@ -307,13 +341,15 @@ def _ensure_dbus_bridge(*, check_only: bool, enabled: bool, color: bool) -> bool
     return reader_ok and hub_ok
 
 
-def _ensure_bridge_reader(*, check_only: bool, color: bool) -> bool:
+def _ensure_bridge_reader(*, check_only: bool) -> bool:
     """Copy the NFLOG reader script out of terok-shield into the user data dir."""
+    from terok_shield import reader_script_path
+
     _stage_begin("Bridge reader")
-    dest = Path.home() / ".local" / "share" / "terok-shield" / "nflog-reader.py"
+    dest = reader_script_path()
     if check_only:
         present = dest.is_file()
-        label = _status_label(present, color)
+        label = _status_label(present)
         suffix = " (installed)" if present else " (not installed)"
         print(f"{label}{suffix}")
         return present
@@ -321,21 +357,21 @@ def _ensure_bridge_reader(*, check_only: bool, color: bool) -> bool:
     from terok_sandbox import install_shield_bridge
 
     try:
-        install_shield_bridge(dest)
+        install_shield_bridge()
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} ({exc})")
+        print(f"{_status_label(False)} ({exc})")
         return False
-    print(f"{_status_label(True, color)} (installed)")
+    print(f"{_status_label(True)} (installed)")
     return True
 
 
-def _ensure_dbus_hub(*, check_only: bool, color: bool) -> bool:
+def _ensure_dbus_hub(*, check_only: bool) -> bool:
     """Install the terok-dbus systemd user unit that owns org.terok.Shield1."""
     _stage_begin("D-Bus hub")
     unit_path = _user_systemd_dir() / "terok-dbus.service"
     if check_only:
         present = unit_path.is_file()
-        label = _status_label(present, color)
+        label = _status_label(present)
         suffix = " (installed)" if present else " (not installed)"
         print(f"{label}{suffix}")
         return present
@@ -343,7 +379,7 @@ def _ensure_dbus_hub(*, check_only: bool, color: bool) -> bool:
     try:
         from terok_dbus._install import install_service
     except ImportError as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} (import failed: {exc})")
+        print(f"{_status_label(False)} (import failed: {exc})")
         return False
 
     # Avoid ``shutil.which("terok-dbus")`` here: a hostile PATH (shell rc,
@@ -355,14 +391,14 @@ def _ensure_dbus_hub(*, check_only: bool, color: bool) -> bool:
     try:
         install_service([sys.executable, "-m", "terok_dbus._cli"])
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False, color)} ({exc})")
+        print(f"{_status_label(False)} ({exc})")
         return False
     _enable_user_service("terok-dbus")
-    print(f"{_status_label(True, color)} (installed + enabled)")
+    print(f"{_status_label(True)} (installed + enabled)")
     return True
 
 
-def _disable_dbus_bridge(*, check_only: bool, color: bool) -> bool:
+def _disable_dbus_bridge(*, check_only: bool) -> bool:
     """Tear down the bridge installation when the operator runs ``--no-dbus-bridge``.
 
     Returns ``False`` if any step of the teardown raised — the operator then
@@ -372,7 +408,7 @@ def _disable_dbus_bridge(*, check_only: bool, color: bool) -> bool:
     """
     _stage_begin("D-Bus bridge")
     if check_only:
-        print(f"{_warn_label(color)} (opted out via --no-dbus-bridge)")
+        print(f"{_warn_label()} (opted out via --no-dbus-bridge)")
         return True
 
     from terok_sandbox import uninstall_shield_bridge
@@ -380,7 +416,7 @@ def _disable_dbus_bridge(*, check_only: bool, color: bool) -> bool:
     try:
         uninstall_shield_bridge()
     except Exception as exc:  # noqa: BLE001
-        print(f"{_warn_label(color)} (reader uninstall: {exc})")
+        print(f"{_warn_label()} (reader uninstall: {exc})")
         return False
 
     unit_path = _user_systemd_dir() / "terok-dbus.service"
@@ -393,19 +429,19 @@ def _disable_dbus_bridge(*, check_only: bool, color: bool) -> bool:
         try:
             unit_path.unlink(missing_ok=True)
         except OSError as exc:
-            print(f"{_warn_label(color)} (unit removal: {exc})")
+            print(f"{_warn_label()} (unit removal: {exc})")
             return False
-    print(f"{_warn_label(color)} (disabled — audit-minimal mode)")
+    print(f"{_warn_label()} (disabled — audit-minimal mode)")
     return True
 
 
-def _check_dbus_send(color: bool) -> bool:
+def _check_dbus_send() -> bool:
     """Warn the operator when ``dbus-send`` is missing; doesn't fail setup."""
     present = shutil.which("dbus-send") is not None
     if present:
         return True
     print(
-        f"  dbus-send        {_warn_label(color)} "
+        f"  dbus-send        {_warn_label()} "
         f"(missing — install dbus-tools / dbus for clearance signals)"
     )
     return False
@@ -469,7 +505,7 @@ def _run_systemctl(*args: str) -> None:
     _sp.run([systemctl, *args], check=False, capture_output=True)  # noqa: S603
 
 
-def _check_selinux_policy(*, color: bool) -> bool:
+def _check_selinux_policy() -> bool:
     """Print SELinux prereq status and return whether it's satisfied.
 
     ``True`` means containers will be able to reach service sockets
@@ -503,10 +539,10 @@ def _check_selinux_policy(*, color: bool) -> bool:
 
     install_cmd = selinux_install_command()
     print()
-    print(bold("SELinux:", color))
+    print(_bold("SELinux:"))
     match result.status:
         case SelinuxStatus.POLICY_MISSING:
-            print(f"  terok_socket_t   {_warn_label(color)} (policy NOT installed)")
+            print(f"  terok_socket_t   {_warn_label()} (policy NOT installed)")
             print("                   Containers cannot connect to service sockets.")
             print("                   Fix (pick one):")
             if result.missing_policy_tools:
@@ -514,26 +550,26 @@ def _check_selinux_policy(*, color: bool) -> bool:
                 print(f"                   Policy tools missing: {tools}")
                 print(
                     f"                     install policy: "
-                    f"{bold('sudo dnf install selinux-policy-devel policycoreutils', color)}, "
-                    f"then {bold(install_cmd, color)}"
+                    f"{_bold('sudo dnf install selinux-policy-devel policycoreutils')}, "
+                    f"then {_bold(install_cmd)}"
                 )
             else:
-                print(f"                     install policy: {bold(install_cmd, color)}")
+                print(f"                     install policy: {_bold(install_cmd)}")
             print(
                 f"                     or opt out:     add "
-                f"{bold(SERVICES_TCP_OPTOUT_YAML, color)}"
+                f"{_bold(SERVICES_TCP_OPTOUT_YAML)}"
                 f" to {global_config_path()}"
             )
             print()
             return False
         case SelinuxStatus.LIBSELINUX_MISSING:
-            print(f"  terok_socket_t   {_warn_label(color)} (libselinux.so.1 not loadable)")
+            print(f"  terok_socket_t   {_warn_label()} (libselinux.so.1 not loadable)")
             print("                   Sockets will bind as unconfined_t — containers denied.")
-            print(f"                   Fix: {bold('sudo dnf install libselinux', color)}")
+            print(f"                   Fix: {_bold('sudo dnf install libselinux')}")
             print()
             return False
         case SelinuxStatus.OK:
-            print(f"  terok_socket_t   {_status_label(True, color)} (policy installed)")
+            print(f"  terok_socket_t   {_status_label(True)} (policy installed)")
             print(f"                   Installer: {selinux_install_script()}")
             print()
             return True
@@ -548,49 +584,42 @@ def cmd_setup(*, check_only: bool = False, no_dbus_bridge: bool = False) -> None
     ``--no-dbus-bridge`` skips the NFLOG reader resource and the terok-dbus
     hub unit so audit-minimal hosts only see the nft hook pair on disk.
     """
-    color = supports_color()
     action = "Checking" if check_only else "Setting up"
-    print(bold(f"\n{action} terok host services\n", color))
+    print(_bold(f"\n{action} terok host services\n"))
 
     # Step 1: Host binary prerequisites
-    print(bold("Host binaries:", color))
-    binaries_ok = _check_host_binaries(color)
+    print(_bold("Host binaries:"))
+    binaries_ok = _check_host_binaries()
     print()
 
     # Step 2: SELinux prereq (prints only on enforcing hosts in socket mode;
     # surfaced *before* service install so the fix hint isn't buried below
     # multi-line install output the user has to scroll past).
-    selinux_ok = _check_selinux_policy(color=color)
+    selinux_ok = _check_selinux_policy()
 
     # Step 3: Services
-    print(bold("Services:", color))
-    shield_ok = _ensure_shield(check_only=check_only, color=color)
+    print(_bold("Services:"))
+    shield_ok = _ensure_shield(check_only=check_only)
 
-    vault_ok = _ensure_vault(check_only=check_only, color=color)
+    vault_ok = _ensure_vault(check_only=check_only)
 
-    gate_ok = _ensure_gate(check_only=check_only, color=color)
+    gate_ok = _ensure_gate(check_only=check_only)
 
-    bridge_ok = _ensure_dbus_bridge(check_only=check_only, enabled=not no_dbus_bridge, color=color)
+    bridge_ok = _ensure_dbus_bridge(check_only=check_only, enabled=not no_dbus_bridge)
     print()
 
     # Summary + next steps
     all_ok = binaries_ok and shield_ok and vault_ok and gate_ok and selinux_ok and bridge_ok
     if all_ok:
-        print(bold("Setup complete.", color))
+        print(_bold("Setup complete."))
     elif not binaries_ok:
-        print(bold(red("Missing mandatory binaries — install them first.", color), color))
+        print(_bold(_red("Missing mandatory binaries — install them first.")))
     elif not selinux_ok:
         print(
-            bold(
-                yellow(
-                    "SELinux prerequisites unmet — task containers will fail until fixed.",
-                    color,
-                ),
-                color,
-            )
+            _bold(_yellow("SELinux prerequisites unmet — task containers will fail until fixed."))
         )
     else:
-        print(bold(yellow("Some services could not be installed (see above).", color), color))
+        print(_bold(_yellow("Some services could not be installed (see above).")))
 
     providers = ", ".join(AUTH_PROVIDERS)
     print(
