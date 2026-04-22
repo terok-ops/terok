@@ -21,6 +21,7 @@ Dual use:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
 from rich.style import Style
 from rich.text import Text
-from textual import screen
+from textual import events, screen
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Footer, ListItem, ListView, RichLog, Static
@@ -83,6 +84,9 @@ class _NotificationPosted(Message):
         replaces_id: int,
         container_id: str = "",
         container_name: str = "",
+        project: str = "",
+        task_id: str = "",
+        task_name: str = "",
     ) -> None:
         """Store notification fields for the screen handler."""
         super().__init__()
@@ -93,6 +97,9 @@ class _NotificationPosted(Message):
         self.replaces_id = replaces_id
         self.container_id = container_id
         self.container_name = container_name
+        self.project = project
+        self.task_id = task_id
+        self.task_name = task_name
 
 
 class _LifecyclePosted(Message):
@@ -187,6 +194,9 @@ class ClearanceScreen(screen.Screen[None]):
                 replaces_id=notification.replaces_id,
                 container_id=notification.container_id,
                 container_name=notification.container_name,
+                project=notification.project,
+                task_id=notification.task_id,
+                task_name=notification.task_name,
             )
         )
 
@@ -214,14 +224,12 @@ class ClearanceScreen(screen.Screen[None]):
         yield RichLog(auto_scroll=True, max_lines=1000, id="event-log")
 
     async def on_mount(self) -> None:
-        """Connect to the D-Bus session bus and start the event subscriber."""
+        """Connect to the clearance hub and start the event subscriber."""
         log = self.query_one(_ID_EVENT_LOG, RichLog)
         try:
-            from terok_dbus import (
-                CallbackNotifier,
-                EventSubscriber,
-                PodmanContainerNameResolver,
-            )
+            from terok_dbus import CallbackNotifier, EventSubscriber
+
+            from terok.clearance.identity import IdentityResolver
 
             self._notifier = CallbackNotifier(
                 on_notify=self._on_notify,
@@ -230,13 +238,13 @@ class ClearanceScreen(screen.Screen[None]):
             )
             self._subscriber = EventSubscriber(
                 self._notifier,
-                name_resolver=PodmanContainerNameResolver(),
+                identity_resolver=IdentityResolver(),
             )
             await self._subscriber.start()
-            log.write(Text("Listening on session bus...", style=_STYLE_INFO))
+            log.write(Text("Connected to clearance hub...", style=_STYLE_INFO))
         except Exception as exc:
-            _log.debug("D-Bus connection failed: %s", exc)
-            log.write(Text(f"D-Bus unavailable: {exc}", style=_STYLE_ERROR))
+            _log.debug("clearance hub connection failed: %s", exc)
+            log.write(Text(f"clearance hub unavailable: {exc}", style=_STYLE_ERROR))
             if self._subscriber:
                 try:
                     await self._subscriber.stop()
@@ -249,6 +257,12 @@ class ClearanceScreen(screen.Screen[None]):
                     _log.debug("Failed to disconnect notifier during error cleanup", exc_info=True)
             self._notifier = None
             self._subscriber = None
+
+    def on_app_focus(self, _event: events.AppFocus) -> None:
+        """Cut short any reconnect back-off when the operator refocuses."""
+        if self._subscriber is not None:
+            with contextlib.suppress(Exception):
+                self._subscriber.poke_reconnect()
 
     async def on_unmount(self) -> None:
         """Stop the subscriber and release resources."""

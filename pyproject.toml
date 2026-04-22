@@ -44,12 +44,15 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-# DEV-TIME BRANCH PINS — feat/dbus-clearance-bridge chain across all four siblings.
-# The release script replaces these with release-URL pins before cutting.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.105/terok_executor-0.0.105-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.87/terok_sandbox-0.0.87-py3-none-any.whl"}
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.26/terok_shield-0.6.26-py3-none-any.whl"}
-terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.12/terok_dbus-0.5.12-py3-none-any.whl"}
+# DEV-TIME BRANCH PINS — feat/varlink-clearance-hub chain.  Three
+# sibling PRs hold the counterparts; the executor pin is a pure
+# bridge (it just re-pins sandbox to the same branch pinned here so
+# Poetry doesn't see two sources for terok-sandbox).  The release
+# script replaces all four with release-URL pins before cutting.
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.106/terok_executor-0.0.106-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.88/terok_sandbox-0.0.88-py3-none-any.whl"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.27/terok_shield-0.6.27-py3-none-any.whl"}
+terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.13/terok_dbus-0.5.13-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"
@@ -102,6 +105,7 @@ terokctl = "terok.cli.main:terokctl_main"
 terok-tui = "terok.tui.app:main"
 terok-web = "terok.tui.serve:main"
 terok-clearance = "terok.tui.clearance_screen:main"
+terok-clearance-notifier = "terok.clearance.notifier.app:main"
 terok-gate = "terok_sandbox.gate.server:main"
 
 [tool.ruff]

@@ -430,6 +430,7 @@ def _run_container(
     env: dict[str, str],
     volumes: list[VolumeSpec],
     project: ProjectConfig,
+    task_id: str,
     task_dir: Path,
     extra_args: list[str] | None = None,
     command: list[str] | None = None,
@@ -449,13 +450,25 @@ def _run_container(
         env: Environment variables to pass via ``-e``.
         volumes: Typed volume specs (sandbox decides mount vs inject).
         project: The resolved :class:`ProjectConfig` (used for GPU flag).
+        task_id: Task identifier, used for the ``ai.terok.task`` OCI
+            annotation so clearance clients can render popups as
+            "Task: project/task_id" instead of raw container IDs.
         task_dir: Per-task directory (used for per-task shield state).
         extra_args: Additional ``podman run`` flags inserted after the GPU
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
         hooks: Optional lifecycle callbacks fired around the launch.
     """
-    merged_args = list(extra_args or ()) + _project_runtime_flags(project)
+    # OCI annotations picked up by terok.clearance.identity to render
+    # task-aware clearance popups.  Shield already writes its own set
+    # through the same path; these are additive.
+    annotations = [
+        "--annotation",
+        f"ai.terok.project={project.id}",
+        "--annotation",
+        f"ai.terok.task={task_id}",
+    ]
+    merged_args = annotations + list(extra_args or ()) + _project_runtime_flags(project)
     try:
         _agent_runner().launch_prepared(
             env=env,
@@ -592,6 +605,7 @@ def task_run_cli(
         env=env,
         volumes=volumes,
         project=project,
+        task_id=task_id,
         task_dir=task_dir,
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
@@ -747,6 +761,7 @@ def task_run_toad(
         env=env,
         volumes=volumes,
         project=project,
+        task_id=task_id,
         task_dir=task_dir,
         extra_args=["-p", f"{bind_addr}:{port}:{_TOAD_PUBLIC_PORT}"],
         command=["bash", "-lc", toad_cmd],
@@ -961,6 +976,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         env=env,
         volumes=volumes,
         project=project,
+        task_id=task_id,
         task_dir=task_dir,
         command=["bash", "-lc", headless_cmd],
     )

@@ -348,18 +348,26 @@ def _ensure_gate(*, check_only: bool) -> bool:
 
 
 def _ensure_dbus_bridge(*, check_only: bool, enabled: bool) -> bool:
-    """Install the D-Bus clearance bridge: shield reader resource + dbus hub unit."""
+    """Install the clearance bridge: shield reader + dbus hub + notifier."""
     if not enabled:
-        return _disable_dbus_bridge(check_only=check_only)
+        disable_ok = _disable_dbus_bridge(check_only=check_only)
+        notifier_disable_ok = _disable_clearance_notifier(check_only=check_only)
+        return disable_ok and notifier_disable_ok
 
     _check_dbus_send()  # warning only — never affects the return value
     reader_ok = _ensure_bridge_reader(check_only=check_only)
     hub_ok = _ensure_dbus_hub(check_only=check_only)
+    # Gate the notifier on the hub.  Enabling ``terok-clearance-notifier``
+    # when the hub didn't come up would leave it in a ``Restart=on-failure``
+    # loop against a missing socket; better to skip it and let the user
+    # fix the hub first.
+    notifier_ok = _ensure_clearance_notifier(check_only=check_only) if hub_ok else True
     # dbus-send absence is reported as a WARN in its own stage line but must
-    # not mask a real failure from the reader/hub stages — if either install
-    # step errors out, ``terok setup`` has to surface that as a failed run
-    # regardless of whether ``dbus-send`` happens to be on this host.
-    return reader_ok and hub_ok
+    # not mask a real failure from the reader/hub/notifier stages — if any
+    # install step errors out, ``terok setup`` has to surface that as a
+    # failed run regardless of whether ``dbus-send`` happens to be on this
+    # host.
+    return reader_ok and hub_ok and notifier_ok
 
 
 def _ensure_bridge_reader(*, check_only: bool) -> bool:
@@ -416,6 +424,62 @@ def _ensure_dbus_hub(*, check_only: bool) -> bool:
         return False
     _enable_user_service("terok-dbus")
     print(f"{_status_label(True)} (installed + enabled)")
+    return True
+
+
+def _ensure_clearance_notifier(*, check_only: bool) -> bool:
+    """Install the terok-clearance-notifier user unit (desktop popup bridge).
+
+    Separate from the hub unit: the hub is headless-friendly, the
+    notifier needs a desktop session (reaches for
+    ``org.freedesktop.Notifications``).  Paired with ``Wants=
+    terok-dbus.service`` in the unit file so systemd starts the hub
+    first.
+    """
+    _stage_begin("Clearance notifier")
+    from terok.clearance._install import default_unit_path
+
+    unit_path = default_unit_path()
+    if check_only:
+        present = unit_path.is_file()
+        label = _status_label(present)
+        suffix = _presence_suffix(present)
+        print(f"{label}{suffix}")
+        return present
+
+    from terok.clearance._install import install_service
+
+    # Same rationale as _ensure_dbus_hub: use sys.executable + -m so a
+    # hostile PATH can't poison the unit's ExecStart.  The
+    # ``terok-clearance-notifier`` entry point is declared in
+    # pyproject.toml's [tool.poetry.scripts] section.
+    try:
+        install_service([sys.executable, "-m", "terok.clearance.notifier.app"])
+    except Exception as exc:  # noqa: BLE001
+        print(f"{_status_label(False)} ({exc})")
+        return False
+    _enable_user_service("terok-clearance-notifier")
+    print(f"{_status_label(True)} (installed + enabled)")
+    return True
+
+
+def _disable_clearance_notifier(*, check_only: bool) -> bool:
+    """Tear down the clearance-notifier unit when the bridge is opted out."""
+    _stage_begin("Clearance notifier")
+    from terok.clearance._install import default_unit_path
+
+    unit_path = default_unit_path()
+    if check_only:
+        print(f"{_warn_label()} (opted out via --no-dbus-bridge)")
+        return True
+    if unit_path.is_file():
+        _disable_user_service("terok-clearance-notifier")
+        try:
+            unit_path.unlink(missing_ok=True)
+        except OSError as exc:
+            print(f"{_warn_label()} (unit removal: {exc})")
+            return False
+    print(f"{_warn_label()} (disabled — audit-minimal mode)")
     return True
 
 

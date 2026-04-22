@@ -641,29 +641,45 @@ class TestEnsureDbusBridge:
     """``_ensure_dbus_bridge`` composes the reader + hub stages when enabled."""
 
     @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_clearance_notifier", return_value=True)
     @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
     @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
-    def test_enabled_all_ok(self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock) -> None:
-        """Both sub-stages green → bridge ok."""
+    def test_enabled_all_ok(
+        self, _hub: MagicMock, _reader: MagicMock, _notifier: MagicMock, _dbus: MagicMock
+    ) -> None:
+        """All sub-stages green → bridge ok."""
         assert _ensure_dbus_bridge(check_only=False, enabled=True) is True
 
     @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_clearance_notifier", return_value=True)
     @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=False)
     @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
     def test_enabled_reader_fail_propagates(
-        self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
+        self, _hub: MagicMock, _reader: MagicMock, _notifier: MagicMock, _dbus: MagicMock
     ) -> None:
         """Reader failure must surface as a failed bridge stage."""
         assert _ensure_dbus_bridge(check_only=False, enabled=True) is False
 
     @patch("terok.cli.commands.setup._check_dbus_send", return_value=False)
+    @patch("terok.cli.commands.setup._ensure_clearance_notifier", return_value=True)
     @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
     @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=True)
     def test_enabled_missing_dbus_send_does_not_mask_success(
-        self, _hub: MagicMock, _reader: MagicMock, _dbus: MagicMock
+        self, _hub: MagicMock, _reader: MagicMock, _notifier: MagicMock, _dbus: MagicMock
     ) -> None:
         """dbus-send absence warns only — it must not mask a clean install."""
         assert _ensure_dbus_bridge(check_only=False, enabled=True) is True
+
+    @patch("terok.cli.commands.setup._check_dbus_send", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_clearance_notifier")
+    @patch("terok.cli.commands.setup._ensure_bridge_reader", return_value=True)
+    @patch("terok.cli.commands.setup._ensure_dbus_hub", return_value=False)
+    def test_notifier_skipped_when_hub_fails(
+        self, _hub: MagicMock, _reader: MagicMock, notifier: MagicMock, _dbus: MagicMock
+    ) -> None:
+        """Hub install failure skips notifier — no restart loop against a dead hub socket."""
+        assert _ensure_dbus_bridge(check_only=False, enabled=True) is False
+        notifier.assert_not_called()
 
     @patch("terok.cli.commands.setup._disable_dbus_bridge", return_value=True)
     def test_disabled_routes_to_teardown(self, mock_disable: MagicMock) -> None:

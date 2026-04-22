@@ -43,6 +43,7 @@ exclude = ["pydevd_pycharm", "pydevd"]
 path = "terok.cli"
 layer = "presentation"
 depends_on = [
+    "terok.clearance",
     "terok.lib.orchestration.agent_config",
     "terok.lib.domain.panic",
     "terok.lib.orchestration.container_doctor",
@@ -66,6 +67,7 @@ depends_on = [
 path = "terok.tui"
 layer = "presentation"
 depends_on = [
+    "terok.clearance",
     "terok.lib.orchestration.autopilot",
     "terok.lib.core.task_display",
     "terok.lib.domain.panic",
@@ -77,6 +79,17 @@ depends_on = [
     "terok.lib.domain.facade",
     "terok.lib.util.emoji",
     "terok.lib.util.yaml",
+]
+
+# Clearance hub integration — varlink client + desktop notifier + TUI helpers.
+# Lives at the presentation layer because every component here outputs UI
+# (notifications, TUI rows) and needs to reach into orchestration for task
+# metadata lookup (``load_task_meta``).
+[[modules]]
+path = "terok.clearance"
+layer = "presentation"
+depends_on = [
+    "terok.lib.orchestration.tasks",
 ]
 
 # ── DOMAIN LAYER ──────────────────────────────────────────────────
