@@ -3,15 +3,11 @@
 
 """Install ``terok-clearance-notifier.service`` into the user's systemd tree.
 
-Companion to ``terok_dbus._install`` for the notifier half of the
-clearance pair.  The hub unit is installed by terok-dbus's own
-installer; the notifier unit lives in terok because terok owns the
-entry point (``terok-clearance-notifier``) and the systemd-resource
-template.
-
-Per-argv-token quoting + daemon-reload match the terok-dbus installer
-so a launcher path with spaces (``/home/me/My Tools/bin/python``)
-doesn't split into two tokens at ``ExecStart=`` render time.
+Renders the unit template with the resolved ``ExecStart`` path, writes
+it to ``$XDG_CONFIG_HOME/systemd/user/``, and asks systemd to reload.
+Per-argv-token quoting protects launcher paths that contain spaces
+(``/home/me/My Tools/bin/python``) from being split at ``ExecStart=``
+render time.
 """
 
 from __future__ import annotations

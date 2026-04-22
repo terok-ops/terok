@@ -1,21 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Desktop clearance notifier — hub varlink client + freedesktop popups.
-
-One long-lived coroutine that:
-
-1. Connects to ``terok-dbus``'s clearance hub via varlink.
-2. Connects to ``org.freedesktop.Notifications`` on the session bus.
-3. Streams hub events; each one flows into
-   :class:`terok_dbus.EventSubscriber` which renders a popup, tracks
-   pending-verdict state, and routes the operator's Allow / Deny click
-   back to the hub over the same varlink connection.
+"""Bridge clearance-hub events to desktop popups.
 
 Runs as ``terok-clearance-notifier.service`` — a systemd user unit
-installed by ``terok setup`` alongside the hub's own unit.  Crashes
-here never take the firewall (shield) or the hub with them; systemd
-restarts the notifier independently.
+paired with the hub's own.  Splitting the roles means headless hosts
+(CI, servers) run the hub without pulling in a desktop stack, and
+notifier crashes never take the firewall or the hub with them.
 """
 
 from __future__ import annotations
@@ -75,5 +66,5 @@ async def _teardown(subscriber: EventSubscriber, notifier: Notifier) -> None:
 
 
 def main() -> None:  # pragma: no cover — CLI entry point
-    """Entry point exposed as ``terok-clearance-notifier`` in pyproject.toml."""
+    """Systemd-unit ``ExecStart`` target — launches :func:`run_notifier` on an event loop."""
     asyncio.run(run_notifier())
