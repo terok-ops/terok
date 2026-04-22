@@ -3112,11 +3112,11 @@ tomli-w = ">=1.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-executor.git"
 reference = "feat/bump-sandbox-podman-inspector"
-resolved_reference = "67600cc0301d037a305b640f1a89812194d31483"
+resolved_reference = "b330c23ec82c5fd0568573e4964f9c13bae6c0cd"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.86"
+version = "0.0.87"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3134,7 +3134,7 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/podman-inspector"
-resolved_reference = "ad6cd556187d81a959ced93743b44fd29b9f81f7"
+resolved_reference = "40c3a80aa86ce043e3bc99e2b7526eaa86e6773a"
 
 [[package]]
 name = "terok-shield"
