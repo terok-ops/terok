@@ -503,8 +503,10 @@ from = ["terok.lib.core.project_model"]
 
 [[interfaces]]
 expose = [
+    "BrokenProject",
     "ProjectConfig",
     "PresetInfo",
+    "discover_projects",
     "find_preset_path",
     "list_projects",
     "load_project",
@@ -612,6 +614,7 @@ expose = [
     "build_images",
     "build_context_hash",
     "build_context_hash_from_rendered",
+    "image_exists",
     "l0_content_hash",
     "l1_content_hash",
     "l2_content_hash",
@@ -737,6 +740,7 @@ expose = [
     "delete_project",
     "generate_dockerfiles",
     "build_images",
+    "project_image_exists",
     "list_images",
     "find_orphaned_images",
     "cleanup_images",

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from terok.lib.core.config import build_dir, make_sandbox_config, sandbox_live_dir
-from terok.lib.core.projects import list_projects, load_project
+from terok.lib.core.projects import BrokenProject, discover_projects, list_projects, load_project
 from terok.lib.domain.project_state import get_project_state
 from tests.test_utils import project_env, write_project
 
@@ -138,6 +138,39 @@ class TestProject:
         assert len(projects) == 1
         assert projects[0].upstream_url == "https://user.example/repo.git"
         assert projects[0].root == (user_projects / "proj2").resolve()
+
+    def test_discover_projects_splits_valid_and_broken(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """discover_projects returns (valid, broken) without touching stderr (#565)."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_base = base / "config"
+            projects_root = config_base / "projects"
+            write_project(
+                projects_root,
+                "good",
+                "project:\n  id: good\ngit:\n  upstream_url: https://example.com/good.git\n",
+            )
+            write_project(projects_root, "bad", "project:\n  id: bad\n  foo: [invalid\n")
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"TEROK_CONFIG_DIR": str(config_base), "XDG_CONFIG_HOME": str(base / "empty")},
+            ):
+                valid, broken = discover_projects()
+
+        assert [p.id for p in valid] == ["good"]
+        assert [bp.id for bp in broken] == ["bad"]
+        bp = broken[0]
+        assert isinstance(bp, BrokenProject)
+        assert bp.config_path == (projects_root / "bad" / "project.yml")
+        assert bp.error  # message is populated and non-empty
+
+        # discover_projects is the TUI-facing entrypoint; ``list_projects``
+        # owns the CLI-side stderr warning.  If this ever starts printing
+        # directly, the TUI would get duplicate noise on top of its toast.
+        captured = capsys.readouterr()
+        assert captured.err.strip() == ""
 
     def test_list_projects_skips_malformed_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as td:

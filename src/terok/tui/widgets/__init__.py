@@ -11,6 +11,7 @@ from .panic_button import PanicButton  # noqa: F401
 from .project_list import ProjectActions, ProjectList, ProjectListItem  # noqa: F401
 from .project_state import (  # noqa: F401
     ProjectState,
+    render_broken_project,
     render_project_details,
     render_project_loading,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "TaskList",
     "TaskListItem",
     # Render helpers
+    "render_broken_project",
     "render_project_details",
     "render_project_loading",
     "render_task_details",

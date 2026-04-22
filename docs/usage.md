@@ -273,22 +273,31 @@ Supported tokens: `{{IDENTITY_FILE}}`, `{{KEY_NAME}}`, `{{PROJECT_ID}}`
 ### Step 7: Create and Run a Task
 
 ```bash
-# Create a new task
-terok task new myproj
-# Output: Created task 1 for project myproj
+# Create a new task and attach into its shell (default on a TTY).
+# Equivalent to: task run + waiting for ready + terok login — one command.
+terok task run myproj
+
+# --no-attach keeps the old behaviour: start the container and print the
+# `terok login` instructions instead of exec'ing into it.  Scripts piping
+# terok's output get --no-attach automatically (non-TTY = non-interactive).
+terok task run myproj --no-attach
+
+# If the project's image hasn't been built yet, task run prompts on a TTY
+# ("Build now? [Y/n]") and runs `project build` inline; scripts exit with
+# a hint pointing at the command.
 
 # List tasks
 terok task list myproj
-
-# Run in CLI mode (headless agent)
-terokctl task attach --mode cli myproj 1
 ```
 
 #### Additional Task Operations
 
 ```bash
-# Create and immediately run a task in one step
-terok task run myproj
+# Create a task metadata record without running it (scripting, terokctl only)
+terokctl task new myproj
+
+# Attach to an existing task (terokctl, scripting)
+terokctl task attach --mode cli myproj 1
 
 # Rename a task
 terok task rename myproj 1 fix-auth-bug

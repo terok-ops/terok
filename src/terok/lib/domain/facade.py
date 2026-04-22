@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 from ..core.images import project_cli_image
 from ..core.projects import derive_project as _derive_project, load_project
-from ..orchestration.image import build_images, generate_dockerfiles
+from ..orchestration.image import build_images, generate_dockerfiles, image_exists
 from ..orchestration.task_runners import (  # noqa: F401 — re-exported public API
     HeadlessRunRequest,
     task_followup_headless,
@@ -88,6 +88,11 @@ from .vault import vault_db  # noqa: F401 — re-exported public API
 def get_project(project_id: str) -> Project:
     """Load a project by ID and return a rich :class:`Project` aggregate."""
     return Project(load_project(project_id))
+
+
+def project_image_exists(project_id: str) -> bool:
+    """Return ``True`` when the project's L2 CLI image is present locally."""
+    return image_exists(project_cli_image(project_id))
 
 
 def list_projects() -> list[Project]:
@@ -205,6 +210,7 @@ __all__ = [
     # Image management
     "generate_dockerfiles",
     "build_images",
+    "project_image_exists",
     # Image listing & cleanup
     "list_images",
     "find_orphaned_images",

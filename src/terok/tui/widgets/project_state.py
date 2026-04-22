@@ -12,7 +12,7 @@ from rich.text import Text
 from terok_sandbox import EnvironmentCheck, GateServerStatus, GateStalenessInfo
 from textual.widgets import Static
 
-from ...lib.core.projects import ProjectConfig
+from ...lib.core.projects import BrokenProject, ProjectConfig
 from ...lib.core.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
@@ -47,6 +47,30 @@ def render_project_loading(
         Text(""),
         Text("Loading details..."),
         tasks_line,
+    ]
+    return Text("\n").join(lines)
+
+
+def render_broken_project(bp: BrokenProject, css_variables: dict[str, str] | None = None) -> Text:
+    """Render a damaged project's validation error as a Rich Text block (#565).
+
+    The config path plus the raw error message are enough for the user to
+    open ``project.yml`` in an editor and fix whatever pydantic or the
+    YAML parser flagged — no extra round-trip to the CLI.
+    """
+    variables = css_variables or {}
+    error_color = variables.get("error", "red")
+    dim = Style(dim=True)
+    header = Text(f"Project:   {bp.id} ", style=Style(color=error_color, bold=True))
+    header.append("(broken)", style=Style(color=error_color))
+    lines = [
+        header,
+        Text(""),
+        Text("This project's configuration could not be loaded:"),
+        Text(""),
+        Text(bp.error, style=Style(color=error_color)),
+        Text(""),
+        Text(f"Config: {bp.config_path}", style=dim),
     ]
     return Text("\n").join(lines)
 
@@ -258,3 +282,7 @@ class ProjectState(Static):
                 shield_env=shield_env,
             )
         )
+
+    def set_broken(self, bp: BrokenProject) -> None:
+        """Show *bp*'s validation error in place of the normal infrastructure readout."""
+        self.update(render_broken_project(bp, _get_css_variables(self)))

@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -338,45 +339,80 @@ def _find_project_root(project_id: str) -> Path:
 # ---------- Project listing ----------
 
 
+@dataclass(frozen=True)
+class BrokenProject:
+    """A project directory whose ``project.yml`` failed to load.
+
+    Carries just enough context for the TUI to render a row and show the
+    validation error in the details pane, without forcing callers to
+    re-run the failing ``load_project`` to rediscover the message.
+    """
+
+    id: str
+    config_path: Path
+    error: str
+
+
+def discover_projects() -> tuple[list[ProjectConfig], list[BrokenProject]]:
+    """Load every project on disk, splitting successes from config-level failures.
+
+    The broken list lets the TUI render damaged projects alongside healthy
+    ones (issue #565) — silently hiding them turns "project vanished" into
+    a mystery.  ``_parse_project_yaml`` wraps every config error (bad YAML,
+    schema drift, filesystem issues) in ``SystemExit`` with a human-readable
+    message; anything else propagates as a genuine bug.
+    """
+    paths_by_id = _discover_project_paths()
+    valid: list[ProjectConfig] = []
+    broken: list[BrokenProject] = []
+    for pid in sorted(paths_by_id):
+        try:
+            valid.append(load_project(pid))
+        except SystemExit as exc:
+            msg = _sanitize_for_tty(str(exc))
+            broken.append(BrokenProject(id=pid, config_path=paths_by_id[pid], error=msg))
+    return valid, broken
+
+
 def list_projects() -> list[ProjectConfig]:
-    """Discover all projects (user + system) and return them as ProjectConfig objects.
+    """Discover all projects (user + system), warning on broken configs.
+
+    Thin wrapper over :func:`discover_projects` that preserves the existing
+    stderr + logger diagnostics for CLI callers.  The TUI uses
+    :func:`discover_projects` directly to render broken entries in-place.
 
     User projects override system ones with the same id.
     """
-    ids: set[str] = set()
+    valid, broken = discover_projects()
+    for bp in broken:
+        # Log records are one-line structured entries; a message carrying
+        # embedded newlines would split across records and could be read
+        # as injected log lines.  stderr print keeps newlines so pydantic's
+        # multi-line validation output is readable on the console.
+        logger.warning("Skipping broken project '%s': %s", bp.id, bp.error.replace("\n", "\\n"))
+        print(f"warning: skipping broken project '{bp.id}': {bp.error}", file=sys.stderr)
+    return valid
 
-    # Collect IDs from user and system project dirs
+
+def _discover_project_paths() -> dict[str, Path]:
+    """Map each on-disk project ID to its ``project.yml`` path.
+
+    User scope wins over system scope for collisions — matches how
+    :func:`load_project` resolves the effective config.  Returning the
+    path alongside the ID lets :func:`discover_projects` carry the
+    location forward to ``BrokenProject`` without re-walking.
+    """
+    paths: dict[str, Path] = {}
     for root in (user_projects_dir(), projects_dir()):
         if not root.is_dir():
             continue
         for d in root.iterdir():
-            if not d.is_dir():
+            if not d.is_dir() or d.name in paths:
                 continue
-            if (d / _PROJECT_YML).is_file() and is_valid_project_id(d.name):
-                ids.add(d.name)
-
-    projects: list[ProjectConfig] = []
-    for pid in sorted(ids):
-        # ``_parse_project_yaml`` wraps every config error (bad YAML,
-        # schema drift, filesystem issues) in ``SystemExit`` with a
-        # human-readable message — that's the one exception type
-        # ``load_project`` can surface here.  Skip + surface it so the
-        # broken project is visible (silently hiding turns "No projects
-        # found" into a mystery for users upgrading across schema
-        # renames).  Genuinely unexpected exceptions propagate.
-        try:
-            projects.append(load_project(pid))
-        except SystemExit as exc:
-            msg = _sanitize_for_tty(str(exc))
-            # Log records are one-line structured entries; a message
-            # carrying embedded newlines would split across records and
-            # could be read as injected log lines.  stderr print keeps
-            # newlines so pydantic's multi-line validation output is
-            # readable on the console.
-            logger.warning("Skipping broken project '%s': %s", pid, msg.replace("\n", "\\n"))
-            print(f"warning: skipping broken project '{pid}': {msg}", file=sys.stderr)
-            continue
-    return projects
+            yml = d / _PROJECT_YML
+            if yml.is_file() and is_valid_project_id(d.name):
+                paths[d.name] = yml
+    return paths
 
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")

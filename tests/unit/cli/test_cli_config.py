@@ -16,10 +16,17 @@ import pytest
 from tests.testcli import run_cli
 
 
-def make_config_layout(tmp_path: Path) -> SimpleNamespace:
-    """Create a filesystem layout used by the ``terok config`` tests."""
+def make_config_layout(tmp_path: Path, gate_port: int) -> SimpleNamespace:
+    """Create a filesystem layout used by the ``terok config`` tests.
+
+    *gate_port* is the ``gate_server.port`` value written to the synthetic
+    ``global.yml``.  ``make_sandbox_config()`` resolves that port through
+    the sandbox port registry, which does a real ``bind()`` probe — so the
+    test needs a value it can actually bind.  Pass an ephemeral port from
+    the ``unused_tcp_port`` fixture to keep the test host-independent.
+    """
     global_cfg = tmp_path / "global.yml"
-    global_cfg.write_text("gate_server:\n  port: 9418\n", encoding="utf-8")
+    global_cfg.write_text(f"gate_server:\n  port: {gate_port}\n", encoding="utf-8")
 
     user_root = tmp_path / "user-projects"
     system_root = tmp_path / "system-projects"
@@ -114,9 +121,11 @@ def run_import(file_path: Path, envs_root: Path) -> None:
         run_cli("config", "import-opencode", str(file_path))
 
 
-def test_config_command_color_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_config_command_color_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], unused_tcp_port: int
+) -> None:
     """The config command prints the expected colorized layout details."""
-    layout = make_config_layout(tmp_path)
+    layout = make_config_layout(tmp_path, gate_port=unused_tcp_port)
 
     with patch_config_command(layout):
         run_cli("config", "paths")

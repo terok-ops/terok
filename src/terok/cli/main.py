@@ -98,10 +98,9 @@ def main(prog: str = "terok") -> None:
         epilog=(
             "Quick start:\n"
             f"  1. Bootstrap:  {prog} setup                       (install host services)\n"
-            f"  2. Auth:       {prog} auth claude <project>       (authenticate agents)\n"
-            f"  3. Project:    {prog} project wizard              (create a project)\n"
-            f"  4. Work:       {prog} task run <project_id>       (new CLI task)\n"
-            f"  5. Login:      {prog} login <project_id> <task_id>\n"
+            f"  2. Project:    {prog} project wizard              (create a project)\n"
+            f"  3. Auth:       {prog} auth claude <project>       (authenticate agents)\n"
+            f"  4. Work:       {prog} task run <project_id>       (attach into a new CLI task)\n"
             "\n"
             "Standalone agent (no project):\n"
             f"  {prog} executor run claude .          (headless against cwd)\n"

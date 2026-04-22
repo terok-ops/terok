@@ -15,6 +15,8 @@ from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_s
 from ...lib.domain.facade import (
     HeadlessRunRequest,
     LogViewOptions,
+    build_images,
+    project_image_exists,
     task_archive_list,
     task_archive_logs,
     task_delete,
@@ -128,6 +130,21 @@ def register(
     )
     t_run.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
     _add_restriction_flags(t_run)
+    # CLI-mode attach (default: attach when stdout is a TTY).  Headless
+    # already streams/follows on its own; toad returns a URL + token.
+    attach_group = t_run.add_mutually_exclusive_group()
+    attach_group.add_argument(
+        "--attach",
+        action="store_true",
+        default=None,
+        help="After container is ready, log into it (default on TTY, --mode=cli only)",
+    )
+    attach_group.add_argument(
+        "--no-attach",
+        dest="attach",
+        action="store_false",
+        help="Print login instructions instead of attaching",
+    )
     # Headless-only flags (silently ignored in cli/toad modes)
     t_run.add_argument(
         "--provider",
@@ -301,19 +318,25 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 
 def _cmd_task_run(args: argparse.Namespace) -> None:
-    """Handle ``terok task run`` — create a task and run it in the chosen mode."""
+    """Dispatch ``terok task run`` to the runner for the chosen mode."""
     mode = getattr(args, "mode", "cli")
     if mode == "headless":
         _cmd_task_run_headless(args)
     elif mode == "toad":
-        _cmd_task_run_interactive(args, runner=task_run_toad)
+        _cmd_task_run_interactive(args, runner=task_run_toad, attach=False)
     else:  # mode == "cli"
-        _cmd_task_run_interactive(args, runner=task_run_cli)
+        _cmd_task_run_interactive(args, runner=task_run_cli, attach=_resolve_attach(args))
 
 
-def _cmd_task_run_interactive(args: argparse.Namespace, *, runner: Any) -> None:
-    """Create + run for interactive modes (cli, toad)."""
+def _cmd_task_run_interactive(args: argparse.Namespace, *, runner: Any, attach: bool) -> None:
+    """Create a task, launch its container, and optionally attach to it.
+
+    *runner* is the mode-specific launcher (CLI or Toad).  Toad prints a
+    URL + token and returns; CLI under *attach* execs into ``task_login``
+    once the container reports ready.
+    """
     pid = args.project_id
+    _ensure_project_image(pid)
     tid = task_new(pid, name=getattr(args, "name", None))
     runner(
         pid,
@@ -322,15 +345,25 @@ def _cmd_task_run_interactive(args: argparse.Namespace, *, runner: Any) -> None:
         preset=getattr(args, "preset", None),
         unrestricted=_resolve_unrestricted(args),
     )
+    if attach:
+        # ``task_login`` calls ``os.execvp`` and never returns on success.
+        task_login(pid, tid)
 
 
 def _cmd_task_run_headless(args: argparse.Namespace) -> None:
-    """Autopilot path: create a task and run it headlessly against the prompt."""
+    """Autopilot path: create a task and run it headlessly against the prompt.
+
+    Cheap validation (``--prompt`` present, ``--instructions`` file readable)
+    runs first so the user sees those errors before the image preflight
+    potentially asks to build for several minutes.
+    """
     prompt = getattr(args, "prompt", None)
     if not prompt:
         raise SystemExit("--prompt is required when --mode=headless")
 
     instructions_text = _read_instructions(getattr(args, "instructions", None))
+
+    _ensure_project_image(args.project_id)
 
     task_run_headless(
         HeadlessRunRequest(
@@ -349,6 +382,55 @@ def _cmd_task_run_headless(args: argparse.Namespace) -> None:
             unrestricted=_resolve_unrestricted(args),
         )
     )
+
+
+def _resolve_attach(args: argparse.Namespace) -> bool:
+    """Decide whether a CLI-mode ``task run`` execs into ``terok login`` on ready.
+
+    Default is True on an interactive TTY (``docker run -it`` mental model),
+    False otherwise — scripts piping the output want "start it and return"
+    rather than ``execvp`` into an interactive shell.
+    """
+    if args.attach is not None:
+        return bool(args.attach)
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _ensure_project_image(project_id: str) -> None:
+    """Ensure the project's L2 image exists, offering to build it when missing.
+
+    TTY → interactive ``Build now? [Y/n]`` prompt, then ``build_images()``
+    inline.  Non-TTY → exit with a hint so scripts stay deterministic.
+    """
+    if project_image_exists(project_id):
+        return
+
+    hint = (
+        f"Image for project {project_id!r} is not present. "
+        f"Build it first: terok project build {project_id}"
+    )
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise SystemExit(hint)
+
+    try:
+        answer = (
+            input(f"Image for project {project_id!r} is missing. Build now? [Y/n]: ")
+            .strip()
+            .lower()
+        )
+    except EOFError:
+        # stdin closed — treat as implicit decline, print the hint.
+        print()
+        raise SystemExit(hint) from None
+    except KeyboardInterrupt:
+        # Ctrl-C stays Ctrl-C: exit 130 (conventional SIGINT), no hint.
+        print()
+        raise SystemExit(130) from None
+
+    if answer in ("n", "no"):
+        raise SystemExit(hint)
+
+    build_images(project_id)
 
 
 def _read_instructions(instructions_path: str | None) -> str | None:

@@ -39,12 +39,17 @@ from ..util.fs import ensure_dir
 # ---------- helpers ----------
 
 
-def _image_exists(image: str) -> bool:
-    """Check if a container image exists locally.
+def image_exists(image: str) -> bool:
+    """Return True when *image* is present in the local container store."""
+    return _image_exists(image)
 
-    Thin wrapper over the runtime's ``Image.exists`` check, kept as a
-    same-module symbol so existing test mocks (``patch("terok.lib.
-    orchestration.image._image_exists")``) keep working.
+
+def _image_exists(image: str) -> bool:
+    """Same check as :func:`image_exists`, kept as a separate symbol for tests.
+
+    The public function resolves this name on every call, so
+    ``patch("terok.lib.orchestration.image._image_exists", fake)`` reaches
+    every caller — an ``image_exists = _image_exists`` alias would not.
     """
     return _rt.get_runtime().image(image).exists()
 
