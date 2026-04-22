@@ -78,8 +78,7 @@ def dispatch(args: argparse.Namespace) -> bool:
     return True
 
 
-# ── Palette (local copy — tests for ``setup`` clear its ``@cache``-bound
-#    verdict, and we don't want the uninstaller to share that test surface) ──
+# ── Palette ──
 
 
 def _bold(text: str) -> str:
@@ -168,11 +167,16 @@ def _uninstall_desktop_entry() -> bool:
 
 
 def _uninstall_dbus_bridge() -> bool:
-    """Remove the NFLOG reader resource + terok-dbus hub unit."""
-    import shutil
-    import subprocess
+    """Remove the NFLOG reader resource + terok-dbus hub unit.
 
+    Order matters: ``disable --now`` stops + deactivates the service while
+    the unit file is still on disk (otherwise systemd has no unit to
+    resolve); then unlink the file; then ``daemon-reload`` so systemd
+    purges the now-dangling in-memory entry.
+    """
     from terok_sandbox import uninstall_shield_bridge
+
+    from .setup import _run_systemctl, _user_systemd_dir
 
     _stage_begin("D-Bus bridge")
     try:
@@ -181,30 +185,14 @@ def _uninstall_dbus_bridge() -> bool:
         print(f"{_status_label(False)} (reader: {exc})")
         return False
 
-    # Also drop the terok-dbus systemd user unit — symmetric with ``setup``'s
-    # ``_ensure_dbus_hub`` phase.  The file lives under XDG_CONFIG_HOME so we
-    # do not need sudo; a missing unit is a no-op success.
-    from .setup import _user_systemd_dir
-
     unit = _user_systemd_dir() / "terok-dbus.service"
-    if unit.is_file():
-        systemctl = shutil.which("systemctl")
-        if systemctl:
-            subprocess.run(
-                [systemctl, "--user", "disable", "--now", "terok-dbus"],
-                check=False,
-                capture_output=True,
-            )
-            subprocess.run(
-                [systemctl, "--user", "daemon-reload"],
-                check=False,
-                capture_output=True,
-            )
-        try:
-            unit.unlink(missing_ok=True)
-        except OSError as exc:
-            print(f"{_status_label(False)} (unit unlink: {exc})")
-            return False
+    _run_systemctl("--user", "disable", "--now", "terok-dbus")
+    try:
+        unit.unlink(missing_ok=True)
+    except OSError as exc:
+        print(f"{_status_label(False)} (unit unlink: {exc})")
+        return False
+    _run_systemctl("--user", "daemon-reload")
 
     print(f"{_status_label(True)} (removed)")
     return True
@@ -217,14 +205,9 @@ def _uninstall_sandbox_services(*, root: bool) -> bool:
     _stage_begin("Sandbox services")
     try:
         _handle_sandbox_uninstall(root=root)
-    except SystemExit as exc:
+    except (SystemExit, Exception) as exc:  # noqa: BLE001
         print(f"{_status_label(False)} ({exc})")
         return False
-    except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False)} ({exc})")
-        return False
-    # ``_handle_sandbox_uninstall`` prints its own ``→ <phase>`` breadcrumbs,
-    # so the stage label already has context; terminate with a compact summary.
     print(f"  {_status_label(True)} (shield + vault + gate removed)")
     return True
 

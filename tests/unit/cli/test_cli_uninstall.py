@@ -42,20 +42,23 @@ def test_desktop_entry_failure_reported(
     assert "FAIL" in capsys.readouterr().out
 
 
+@patch("terok.cli.commands.setup._run_systemctl")
 @patch("terok_sandbox.uninstall_shield_bridge")
-def test_dbus_bridge_removed_when_unit_absent(
-    mock_uninstall: MagicMock, capsys: pytest.CaptureFixture[str]
+def test_dbus_bridge_removed(
+    mock_reader: MagicMock, mock_systemctl: MagicMock, capsys: pytest.CaptureFixture[str], tmp_path
 ) -> None:
-    """Missing systemd unit file → unlink branch is skipped; phase still ok."""
-    mock_dir = MagicMock()
-    # ``unit = dir / "terok-dbus.service"`` must yield a Path whose .is_file() is False.
-    mock_unit = MagicMock()
-    mock_unit.is_file.return_value = False
-    mock_dir.__truediv__.return_value = mock_unit
+    """Happy path: reader removed, unit disabled, file unlinked, daemon reloaded."""
+    unit = tmp_path / "terok-dbus.service"
+    unit.write_text("[Unit]\n")
 
-    with patch("terok.cli.commands.setup._user_systemd_dir", return_value=mock_dir):
+    with patch("terok.cli.commands.setup._user_systemd_dir", return_value=tmp_path):
         assert _uninstall_dbus_bridge() is True
-    mock_uninstall.assert_called_once()
+
+    mock_reader.assert_called_once()
+    # disable --now must run before unlink; daemon-reload after.
+    assert mock_systemctl.call_args_list[0].args[:4] == ("--user", "disable", "--now", "terok-dbus")
+    assert mock_systemctl.call_args_list[1].args == ("--user", "daemon-reload")
+    assert not unit.exists()
     assert "ok" in capsys.readouterr().out
 
 
