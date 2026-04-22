@@ -457,6 +457,13 @@ class ProjectActionsMixin:
     async def action_new_project_wizard(self) -> None:
         """Launch the CLI project wizard in a suspended terminal."""
         with self.suspend():
+            # Under Nix (and other setups where ``sys.executable`` is a
+            # wrapper that normally rewrites the env on startup) spawning
+            # directly from the TUI bypasses that wrapper, and the child
+            # ``python -m terok.cli`` can't find the ``terok`` package on
+            # its import path.  Passing the parent's ``sys.path`` through
+            # as ``PYTHONPATH`` lets the subprocess resolve the same
+            # install the TUI is running from.  See #717 (Franz Pöschel).
             env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
             try:
                 result = subprocess.run(
