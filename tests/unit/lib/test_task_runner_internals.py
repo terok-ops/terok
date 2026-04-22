@@ -335,6 +335,7 @@ class TestRunContainer:
         from terok.lib.core.project_model import ProjectConfig
 
         p = MagicMock(spec=ProjectConfig)
+        p.id = "p1"
         p.gpu_enabled = False
         p.root = MOCK_TASK_DIR
         p.isolation = "shared"
@@ -355,6 +356,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="test-ctr",
                 image="alpine:latest",
                 env={"FOO": "bar"},
@@ -383,6 +385,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="test-ctr",
                 image="alpine:latest",
                 env={"TEROK_UNRESTRICTED": "1"},
@@ -402,6 +405,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=True),
         ):
             _run_container(
+                task_id="t1",
                 cname="gpu-ctr",
                 image="nvidia:latest",
                 env={},
@@ -421,6 +425,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="ctr",
                 image="img:latest",
                 env={},
@@ -432,7 +437,10 @@ class TestRunContainer:
             )
 
         spec = captured_runspec(sandbox_factory)
-        assert spec.extra_args == ("-p", "8080:80")
+        # _run_container also prepends ``--annotation ai.terok.{project,task}``
+        # so the clearance IdentityResolver can map container → task metadata;
+        # the caller-supplied extras come after.
+        assert spec.extra_args[-2:] == ("-p", "8080:80")
         assert spec.command == ("bash", "-lc", "toad --serve")
 
     def test_resource_limits_from_project(self) -> None:
@@ -445,6 +453,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="rl-ctr",
                 image="alpine:latest",
                 env={},
@@ -467,6 +476,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="ctr",
                 image="alpine:latest",
                 env={},
@@ -498,6 +508,7 @@ class TestRunContainer:
             sandbox_factory.return_value.launch_prepared.side_effect = BuildError("CDI broken")
             with pytest.raises(SystemExit, match="CDI broken"):
                 _run_container(
+                    task_id="t1",
                     cname="gpu-ctr",
                     image="nvidia:latest",
                     env={},
@@ -526,6 +537,7 @@ class TestRunContainer:
             )
             with pytest.raises(SystemExit, match="podman not found"):
                 _run_container(
+                    task_id="t1",
                     cname="ctr",
                     image="img",
                     env={},
@@ -549,6 +561,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="ctr",
                 image="img",
                 env={},
@@ -572,6 +585,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="ctr",
                 image="img",
                 env={},
@@ -595,6 +609,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="sealed-ctr",
                 image="alpine:latest",
                 env={},
@@ -614,6 +629,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="shared-ctr",
                 image="alpine:latest",
                 env={},
@@ -634,6 +650,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="nested-ctr",
                 image="alpine:latest",
                 env={},
@@ -660,6 +677,7 @@ class TestRunContainer:
             patch("terok.lib.orchestration.task_runners.has_gpu", return_value=False),
         ):
             _run_container(
+                task_id="t1",
                 cname="plain-ctr",
                 image="alpine:latest",
                 env={},
