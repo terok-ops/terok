@@ -3089,7 +3089,7 @@ dbus-fast = ">=2.0,<5.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-dbus.git"
 reference = "feat/varlink-clearance-hub"
-resolved_reference = "aec40de9678e1ac84b7a54366674ed01eca6d1dd"
+resolved_reference = "33809f9cc1d4d65e99551424870878b60e30c6af"
 
 [[package]]
 name = "terok-executor"
@@ -3134,7 +3134,7 @@ terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = 
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "feat/podman-inspector"
-resolved_reference = "04275c589a2ce03d41dcf8700207b3f055d22c06"
+resolved_reference = "094f379f7010304a0487a667f3b040d2983afa43"
 
 [[package]]
 name = "terok-shield"
