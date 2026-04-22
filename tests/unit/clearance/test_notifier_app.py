@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,20 +13,19 @@ from terok.clearance.notifier import app as _app
 from terok.clearance.notifier.app import _teardown, run_notifier
 
 
-async def _never() -> None:
-    """Coroutine that never completes — stand-in for one side of the race."""
-    await asyncio.Event().wait()
-
-
 class TestRunNotifier:
     """``run_notifier`` brings up the subscriber, waits, and tears it down."""
 
     @pytest.mark.asyncio
     async def test_happy_path_connects_waits_then_teardown(self) -> None:
-        """SIGTERM wins the race → clean teardown, no SystemExit."""
+        """SIGTERM returns → clean teardown, no SystemExit.
+
+        ``ClearanceClient`` now auto-reconnects on hub drops, so the
+        notifier's own race against stream death is gone — the only
+        thing ``run_notifier`` waits for is the shutdown signal.
+        """
         notifier = AsyncMock()
         subscriber = AsyncMock()
-        subscriber.wait_closed.side_effect = _never
         with (
             patch.object(_app, "configure_logging"),
             patch.object(_app, "create_notifier", AsyncMock(return_value=notifier)),
@@ -35,27 +33,8 @@ class TestRunNotifier:
             patch.object(_app, "IdentityResolver"),
             patch.object(_app, "wait_for_shutdown_signal", AsyncMock()),
         ):
-            await run_notifier()  # returns normally — no SystemExit
+            await run_notifier()  # returns normally
         subscriber.start.assert_awaited_once()
-        subscriber.stop.assert_awaited_once()
-        notifier.disconnect.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_stream_death_exits_non_zero_for_systemd_restart(self) -> None:
-        """Hub-went-away race: subscriber.wait_closed wins → SystemExit(1)."""
-        notifier = AsyncMock()
-        subscriber = AsyncMock()
-        # wait_closed returns immediately; shutdown_signal never fires.
-        with (
-            patch.object(_app, "configure_logging"),
-            patch.object(_app, "create_notifier", AsyncMock(return_value=notifier)),
-            patch.object(_app, "EventSubscriber", return_value=subscriber),
-            patch.object(_app, "IdentityResolver"),
-            patch.object(_app, "wait_for_shutdown_signal", side_effect=_never),
-        ):
-            with pytest.raises(SystemExit) as excinfo:
-                await run_notifier()
-        assert excinfo.value.code == 1
         subscriber.stop.assert_awaited_once()
         notifier.disconnect.assert_awaited_once()
 

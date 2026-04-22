@@ -29,7 +29,7 @@ _CLEANUP_STEP_TIMEOUT_S = 2.0
 
 
 async def run_notifier() -> None:
-    """Run the notifier until SIGINT/SIGTERM — or until the hub disconnects."""
+    """Run the notifier until SIGINT/SIGTERM."""
     configure_logging()
     notifier = await create_notifier("terok-clearance")
     subscriber = EventSubscriber(notifier, identity_resolver=IdentityResolver())
@@ -42,25 +42,13 @@ async def run_notifier() -> None:
         raise SystemExit(1) from None
 
     _log.info("terok-clearance-notifier online")
-    shutdown_signal = asyncio.create_task(wait_for_shutdown_signal())
-    stream_ended = asyncio.create_task(subscriber.wait_closed())
     try:
-        done, pending = await asyncio.wait(
-            {shutdown_signal, stream_ended}, return_when=asyncio.FIRST_COMPLETED
-        )
-        for task in pending:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+        # ``ClearanceClient`` handles hub restarts internally with an
+        # exponential-backoff reconnect; the notifier just waits for
+        # SIGTERM / SIGINT and otherwise stays out of the way.
+        await wait_for_shutdown_signal()
     finally:
         await _teardown(subscriber, notifier)
-    if stream_ended in done and shutdown_signal not in done:
-        # Hub went away; exit non-zero so ``Restart=on-failure`` picks us
-        # back up on the next hub start.  SIGTERM wins this race cleanly
-        # (``done`` contains ``shutdown_signal``), so a normal stop stays
-        # a normal stop.
-        _log.warning("clearance event stream ended; exiting so systemd can reconnect")
-        raise SystemExit(1)
 
 
 async def _teardown(subscriber: EventSubscriber, notifier: Notifier) -> None:
