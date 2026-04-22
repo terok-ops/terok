@@ -78,12 +78,14 @@ terok tui
 Or do the same from the command line:
 
 ```bash
-terok project wizard                    # interactive setup
-terok auth claude myproj                # authenticate agent
+terok auth claude                       # authenticate host-wide (no project needed)
+terok auth                              # interactive menu — pick multiple providers
+terok project wizard                    # interactive project setup
 terok task run myproj                   # create a CLI task and attach (default on TTY)
 terok task run myproj --no-attach       # start it detached; print login instructions
 terok task run myproj --mode toad       # Toad multi-agent TUI (browser access)
 terok login myproj a3                   # re-attach later by hex ID prefix
+terok auth claude --project myproj      # project-scoped escape hatch (uses its L2 image)
 ```
 
 For manual project configuration or CI, see the [User Guide](docs/usage.md).

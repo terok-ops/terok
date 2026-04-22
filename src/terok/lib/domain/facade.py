@@ -174,14 +174,27 @@ def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
         input("Press Enter once the key is registered... ")
 
 
-def authenticate(project_id: str, provider: str) -> None:
-    """Run the auth flow for *provider*, injecting terok-specific config.
+#: Container-scope sentinel used when ``authenticate`` runs without a project.
+#:
+#: ``_host`` is rejected by :func:`is_valid_project_id` (leading underscore),
+#: so it can never collide with a real project ID.  The auth flow only uses
+#: the scope string for transient container naming — credentials land in the
+#: vault provider-scoped, not project-scoped — so the sentinel is cosmetic.
+_HOST_AUTH_SENTINEL = "_host"
 
-    Thin wrapper around the instrumentation-layer ``authenticate()`` that
-    supplies ``mounts_dir`` and ``image`` from terok's config/image system.
-    When ``expose_oauth_token`` is active (exposed mode), passes
-    ``expose_token`` so the real credential file is preserved instead of
-    being replaced with a phantom marker.
+
+def authenticate(provider: str, project_id: str | None = None) -> None:
+    """Run the auth flow for *provider*, host-wide by default.
+
+    When *project_id* is given, the project's L2 CLI image is reused — the
+    escape hatch for users who want project-scoped credentials or happen to
+    have a project image handy.  When omitted, terok resolves an L1 image
+    (shared across projects that build on the same base) and offers to
+    build one if none exists — the "fresh install, no project yet" path.
+
+    Vault storage is provider-scoped in both modes, so switching from a
+    per-project auth to a host-wide one later (or vice versa) does not
+    duplicate or overwrite credentials.
     """
     from ..core.config import (
         get_claude_expose_oauth_token,
@@ -190,13 +203,86 @@ def authenticate(project_id: str, provider: str) -> None:
     )
 
     expose = provider == "claude" and is_experimental() and get_claude_expose_oauth_token()
+
+    if project_id is None:
+        image = _resolve_host_auth_image(provider)
+        container_scope = _HOST_AUTH_SENTINEL
+    else:
+        image = project_cli_image(project_id)
+        container_scope = project_id
+
     _authenticate_raw(
-        project_id,
+        container_scope,
         provider,
         mounts_dir=sandbox_live_mounts_dir(),
-        image=project_cli_image(project_id),
+        image=image,
         expose_token=expose,
     )
+
+
+def _resolve_host_auth_image(provider: str) -> str:
+    """Pick (or build) an L1 image suitable for host-wide ``terok auth``.
+
+    Prefers the default full-roster L1 when present — it has every agent
+    installed, so repeated ``terok auth`` calls for different providers
+    share one image.  Falls back to a per-provider L1 that gets built on
+    demand.  For API-key-only providers no container is ever launched, so
+    any tag is acceptable; we return the full-roster name without
+    verifying it exists.
+    """
+    import sys
+
+    from terok_executor import (
+        AUTH_PROVIDERS,
+        DEFAULT_BASE_IMAGE,
+        build_base_images,
+        l1_image_tag,
+    )
+
+    info = AUTH_PROVIDERS.get(provider)
+    needs_container = info is not None and info.supports_oauth
+
+    full_roster = l1_image_tag(DEFAULT_BASE_IMAGE)
+    if image_exists(full_roster):
+        return full_roster
+
+    per_agent = l1_image_tag(DEFAULT_BASE_IMAGE, agents=(provider,))
+    if image_exists(per_agent):
+        return per_agent
+
+    if not needs_container:
+        # API-key-only providers never launch the image, so any tag is fine.
+        return full_roster
+
+    hint = (
+        "No agent image present.  Build one with: "
+        "terok project build <project>  (or terok executor build), "
+        "or pass --project <id> to reuse an existing project's image."
+    )
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise SystemExit(hint)
+
+    try:
+        answer = (
+            input(
+                f"Auth for {provider!r} needs an agent image.  "
+                f"Build the minimal L1 ({per_agent}) now? [Y/n]: "
+            )
+            .strip()
+            .lower()
+        )
+    except EOFError:
+        print()
+        raise SystemExit(hint) from None
+    except KeyboardInterrupt:
+        print()
+        raise SystemExit(130) from None
+
+    if answer in ("n", "no"):
+        raise SystemExit(hint)
+
+    build_base_images(DEFAULT_BASE_IMAGE, agents=(provider,))
+    return per_agent
 
 
 __all__ = [

@@ -211,3 +211,97 @@ class TestMaybePauseForSshKeyRegistration:
         with patch("terok.lib.domain.facade.load_project", return_value=project):
             facade.maybe_pause_for_ssh_key_registration("myproj")
         assert "ACTION REQUIRED" not in capsys.readouterr().out
+
+
+class TestAuthenticate:
+    """authenticate dispatches to the raw executor call with the right image+scope."""
+
+    def test_project_scoped_uses_l2_image(self) -> None:
+        """``authenticate(provider, project_id)`` reuses the project's L2 image."""
+        from terok.lib.domain import facade
+
+        # sandbox_live_mounts_dir / is_experimental / expose-token are
+        # lazy-imported inside the function body, so patching happens
+        # at their definition modules rather than on the facade.
+        with (
+            patch(
+                "terok.lib.domain.facade.project_cli_image", return_value="terok-p1:latest"
+            ) as mock_l2,
+            patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
+            patch("terok.lib.core.config.is_experimental", return_value=False),
+            patch("terok.lib.core.config.get_claude_expose_oauth_token", return_value=False),
+            patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
+        ):
+            facade.authenticate("claude", project_id="p1")
+
+        mock_l2.assert_called_once_with("p1")
+        mock_auth.assert_called_once()
+        # Positional call arg 0 is the container-scope string: the project id.
+        assert mock_auth.call_args.args[0] == "p1"
+        assert mock_auth.call_args.kwargs["image"] == "terok-p1:latest"
+
+    def test_host_wide_resolves_l1_and_uses_sentinel(self) -> None:
+        """``authenticate(provider)`` (no project) uses the host sentinel and an L1 image."""
+        from terok.lib.domain import facade
+
+        with (
+            patch(
+                "terok.lib.domain.facade._resolve_host_auth_image",
+                return_value="terok-l1-cli:ubuntu-24.04",
+            ) as mock_resolve,
+            patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
+            patch("terok.lib.core.config.is_experimental", return_value=False),
+            patch("terok.lib.core.config.get_claude_expose_oauth_token", return_value=False),
+            patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
+        ):
+            facade.authenticate("claude")
+
+        mock_resolve.assert_called_once_with("claude")
+        assert mock_auth.call_args.args[0] == facade._HOST_AUTH_SENTINEL
+        assert mock_auth.call_args.kwargs["image"] == "terok-l1-cli:ubuntu-24.04"
+
+
+class TestResolveHostAuthImage:
+    """_resolve_host_auth_image prefers an existing L1 and builds on demand."""
+
+    def test_prefers_existing_full_roster_image(self) -> None:
+        from terok.lib.domain import facade
+
+        def exists(tag: str) -> bool:
+            return tag == "terok-l1-cli:ubuntu-24.04"
+
+        with patch("terok.lib.domain.facade.image_exists", side_effect=exists):
+            image = facade._resolve_host_auth_image("claude")
+        assert image == "terok-l1-cli:ubuntu-24.04"
+
+    def test_falls_back_to_per_agent_l1(self) -> None:
+        from terok.lib.domain import facade
+
+        def exists(tag: str) -> bool:
+            return tag == "terok-l1-cli:ubuntu-24.04-claude"
+
+        with patch("terok.lib.domain.facade.image_exists", side_effect=exists):
+            image = facade._resolve_host_auth_image("claude")
+        assert image == "terok-l1-cli:ubuntu-24.04-claude"
+
+    def test_api_key_only_provider_skips_build_when_missing(self) -> None:
+        """API-key-only providers never launch a container; any tag is fine."""
+        from terok.lib.domain import facade
+
+        with patch("terok.lib.domain.facade.image_exists", return_value=False):
+            # sonar is api-key-only — no prompt, no build, just a tag.
+            image = facade._resolve_host_auth_image("sonar")
+        assert image.startswith("terok-l1-cli:")
+
+    def test_oauth_provider_exits_on_non_tty_without_image(self) -> None:
+        """Non-TTY OAuth run with no image exits with a build hint, no prompt."""
+        from terok.lib.domain import facade
+
+        with (
+            patch("terok.lib.domain.facade.image_exists", return_value=False),
+            patch("sys.stdin.isatty", return_value=False),
+            patch("sys.stdout.isatty", return_value=False),
+            pytest.raises(SystemExit) as exc,
+        ):
+            facade._resolve_host_auth_image("claude")
+        assert "terok project build" in str(exc.value) or "terok executor" in str(exc.value)

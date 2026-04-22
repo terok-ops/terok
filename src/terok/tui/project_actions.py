@@ -265,7 +265,7 @@ class ProjectActionsMixin:
             self.notify("No project selected.")
             return
         await self._run_suspended(
-            lambda: authenticate(self.current_project_id, provider),
+            lambda: authenticate(provider, self.current_project_id),
             success_msg=f"Auth completed for {provider}",
             refresh=None,
         )

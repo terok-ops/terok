@@ -780,8 +780,8 @@ def cmd_setup(
     providers = ", ".join(AUTH_PROVIDERS)
     print(
         f"\nNext steps:\n"
+        f"  terok auth <provider>                      Host-wide auth ({providers})\n"
         f"  terok project wizard                       Create your first project\n"
-        f"  terok auth <provider> <project>            Authenticate agents ({providers})\n"
         f"  terok task run <project>                   Start a CLI task (attaches on TTY)\n"
     )
 
