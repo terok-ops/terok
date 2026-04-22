@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 #
+# terok-clearance-notifier-version: {{UNIT_VERSION}}
+#
 # systemd user service for the terok-clearance-notifier — the process
 # that bridges clearance-hub events to freedesktop desktop
 # notifications.  Separate from the hub unit (terok-dbus.service) so

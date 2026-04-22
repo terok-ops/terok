@@ -25,6 +25,11 @@ import sys
 import tomllib
 from pathlib import Path
 
+from terok_dbus import (
+    check_units_outdated as _dbus_check_units_outdated,
+    read_installed_unit_version as _dbus_read_unit_version,
+)
+from terok_dbus._install import UNIT_NAME as _DBUS_UNIT_NAME
 from terok_sandbox import (
     check_environment,
     check_units_outdated,
@@ -36,6 +41,11 @@ from terok_sandbox import (
     resolve_container_state_dir,
 )
 
+from ...clearance._install import (
+    UNIT_NAME as _NOTIFIER_UNIT_NAME,
+    check_units_outdated as _notifier_check_units_outdated,
+    read_installed_unit_version as _notifier_read_unit_version,
+)
 from ...lib.core import runtime as _rt
 from ...lib.core.config import get_services_mode, global_config_path, make_sandbox_config
 from ...lib.core.project_model import ProjectConfig, is_valid_project_id
@@ -128,6 +138,37 @@ def _check_shield() -> _CheckResult:
         return ("warn", label, f"unexpected health: {ec.health}")
     dns = getattr(ec, "dns_tier", "unknown")
     return ("ok", label, f"active ({ec.hooks}, {dns} DNS)")
+
+
+def _check_clearance_hub() -> _CheckResult:
+    """Detect drift between the installed hub unit and the shipped template.
+
+    A pre-varlink Shield1 D-Bus hub wrote the same file name and the
+    same ``ExecStart={{BIN}} serve`` line — the version marker is how
+    we tell the two generations apart.  ``None`` version with file
+    present = legacy unit; bumped ``_UNIT_VERSION`` in terok-dbus =
+    rerun-setup prompt.
+    """
+    label = "Clearance hub"
+    outdated = _dbus_check_units_outdated()
+    if outdated:
+        return ("warn", label, outdated)
+    installed = _dbus_read_unit_version()
+    if installed is None:
+        return ("ok", label, f"{_DBUS_UNIT_NAME} not installed")
+    return ("ok", label, f"{_DBUS_UNIT_NAME} v{installed}")
+
+
+def _check_clearance_notifier() -> _CheckResult:
+    """Same drift check for the clearance-notifier user unit."""
+    label = "Clearance notifier"
+    outdated = _notifier_check_units_outdated()
+    if outdated:
+        return ("warn", label, outdated)
+    installed = _notifier_read_unit_version()
+    if installed is None:
+        return ("ok", label, f"{_NOTIFIER_UNIT_NAME} not installed")
+    return ("ok", label, f"{_NOTIFIER_UNIT_NAME} v{installed}")
 
 
 def _check_vault() -> _CheckResult:
@@ -562,6 +603,8 @@ _GLOBAL_CHECKS = [
     ("SSH signer", _check_ssh_signer),
     ("Keyring", _check_keyring),
     ("SELinux policy", _check_selinux_policy),
+    ("Clearance hub", _check_clearance_hub),
+    ("Clearance notifier", _check_clearance_notifier),
 ]
 """Global checks paired with the label shown while they run.
 

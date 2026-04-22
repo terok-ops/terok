@@ -20,6 +20,18 @@ from pathlib import Path
 
 UNIT_NAME = "terok-clearance-notifier.service"
 
+_UNIT_VERSION = 1
+"""Bump when the unit template's semantics change.
+
+Substituted into ``{{UNIT_VERSION}}`` at render time so
+:func:`check_units_outdated` can tell a fresh install from an older
+generation — mirrors the pattern used by ``terok-gate``,
+``terok-vault``, and ``terok-dbus``.
+"""
+
+_VERSION_MARKER_PREFIX = "# terok-clearance-notifier-version:"
+"""Parser key for :func:`read_installed_unit_version`."""
+
 
 def install_service(bin_path: Path | list[str]) -> Path:
     """Render the unit template, write it to the user systemd dir, reload.
@@ -34,7 +46,9 @@ def install_service(bin_path: Path | list[str]) -> Path:
         The on-disk path the unit was written to.
     """
     template = _read_template()
-    rendered = template.replace("{{BIN}}", _render_exec_start(bin_path))
+    rendered = template.replace("{{BIN}}", _render_exec_start(bin_path)).replace(
+        "{{UNIT_VERSION}}", str(_UNIT_VERSION)
+    )
     dest = default_unit_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(rendered, encoding="utf-8")
@@ -92,3 +106,43 @@ def _daemon_reload() -> None:
         capture_output=True,
         text=True,
     )
+
+
+def read_installed_unit_version() -> int | None:
+    """Return the ``# terok-clearance-notifier-version:`` stamp, or ``None``.
+
+    ``None`` means either the unit isn't installed or it predates the
+    version marker (nothing shipped this file before v1, but sickbay
+    still treats ``None`` as "needs rerun" because the notifier itself
+    is new in the varlink-era release).
+    """
+    try:
+        unit = default_unit_path().read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in unit.splitlines():
+        if line.startswith(_VERSION_MARKER_PREFIX):
+            try:
+                return int(line.split(":", 1)[1].strip())
+            except ValueError:
+                return None
+    return None
+
+
+def check_units_outdated() -> str | None:
+    """Return a one-line drift warning if the installed unit is stale, else ``None``.
+
+    ``None`` when nothing is installed — callers (sickbay) treat that
+    as "user hasn't run terok setup yet" separately; the goal here is
+    to distinguish *installed-but-old* from *installed-and-current*.
+    """
+    if not default_unit_path().is_file():
+        return None
+    installed = read_installed_unit_version()
+    if installed is None or installed < _UNIT_VERSION:
+        installed_label = "unversioned" if installed is None else f"v{installed}"
+        return (
+            f"{UNIT_NAME} is outdated "
+            f"(installed {installed_label}, expected v{_UNIT_VERSION}) — rerun `terok setup`."
+        )
+    return None

@@ -114,14 +114,20 @@ def test_cmd_sickbay_reports_health(
     mock_cfg = MagicMock()
     mock_cfg.return_value.ssh_keys_json_path = ssh_keys
 
-    # _check_vault_migration hits the real filesystem via namespace_state_dir;
-    # swap just that entry in _GLOBAL_CHECKS for a stub so the test stays
-    # hermetic without masking unrelated lookups.
-    def _stub_vault_migration() -> tuple[str, str, str]:
-        return ("ok", "Vault migration", "no legacy directory")
-
+    # Stub checks that hit the real filesystem, so the test stays hermetic
+    # without masking unrelated lookups.  Each stub reports ok, keeping the
+    # fixture narrowly about the gate-server assertions above.
+    _stubs = {
+        "_check_vault_migration": ("ok", "Vault migration", "no legacy directory"),
+        "_check_clearance_hub": ("ok", "Clearance hub", "terok-dbus.service not installed"),
+        "_check_clearance_notifier": (
+            "ok",
+            "Clearance notifier",
+            "terok-clearance-notifier.service not installed",
+        ),
+    }
     patched_checks = [
-        (label, _stub_vault_migration if fn.__name__ == "_check_vault_migration" else fn)
+        (label, (lambda r=_stubs[fn.__name__]: r) if fn.__name__ in _stubs else fn)
         for label, fn in _sickbay_module._GLOBAL_CHECKS
     ]
     with (
