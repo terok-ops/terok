@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 from rich.style import Style
 from rich.text import Text
-from textual import screen
+from textual import events, screen
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Footer, ListItem, ListView, RichLog, Static
@@ -256,6 +256,23 @@ class ClearanceScreen(screen.Screen[None]):
                     _log.debug("Failed to disconnect notifier during error cleanup", exc_info=True)
             self._notifier = None
             self._subscriber = None
+
+    def on_app_focus(self, _event: events.AppFocus) -> None:
+        """Nudge the subscriber to reconnect if the hub went away while we blurred.
+
+        Textual fires ``events.AppFocus`` on terminal focus-gain (xterm
+        focus-reporting escape sequences).  The subscriber auto-
+        reconnects with exponential back-off anyway, but pokes here
+        cut short any in-flight sleep so an operator who just tabbed
+        back to the clearance window sees live events right away.
+        Harmless when the connection is healthy — the poke only
+        registers inside the back-off wait.
+        """
+        if self._subscriber is not None:
+            try:
+                self._subscriber.poke_reconnect()
+            except Exception:
+                _log.debug("poke_reconnect failed", exc_info=True)
 
     async def on_unmount(self) -> None:
         """Stop the subscriber and release resources."""

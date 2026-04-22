@@ -3089,7 +3089,7 @@ dbus-fast = ">=2.0,<5.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-dbus.git"
 reference = "feat/varlink-clearance-hub"
-resolved_reference = "cc34bc17cc54a64f989b65bd47c2516454f64229"
+resolved_reference = "ad7d64c92904d2a3cc2f03f7083e1f05a1db3296"
 
 [[package]]
 name = "terok-executor"
