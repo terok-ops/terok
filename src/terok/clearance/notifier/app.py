@@ -43,9 +43,6 @@ async def run_notifier() -> None:
 
     _log.info("terok-clearance-notifier online")
     try:
-        # ``ClearanceClient`` handles hub restarts internally with an
-        # exponential-backoff reconnect; the notifier just waits for
-        # SIGTERM / SIGINT and otherwise stays out of the way.
         await wait_for_shutdown_signal()
     finally:
         await _teardown(subscriber, notifier)
