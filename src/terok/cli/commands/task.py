@@ -418,9 +418,14 @@ def _ensure_project_image(project_id: str) -> None:
             .strip()
             .lower()
         )
-    except (EOFError, KeyboardInterrupt):
+    except EOFError:
+        # stdin closed — treat as implicit decline, print the hint.
         print()
         raise SystemExit(hint) from None
+    except KeyboardInterrupt:
+        # Ctrl-C stays Ctrl-C: exit 130 (conventional SIGINT), no hint.
+        print()
+        raise SystemExit(130) from None
 
     if answer in ("n", "no"):
         raise SystemExit(hint)
