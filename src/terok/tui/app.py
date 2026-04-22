@@ -280,6 +280,11 @@ if _HAS_TEXTUAL:
             self.current_task: TaskMeta | None = None
             self._projects_by_id: dict[str, ProjectConfig] = {}
             self._broken_by_id: dict[str, BrokenProject] = {}
+            # Tracks which broken-project IDs have already been toasted so
+            # repeated ``refresh_projects`` calls don't re-notify the same
+            # set on every action (#565).  Resets when all breakages clear,
+            # so a later regression toasts again.
+            self._announced_broken_ids: set[str] = set()
             self._last_task_count: int | None = None
             # Upstream polling state
             self._staleness_info: GateStalenessInfo | None = None
@@ -486,8 +491,11 @@ if _HAS_TEXTUAL:
 
             # Surface broken configs with a one-shot notification so users on
             # an upgrade who lost a project to schema drift see it immediately
-            # rather than having to select the row to discover it (#565).
-            if broken:
+            # rather than having to select the row to discover it (#565).  Only
+            # fire when the set of broken IDs has changed since the last
+            # announcement so repeated refreshes don't spam the operator.
+            current_broken_ids = {bp.id for bp in broken}
+            if current_broken_ids and current_broken_ids != self._announced_broken_ids:
                 first = broken[0]
                 summary = f"{first.id}: {first.error.splitlines()[0]}"
                 extra = f" (+{len(broken) - 1} more)" if len(broken) > 1 else ""
@@ -496,6 +504,11 @@ if _HAS_TEXTUAL:
                     severity="warning",
                     timeout=15,
                 )
+                self._announced_broken_ids = current_broken_ids
+            elif not current_broken_ids:
+                # All breakages cleared — forget the announced set so a future
+                # regression announces again.
+                self._announced_broken_ids = set()
 
             if projects or broken:
                 # Try to restore last selected project, fall back to first

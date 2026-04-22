@@ -318,18 +318,22 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 
 def _cmd_task_run(args: argparse.Namespace) -> None:
-    """Handle ``terok task run`` — create a task and run it in the chosen mode."""
+    """Handle ``terok task run`` — create a task and run it in the chosen mode.
+
+    The L2 image preflight fires inside each mode branch *after* that mode's
+    cheap validation so a user who forgets e.g. ``--prompt`` in headless mode
+    sees the argparse-style error before being asked whether to spend minutes
+    building an image.
+    """
     mode = getattr(args, "mode", "cli")
-    # Preflight: the L2 CLI image must exist before any ``task run`` mode;
-    # all three runners launch containers from it.  Offered interactively on
-    # a TTY, a hard error otherwise.
-    _ensure_project_image(args.project_id)
 
     if mode == "headless":
         _cmd_task_run_headless(args)
     elif mode == "toad":
+        _ensure_project_image(args.project_id)
         _cmd_task_run_interactive(args, runner=task_run_toad, attach=False)
     else:  # mode == "cli"
+        _ensure_project_image(args.project_id)
         _cmd_task_run_interactive(args, runner=task_run_cli, attach=_resolve_attach(args))
 
 
@@ -401,12 +405,19 @@ def _cmd_task_run_interactive(
 
 
 def _cmd_task_run_headless(args: argparse.Namespace) -> None:
-    """Autopilot path: create a task and run it headlessly against the prompt."""
+    """Autopilot path: create a task and run it headlessly against the prompt.
+
+    Cheap validation (``--prompt`` present, ``--instructions`` file readable)
+    runs first so the user sees those errors before the image preflight
+    potentially asks to build for several minutes.
+    """
     prompt = getattr(args, "prompt", None)
     if not prompt:
         raise SystemExit("--prompt is required when --mode=headless")
 
     instructions_text = _read_instructions(getattr(args, "instructions", None))
+
+    _ensure_project_image(args.project_id)
 
     task_run_headless(
         HeadlessRunRequest(

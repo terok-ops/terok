@@ -49,10 +49,17 @@ def _image_exists(image: str) -> bool:
     return _rt.get_runtime().image(image).exists()
 
 
-# Public alias — the underscore form above is retained only so pre-existing
-# test monkeypatches don't break.  New callers (facade, TUI, etc.) should
-# import :func:`image_exists` so tach can police the boundary.
-image_exists = _image_exists
+def image_exists(image: str) -> bool:
+    """Public wrapper around :func:`_image_exists` that stays patch-transparent.
+
+    ``image_exists = _image_exists`` would capture the reference at import
+    time, so ``monkeypatch.setattr(..., "_image_exists", fake)`` would only
+    affect same-module callers — the facade / TUI would keep using the
+    original implementation.  The delegating form below looks the module
+    attribute up at call time, so the underscore-form monkeypatches that
+    existing tests rely on continue to propagate to public callers.
+    """
+    return _image_exists(image)
 
 
 # ---------- Hashing ----------

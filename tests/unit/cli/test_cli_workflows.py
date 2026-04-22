@@ -243,13 +243,15 @@ class TestTaskRunInteractive:
             unittest.mock.patch(
                 "terok.cli.commands.task.task_new", return_value=task_id
             ) as mock_new,
-            unittest.mock.patch("terok.cli.commands.task.task_login"),
+            unittest.mock.patch("terok.cli.commands.task.task_login") as mock_task_login,
             unittest.mock.patch(runner_path) as mock_runner,
         ):
             run_main(argv)
         project_id, expected_task_id, kwargs = expected_call
         mock_new.assert_called_once_with(project_id, name=None)
         mock_runner.assert_called_once_with(project_id, expected_task_id, **kwargs)
+        # --no-attach must suppress the login exec in every interactive mode.
+        mock_task_login.assert_not_called()
 
     @pytest.mark.parametrize(
         ("argv", "patch_target", "expected_call"),

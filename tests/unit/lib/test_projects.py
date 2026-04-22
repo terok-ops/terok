@@ -139,7 +139,9 @@ class TestProject:
         assert projects[0].upstream_url == "https://user.example/repo.git"
         assert projects[0].root == (user_projects / "proj2").resolve()
 
-    def test_discover_projects_splits_valid_and_broken(self) -> None:
+    def test_discover_projects_splits_valid_and_broken(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """discover_projects returns (valid, broken) without touching stderr (#565)."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -163,6 +165,12 @@ class TestProject:
         assert isinstance(bp, BrokenProject)
         assert bp.config_path == (projects_root / "bad" / "project.yml")
         assert bp.error  # message is populated and non-empty
+
+        # discover_projects is the TUI-facing entrypoint; ``list_projects``
+        # owns the CLI-side stderr warning.  If this ever starts printing
+        # directly, the TUI would get duplicate noise on top of its toast.
+        captured = capsys.readouterr()
+        assert captured.err.strip() == ""
 
     def test_list_projects_skips_malformed_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -220,15 +220,18 @@ def test_run_interactive_mode_creates_and_runs(mode: str, runner_target: str) ->
     mock_login.assert_not_called()
 
 
-def test_run_cli_mode_attaches_on_tty() -> None:
-    """``task run --mode cli`` calls task_login after the runner when --attach."""
+def test_run_cli_mode_attaches_by_default_on_tty() -> None:
+    """With no flag, TTY stdio triggers ``task_login`` via ``_resolve_attach``."""
     with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("sys.stdout.isatty", return_value=True),
         patch("terok.cli.commands.task.project_image_exists", return_value=True),
         patch("terok.cli.commands.task.task_new", return_value="42"),
         patch("terok.cli.commands.task.task_run_cli"),
         patch("terok.cli.commands.task.task_login") as mock_login,
     ):
-        run_cli("task", "run", "myproj", "--attach")
+        # No --attach / --no-attach — exercise the default-on-TTY branch.
+        run_cli("task", "run", "myproj")
 
     mock_login.assert_called_once_with("myproj", "42")
 
