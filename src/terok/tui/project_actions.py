@@ -463,7 +463,7 @@ class ProjectActionsMixin:
             # ``python -m terok.cli`` can't find the ``terok`` package on
             # its import path.  Passing the parent's ``sys.path`` through
             # as ``PYTHONPATH`` lets the subprocess resolve the same
-            # install the TUI is running from.  See #717 (Franz Pöschel).
+            # install the TUI is running from.  See #717 by Franz Pöschel.
             env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
             try:
                 result = subprocess.run(
