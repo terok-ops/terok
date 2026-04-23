@@ -145,17 +145,17 @@ def wheel_url(org: str, repo: str, version: str) -> str:
 
 # ── Domain types ──────────────────────────────────────────────────────────
 
-DepGraph = dict[str, list[str]]
-"""Package → in-chain packages it depends on."""
+# Package → in-chain packages it depends on.
+type DepGraph = dict[str, list[str]]
 
-SiblingVersions = dict[str, str]
-"""Sibling package → version string to pin for it."""
+# Sibling package → version string to pin for it.
+type SiblingVersions = dict[str, str]
 
-PrSpecs = dict[str, int]
-"""Package → GitHub PR number (the release-from-PR workflow)."""
+# Package → GitHub PR number (the release-from-PR workflow).
+type PrSpecs = dict[str, int]
 
-ReleasedVersions = dict[str, str]
-"""Package → new version string, for packages already processed in this run."""
+# Package → new version string, for packages already processed in this run.
+type ReleasedVersions = dict[str, str]
 
 
 # ── Plan model ────────────────────────────────────────────────────────────
