@@ -47,21 +47,12 @@ console = Console(stderr=True)
 
 
 # ── Chain ─────────────────────────────────────────────────────────────────
-#
-# The two tables most likely to need editing, and the vocabulary the rest
-# of this file serves.  ``CHAIN`` fixes the release order; ``DEPS`` fixes
-# the inter-package dependency graph.  Everything below exists only to
-# execute a chained release against these two declarations, given the
-# operator's CLI preferences.
 
 CHAIN = ["terok-clearance", "terok-shield", "terok-sandbox", "terok-executor", "terok"]
 
-# Declared sibling-dep graph.  A human-readable audit of the chain shape;
-# the planner cross-checks it against each package's live ``pyproject.toml``
-# after cloning and aborts on any drift (see ``_verify_dep_graph``).  When
-# you add a new inter-package dep, update both this table and the
-# consuming package's ``pyproject.toml`` in the same PR — otherwise the
-# next release will fail fast with a diff.
+# When you add a new inter-package dep, update this table and the
+# consuming package's ``pyproject.toml`` in the same PR — the planner
+# cross-checks the two and aborts the next release otherwise.
 DEPS: DepGraph = {
     "terok-clearance": [],
     "terok-shield": ["terok-clearance"],
@@ -70,18 +61,12 @@ DEPS: DepGraph = {
     "terok": ["terok-executor", "terok-sandbox", "terok-shield", "terok-clearance"],
 }
 
-# Shorthand → canonical repo name.  Derived from CHAIN so there is no
-# second list to keep in sync.  ``terok`` has no prefix to strip, so its
-# shorthand coincides with its canonical name.
 ALIASES = {repo.removeprefix("terok-"): repo for repo in CHAIN} | {repo: repo for repo in CHAIN}
 
 
 # ── Tuning ────────────────────────────────────────────────────────────────
 #
-# Operational knobs — timeouts, poll intervals, and the string literals
-# that branch names, commit messages and PR labels are built from.
-# Gathered here so policy changes don't require hunting through the
-# executor.  Seconds everywhere unless noted.
+# Seconds everywhere unless noted.
 
 DEFAULT_CHECK_TIMEOUT = 1800  # 30 min — long enough for a full CI matrix
 DEFAULT_WHEEL_TIMEOUT = 300
@@ -159,10 +144,6 @@ def wheel_url(org: str, repo: str, version: str) -> str:
 
 
 # ── Domain types ──────────────────────────────────────────────────────────
-#
-# Supporting aliases used in signatures below — they make the planner and
-# executor read in the domain's vocabulary ("sibling versions", not
-# "dict of str to str").
 
 DepGraph = dict[str, list[str]]
 """Package → in-chain packages it depends on."""
@@ -325,12 +306,9 @@ def pinned_version(path: Path, dep_repo: str, org: str) -> str | None:
 
 # ── Dep-graph verifier ────────────────────────────────────────────────────
 #
-# ``DEPS`` is the declared (vendored) chain shape.  Every ``pyproject.toml``
-# in the cloned workspace is reality.  Before the planner emits any step,
-# we reconcile the two — a stale sibling pin in a pyproject (or a missing
-# entry in DEPS) means the planner would silently ship a release with a
-# stale transitive pin, which is exactly the class of bug that motivated
-# this verifier.  So: fail fast with a diff, no heuristic recovery.
+# A stale sibling pin in a pyproject.toml (or a missing entry in DEPS)
+# would ship a release with a broken transitive pin, so: reconcile the
+# two before planning; on any drift, fail fast with a diff.
 
 
 def _discover_sibling_deps(pyproject_path: Path, chain: list[str]) -> list[str]:
@@ -629,14 +607,7 @@ def _step(pkg: str, seq: int, kind: StepKind, **params: Any) -> Step:
 
 
 def _branch_for(pkg: PackagePlan, release_name: str) -> tuple[str, dict[str, str]]:
-    """Branch name + checkout parameters for *pkg*'s work on this run.
-
-    Three shapes:
-      * reuse a developer's open PR (``source="pr"``);
-      * cut a fresh ``chore/release-X.Y.Z`` from upstream/master;
-      * cut a fresh ``chore/bump-deps[-slug]`` from upstream/master
-        (deps-only / open-top case).
-    """
+    """Branch name + checkout parameters for *pkg*'s work on this run."""
     if pkg.pr_branch:
         return pkg.pr_branch, {"branch": pkg.pr_branch, "source": "pr"}
     if pkg.action in (Action.RELEASE_MASTER, Action.RELEASE_PR):
@@ -697,19 +668,11 @@ def _resolve_sibling_version(
     org: str,
     upgrade_pinned: bool,
 ) -> str:
-    """Pick the version to pin for *dep* in the current repo.
-
-    Preference order, most-local first:
-      1. a version we're already shipping in this run (``released``);
-      2. a version an earlier sibling in this run already pinned
-         (``planned_pins`` — keeps the chain internally consistent when
-         two downstream repos share the same upstream);
-      3. the version currently in the repo's own ``pyproject.toml``;
-      4. the latest GitHub release (fallback, or when ``upgrade_pinned``
-         tells us to override the current pin).
-    """
+    """Version to pin for *dep* in the current repo — most-local first."""
     if dep in released:
         return released[dep]
+    # Two downstream repos sharing an upstream must agree on its version
+    # even if neither is being released in this run.
     for other in repo_deps:
         if other == dep or other not in released:
             continue
@@ -1092,10 +1055,8 @@ def execute_plan(plan: Plan, *, mode: ExecMode, ctx: Ctx) -> Plan:
 
 # ── Operator attention prompts ────────────────────────────────────────────
 #
-# Long stages (clones, CI waits) make it easy for the operator to wander
-# off.  Every confirmation/prompt routes through these helpers — terminal
-# bell plus a reverse-video banner in a colour used nowhere else — so
-# the prompt lands in peripheral vision instead of scrolling past.
+# Long stages (clones, CI waits) tempt the operator to wander; these
+# helpers pull their attention back when input is actually needed.
 
 
 def _alert_banner(text: str) -> None:
