@@ -89,6 +89,28 @@ _LEGACY_HEX_TASK_ID_PREFIX_RE = re.compile(r"[0-9a-f]{1,8}")
 _LEGACY_HEX_TASK_ID_FULL_RE = re.compile(r"[0-9a-f]{8}")
 """Full-form validator for pre-0.8.0 hex task IDs.  Deprecated; removal in 0.9.0."""
 
+_TASK_ID_AMBIGUOUS_LETTERS = "ilo"
+"""Crockford's visually ambiguous letters: ``I``/``L`` → ``1`` and ``O`` → ``0``.
+
+See https://www.crockford.com/base32.html.  We encode only in canonical
+lowercase, but accept these substitutions at user-facing entry points to
+widen the input surface.
+"""
+
+_TASK_ID_INPUT_TRANSLATE = str.maketrans(_TASK_ID_AMBIGUOUS_LETTERS, "110")
+"""Translate table matching :data:`_TASK_ID_AMBIGUOUS_LETTERS`."""
+
+
+def normalize_task_id_input(raw: str) -> str:
+    """Collapse user-input variants to the canonical lowercase form.
+
+    Strips hyphens, lowercases, and applies the Crockford
+    ``I/L → 1``, ``O → 0`` substitutions.  The result is still subject
+    to :data:`_TASK_ID_PREFIX_RE` downstream — this only widens what
+    we accept, never what we emit.
+    """
+    return raw.replace("-", "").lower().translate(_TASK_ID_INPUT_TRANSLATE)
+
 
 def is_task_id(text: str) -> bool:
     """Return True if *text* is a well-formed task ID (current or legacy)."""
@@ -147,8 +169,25 @@ def _validate_task_id_prefix(prefix: str) -> None:
 def resolve_task_id(project_id: str, prefix: str) -> str:
     """Resolve a (possibly partial) task ID to its full form.
 
+    The *prefix* is first run through :func:`normalize_task_id_input`,
+    so callers may pass uppercase, hyphenated, or ambiguous-letter
+    variants (``K3-V8H``, ``k3v8I``) — they collapse to the canonical
+    lowercase form before validation and lookup.
+
     Raises ``SystemExit`` with an actionable message on zero or multiple matches.
     """
+    # Head position is letter-only, so an ``I/L/O`` there can't be a
+    # Crockford body substitution — surface that as a specific error
+    # instead of normalising it into a digit and letting downstream
+    # mistake it for a legacy-hex prefix.
+    stripped = prefix.replace("-", "").lower()
+    if stripped[:1] in _TASK_ID_AMBIGUOUS_LETTERS:
+        raise SystemExit(
+            f"Invalid task ID prefix {prefix!r}; "
+            f"task IDs never start with I, L, or O — "
+            f"expected one of {_TASK_ID_HEAD_CHARS!r}"
+        )
+    prefix = stripped.translate(_TASK_ID_INPUT_TRANSLATE)
     _validate_task_id_prefix(prefix)
     meta_dir = tasks_meta_dir(project_id)
     if not meta_dir.is_dir():

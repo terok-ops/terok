@@ -77,6 +77,28 @@ class TestCompleteTaskIds:
             result = complete_task_ids("k", argparse.Namespace(project_id="p"))
         assert result == ["k3v8h"]
 
+    @pytest.mark.parametrize(
+        "typed, expected",
+        [
+            ("K3V8", ["k3v8h"]),  # uppercase → lowercase
+            ("k3-v8", ["k3v8h"]),  # hyphen separator
+            ("K3VO", ["k3v01"]),  # O → 0 on a body position
+            ("K3-V-I", ["k3v1m"]),  # hyphens + I → 1
+            ("P7F", ["p7fmn"]),  # sanity: no ambiguous letters
+        ],
+    )
+    def test_normalises_typed_prefix(self, typed: str, expected: list[str]) -> None:
+        """Typed-prefix variants resolve to canonical IDs (bash then rewrites the word)."""
+        tasks = [
+            SimpleNamespace(task_id="k3v8h"),
+            SimpleNamespace(task_id="k3v01"),
+            SimpleNamespace(task_id="k3v1m"),
+            SimpleNamespace(task_id="p7fmn"),
+        ]
+        with patch("terok.cli.commands._completers.get_tasks", return_value=tasks):
+            result = complete_task_ids(typed, argparse.Namespace(project_id="p"))
+        assert result == expected
+
     def test_skips_tasks_without_ids(self) -> None:
         """Tasks with a falsy ``task_id`` (defensive: shouldn't happen) are skipped."""
         tasks = [SimpleNamespace(task_id="k3v8h"), SimpleNamespace(task_id="")]

@@ -18,6 +18,7 @@ from typing import Any
 
 from ...lib.core.projects import list_presets, list_projects
 from ...lib.domain.facade import get_tasks
+from ...lib.orchestration.tasks import normalize_task_id_input
 
 
 def complete_project_ids(
@@ -41,6 +42,11 @@ def complete_task_ids(
     Returns an empty list when the project arg hasn't been typed yet —
     argcomplete uses the partially-parsed namespace, which is exactly
     what we want to scope task-ID suggestions.
+
+    The prefix is run through :func:`normalize_task_id_input`, so
+    ``K3V<TAB>`` or ``k3-v<TAB>`` rewrite to the canonical lowercase
+    form — the same surface-form tolerance ``resolve_task_id`` gives
+    at dispatch time.
     """
     project_id = getattr(parsed_args, "project_id", None)
     if not project_id:
@@ -49,8 +55,9 @@ def complete_task_ids(
         tids = [t.task_id for t in get_tasks(project_id) if t.task_id]
     except Exception:
         return []
-    if prefix:
-        tids = [t for t in tids if t.startswith(prefix)]
+    normalized = normalize_task_id_input(prefix)
+    if normalized:
+        tids = [t for t in tids if t.startswith(normalized)]
     return tids
 
 

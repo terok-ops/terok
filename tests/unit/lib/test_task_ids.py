@@ -15,6 +15,7 @@ from terok.lib.orchestration.tasks import (
     _TASK_ID_HEAD_CHARS,
     _TASK_ID_LEN,
     _generate_unique_id,
+    normalize_task_id_input,
     resolve_task_id,
     tasks_meta_dir,
 )
@@ -76,6 +77,30 @@ class TestGenerateUniqueId:
                 _generate_unique_id({ID_A})
 
 
+# ---------- normalize_task_id_input ----------
+
+
+class TestNormalizeTaskIdInput:
+    """Surface-form input sanitiser — Crockford-style I/L→1, O→0 substitutions."""
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("K3V8H", "k3v8h"),
+            ("k3-v8h", "k3v8h"),
+            ("K3-V8-H", "k3v8h"),
+            ("K3VOH", "k3v0h"),  # O → 0 at body position
+            ("k3vIh", "k3v1h"),  # I → 1 at body position
+            ("k3vLh", "k3v1h"),  # L → 1 at body position
+            ("g1V0L", "g1v01"),  # mixed case + L → 1
+            ("", ""),
+        ],
+    )
+    def test_canonical_form(self, raw: str, expected: str) -> None:
+        """Normalisation collapses case, hyphens, and ambiguous Crockford letters."""
+        assert normalize_task_id_input(raw) == expected
+
+
 # ---------- resolve_task_id ----------
 
 
@@ -134,11 +159,25 @@ class TestResolveTaskId:
             with pytest.raises(SystemExit, match="Invalid task ID prefix"):
                 resolve_task_id("test-proj", "../../etc")
 
-    def test_rejects_uppercase(self) -> None:
-        """Should reject uppercase letters (IDs are always lowercase)."""
+    def test_accepts_uppercase(self) -> None:
+        """Uppercase input should be normalised to the canonical lowercase ID."""
         with project_env(MINIMAL_PROJECT) as _ctx:
-            with pytest.raises(SystemExit, match="Invalid task ID prefix"):
-                resolve_task_id("test-proj", ID_A.upper())
+            self._write_meta("test-proj", ID_A)
+            assert resolve_task_id("test-proj", ID_A.upper()) == ID_A
+
+    def test_accepts_hyphenated_input(self) -> None:
+        """Hyphens (Crockford group separators) should be stripped."""
+        with project_env(MINIMAL_PROJECT) as _ctx:
+            self._write_meta("test-proj", ID_A)
+            assert resolve_task_id("test-proj", f"{ID_A[:2]}-{ID_A[2:]}") == ID_A
+
+    def test_accepts_ambiguous_body_letters(self) -> None:
+        """``I/L → 1`` and ``O → 0`` substitutions resolve in body positions."""
+        # ID_A = "k3v8h"; insert a fake ambiguous variant and check it maps back.
+        tid = "g1v01"  # body positions contain '1' and '0'
+        with project_env(MINIMAL_PROJECT) as _ctx:
+            self._write_meta("test-proj", tid)
+            assert resolve_task_id("test-proj", "G1-VOL") == tid
 
     def test_rejects_empty_string(self) -> None:
         """Should reject an empty prefix."""
