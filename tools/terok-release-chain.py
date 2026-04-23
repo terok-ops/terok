@@ -14,7 +14,7 @@ Usage:
     python3 tools/terok-release-chain.py quick sandbox..terok --open-top  # chain, top=deps-only
     python3 tools/terok-release-chain.py quick --from-prs sandbox:42,executor:55
     python3 tools/terok-release-chain.py quick --from-prs s:42,e:55,t:706 --open-top
-    python3 tools/terok-release-chain.py open feat/comms dbus
+    python3 tools/terok-release-chain.py open feat/comms clearance
     python3 tools/terok-release-chain.py plan sandbox..terok -o plan.json
     python3 tools/terok-release-chain.py simulate plan.json
     python3 tools/terok-release-chain.py execute plan.json
@@ -93,7 +93,7 @@ DEPS: dict[str, list[str]] = {
 }
 
 ALIASES = {
-    "dbus": "terok-clearance",
+    "clearance": "terok-clearance",
     "shield": "terok-shield",
     "sandbox": "terok-sandbox",
     "executor": "terok-executor",
@@ -1245,7 +1245,7 @@ def open_chain(branch, repos, pretend, org, fork, cache_dir):
 
     \b
     Examples:
-        terok-release-chain.py open feat/comms dbus
+        terok-release-chain.py open feat/comms clearance
         terok-release-chain.py open feat/my-feature sandbox terok
     """
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, pretend, True, True, 0)
