@@ -311,14 +311,16 @@ def pinned_version(path: Path, dep_repo: str, org: str) -> str | None:
 # two before planning; on any drift, fail fast with a diff.
 
 
-def _discover_sibling_deps(pyproject_path: Path, chain: list[str]) -> list[str]:
-    """CHAIN members that appear as dependency keys in ``pyproject_path``.
+def _discover_sibling_deps(pyproject_path: Path, family: list[str]) -> list[str]:
+    """Members of *family* that appear as dependency keys in ``pyproject_path``.
 
-    Matches both hyphen (``terok-shield``) and underscore (``terok_shield``)
-    forms, since Poetry accepts either.  Ordered by CHAIN position.
+    ``family`` must be the full package family (typically ``CHAIN``) — not a
+    slice.  A sliced family would miss legitimate upstream pins and produce
+    false drift reports.  Matches both hyphen (``terok-shield``) and
+    underscore (``terok_shield``) forms since Poetry accepts either.
     """
     _, deps = _toml_deps(pyproject_path)
-    return [m for m in chain if m in deps or pkg_name(m) in deps]
+    return [m for m in family if m in deps or pkg_name(m) in deps]
 
 
 def _verify_dep_graph(chain: list[str], cache_dir: Path) -> DepGraph:
@@ -333,7 +335,7 @@ def _verify_dep_graph(chain: list[str], cache_dir: Path) -> DepGraph:
     live: DepGraph = {}
     mismatches: list[str] = []
     for repo in chain:
-        found = _discover_sibling_deps(cache_dir / repo / "pyproject.toml", chain)
+        found = _discover_sibling_deps(cache_dir / repo / "pyproject.toml", CHAIN)
         declared = DEPS.get(repo, [])
         live[repo] = found
         if set(found) != set(declared):
