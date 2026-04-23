@@ -737,7 +737,17 @@ expose = ["wait_for_container_exit", "follow_container_logs_cmd"]
 from = ["terok.lib.orchestration.autopilot"]
 
 [[interfaces]]
-expose = ["run_wizard", "offer_edit_then_init", "collect_wizard_inputs", "generate_config"]
+expose = [
+    "QUESTIONS",
+    "Question",
+    "collect_wizard_inputs",
+    "generate_config",
+    "offer_edit_then_init",
+    "render_project_yaml",
+    "run_wizard",
+    "validate_answer",
+    "write_project_yaml",
+]
 from = ["terok.lib.domain.wizards.new_project"]
 
 # Facade interface (stable boundary for presentation layer)

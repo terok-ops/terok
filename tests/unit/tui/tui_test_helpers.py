@@ -29,7 +29,25 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
         return decorator
 
+    def work(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+        """Stub for ``textual.work`` — pass the function through unchanged.
+
+        The real decorator wraps the coroutine in a worker so
+        ``push_screen_wait`` has an async context; tests that import
+        TUI modules via stubs don't run the body, so identity is fine.
+        """
+        # Support both ``@work`` (direct call with the function) and
+        # ``@work(exclusive=True)`` (configured call returning a decorator).
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            return fn
+
+        return decorator
+
     textual.on = on
+    textual.work = work
 
     events_mod = types.ModuleType("textual.events")
 

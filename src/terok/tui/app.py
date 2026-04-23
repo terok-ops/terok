@@ -306,6 +306,9 @@ if _HAS_TEXTUAL:
             # Selection persistence
             self._last_selected_project: str | None = None
             self._last_selected_tasks: dict[str, str] = {}  # project_id -> task_id
+            # First-run nudge marker — flipped when the wizard has auto-opened
+            # once, so subsequent empty-install starts don't nag.
+            self._first_run_dismissed: bool = False
 
         def _update_title(self):
             """Update the TUI title with version and branch information."""
@@ -392,6 +395,23 @@ if _HAS_TEXTUAL:
             # Start periodic gate server polling
             self._start_gate_server_polling()
 
+            # First-run nudge: zero projects *and* zero broken configs on
+            # a fresh install → auto-open the wizard so the user never
+            # lands on a blank TUI wondering what to do next.  The
+            # dismissed flag persists through ``terok-state.json`` so a
+            # user who closes the wizard once isn't nagged again.
+            if not self._projects_by_id and not self._broken_by_id:
+                await self._maybe_show_first_run_wizard()
+
+        async def _maybe_show_first_run_wizard(self) -> None:
+            """Auto-open the wizard on a genuinely-empty install, once per user."""
+            if getattr(self, "_first_run_dismissed", False):
+                return
+            self._first_run_dismissed = True
+            self._save_selection_state()
+            # The action kicks off a worker; no need to await.
+            self.action_new_project_wizard()
+
         def _log_layout_debug(self) -> None:
             """Write a one-shot snapshot of key widget sizes to the state dir.
 
@@ -457,10 +477,12 @@ if _HAS_TEXTUAL:
                         state = json.load(f)
                         self._last_selected_project = state.get("last_project")
                         self._last_selected_tasks = state.get("last_tasks", {})
+                        self._first_run_dismissed = bool(state.get("first_run_dismissed", False))
             except Exception:
                 # If loading fails, just start with empty state
                 self._last_selected_project = None
                 self._last_selected_tasks = {}
+                self._first_run_dismissed = False
 
         def _save_selection_state(self) -> None:
             """Save current selection state to persistent storage."""
@@ -472,6 +494,7 @@ if _HAS_TEXTUAL:
                 state = {
                     "last_project": self.current_project_id,
                     "last_tasks": self._last_selected_tasks,
+                    "first_run_dismissed": getattr(self, "_first_run_dismissed", False),
                 }
                 with state_path.open("w", encoding="utf-8") as f:
                     json.dump(state, f)

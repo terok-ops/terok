@@ -1,0 +1,206 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for the Textual-native new-project wizard screens.
+
+These drive the three modal screens via Textual's built-in ``Pilot``
+harness.  The heavy semantic tests (question schema, validation,
+rendering) live in ``tests/unit/lib/test_wizard.py`` — this module
+just confirms the screens wire the right widgets to the shared
+``validate_answer`` and dismiss with the expected results.
+"""
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from textual.app import App
+from textual.widgets import Input, Label, RadioButton, RadioSet, TextArea
+
+from terok.lib.domain.wizards.new_project import QUESTIONS, Question
+from terok.tui.wizard_screens import ProjectReviewScreen, WizardFormScreen
+
+
+def _question(key: str) -> Question:
+    for q in QUESTIONS:
+        if q.key == key:
+            return q
+    raise AssertionError(f"No question with key {key!r}")
+
+
+_SENTINEL_PENDING = object()
+
+
+class _WizardHost(App):
+    """Minimal test host that pushes a screen and stashes its dismissal result.
+
+    Uses the callback form of ``push_screen`` because ``push_screen_wait``
+    requires a running worker — Textual's ``run_test`` does not provide
+    one out of the box.
+    """
+
+    def __init__(self, screen) -> None:
+        super().__init__()
+        self._screen_to_push = screen
+        self.result: object = _SENTINEL_PENDING
+
+    def on_mount(self) -> None:
+        self.push_screen(self._screen_to_push, self._capture)
+
+    def _capture(self, result: object) -> None:
+        self.result = result
+
+
+# ── WizardFormScreen ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_wizard_form_cancel_dismisses_with_none() -> None:
+    """Pressing Cancel dismisses the form with ``None``."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.click("#wizard-form-cancel")
+        await pilot.pause()
+    assert app.result is None
+
+
+@pytest.mark.asyncio
+async def test_wizard_form_submit_blocks_on_validation_error() -> None:
+    """Empty required project_id surfaces the shared ``validate_answer`` message."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Leave project_id empty and click Create — should NOT dismiss.
+        await pilot.click("#wizard-form-create")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, WizardFormScreen)
+        error_label = screen.query_one("#wizard-error-project_id", Label)
+        rendered = error_label.render()
+        assert "required" in str(rendered).lower()
+    # Still showing the form when the test exited — no dismissal.
+    assert app.result is _SENTINEL_PENDING
+
+
+@pytest.mark.asyncio
+async def test_wizard_form_submit_returns_collected_dict() -> None:
+    """Valid inputs across every question dismiss with a complete values dict."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Fill project_id so validation passes.
+        pid_input = app.screen.query_one("#wizard-field-project_id", Input)
+        pid_input.value = "demo-proj"
+        # Leave upstream + branch + snippet empty (all optional).
+        await pilot.click("#wizard-form-create")
+        await pilot.pause()
+    assert isinstance(app.result, dict)
+    assert app.result["project_id"] == "demo-proj"
+    # First radio button is pre-selected on each choice; confirm it mapped
+    # through to the slug, not the label.
+    assert app.result["security_class"] == _question("security_class").choices[0][0]
+    assert app.result["base"] == _question("base").choices[0][0]
+    # Optional fields default to empty strings.
+    assert app.result["upstream_url"] == ""
+    assert app.result["default_branch"] == ""
+    assert app.result["user_snippet"] == ""
+
+
+@pytest.mark.asyncio
+async def test_wizard_form_lowercases_project_id() -> None:
+    """``str.lower`` transform runs before validation on submit."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.screen.query_one("#wizard-field-project_id", Input).value = "MixedCaseID"
+        await pilot.click("#wizard-form-create")
+        await pilot.pause()
+    assert isinstance(app.result, dict)
+    assert app.result["project_id"] == "mixedcaseid"
+
+
+@pytest.mark.asyncio
+async def test_wizard_form_radio_selection_picks_other_option() -> None:
+    """Selecting the second radio on a choice question flips the dismissed slug."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Select the second option of security_class (gatekeeping).
+        sec_radioset = app.screen.query_one("#wizard-field-security_class", RadioSet)
+        buttons = list(sec_radioset.query(RadioButton))
+        buttons[1].value = True
+        app.screen.query_one("#wizard-field-project_id", Input).value = "p1"
+        await pilot.click("#wizard-form-create")
+        await pilot.pause()
+    assert isinstance(app.result, dict)
+    assert app.result["security_class"] == _question("security_class").choices[1][0]
+
+
+# ── ProjectReviewScreen ───────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_review_screen_back_dismisses_with_none() -> None:
+    """Back button dismisses with ``None`` — caller re-opens the form."""
+    app = _WizardHost(ProjectReviewScreen("demo", "project:\n  id: demo\n"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.click("#wizard-review-back")
+        await pilot.pause()
+    assert app.result is None
+
+
+@pytest.mark.asyncio
+async def test_review_screen_initialize_returns_edited_yaml() -> None:
+    """Edits to the TextArea flow through to the dismissed string."""
+    app = _WizardHost(ProjectReviewScreen("demo", "project:\n  id: demo\n"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ta = app.screen.query_one("#wizard-review-yaml", TextArea)
+        ta.text = "project:\n  id: demo\n  edited: true\n"
+        await pilot.click("#wizard-review-init")
+        await pilot.pause()
+    assert app.result == "project:\n  id: demo\n  edited: true\n"
+
+
+# ── Registry-level smoke ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_form_renders_one_widget_per_question() -> None:
+    """Each declared question produces a field with the expected ID."""
+    app = _WizardHost(WizardFormScreen())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        for q in QUESTIONS:
+            # The field widget exists and has the deterministic ID the
+            # read_raw loop relies on.
+            assert app.screen.query_one(f"#wizard-field-{q.key}")
+
+
+def test_touched_wizard_yaml_survives_roundtrip() -> None:
+    """Integration: form dict → render → write_project_yaml round-trips content."""
+    from terok.lib.domain.wizards.new_project import (
+        render_project_yaml,
+        write_project_yaml,
+    )
+
+    values = {
+        "security_class": "online",
+        "base": "ubuntu",
+        "project_id": "roundtrip",
+        "upstream_url": "",
+        "default_branch": "main",
+        "user_snippet": "",
+    }
+    rendered = render_project_yaml(values)
+    with (
+        tempfile.TemporaryDirectory() as td,
+        patch("terok.lib.domain.wizards.new_project.user_projects_dir", return_value=Path(td)),
+    ):
+        path = write_project_yaml("roundtrip", rendered, overwrite=True)
+        assert path.read_text() == rendered
