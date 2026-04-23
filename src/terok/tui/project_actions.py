@@ -482,26 +482,40 @@ class ProjectActionsMixin:
 
     @work(exclusive=True)
     async def _run_wizard_flow(self) -> None:
-        """Drive form → review → init-progress, refreshing the list at the end."""
+        """Drive form → review → init-progress, refreshing the list at the end.
+
+        The form/review loop preserves answers on "Back": the form
+        screen accepts an *initial* prefill dict, and the review
+        screen's ``REVIEW_BACK`` sentinel tells us to re-open the form
+        with the user's previous input instead of starting fresh.
+        ``None`` from either screen abandons the wizard.
+        """
         from ..lib.domain.wizards.new_project import render_project_yaml
         from .wizard_screens import (
+            REVIEW_BACK,
             InitProgressScreen,
             ProjectReviewScreen,
             WizardFormScreen,
         )
 
-        values = await self.push_screen_wait(WizardFormScreen())
-        if values is None:
-            return  # user cancelled the form
+        values: dict[str, str] | None = None
+        while True:
+            values = await self.push_screen_wait(WizardFormScreen(initial=values))
+            if values is None:
+                return  # user cancelled the form
 
-        rendered = render_project_yaml(values)
-        final_yaml = await self.push_screen_wait(
-            ProjectReviewScreen(values["project_id"], rendered)
-        )
-        if final_yaml is None:
-            # "Back" on the review screen abandons the wizard.  Users who
-            # want partial edits already have the inline review pane.
-            return
+            rendered = render_project_yaml(values)
+            review_result = await self.push_screen_wait(
+                ProjectReviewScreen(values["project_id"], rendered)
+            )
+            if review_result is None:
+                return  # Escape on the review screen — abandon
+            if review_result is REVIEW_BACK:
+                continue  # loop back to the form, prefilled
+            # review_result is the (possibly edited) YAML string.
+            final_yaml = review_result
+            break
+
         ok = await self.push_screen_wait(InitProgressScreen(values["project_id"], final_yaml))
         if ok:
             self.notify(f"Project '{values['project_id']}' is ready.")

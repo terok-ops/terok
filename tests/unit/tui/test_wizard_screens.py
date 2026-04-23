@@ -144,12 +144,30 @@ async def test_wizard_form_radio_selection_picks_other_option() -> None:
 
 
 @pytest.mark.asyncio
-async def test_review_screen_back_dismisses_with_none() -> None:
-    """Back button dismisses with ``None`` — caller re-opens the form."""
+async def test_review_screen_back_dismisses_with_sentinel() -> None:
+    """Back button returns ``REVIEW_BACK`` — caller re-opens form with prefill."""
+    from terok.tui.wizard_screens import REVIEW_BACK
+
     app = _WizardHost(ProjectReviewScreen("demo", "project:\n  id: demo\n"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.click("#wizard-review-back")
+        await pilot.pause()
+    assert app.result is REVIEW_BACK
+
+
+@pytest.mark.asyncio
+async def test_review_screen_cancel_action_abandons_with_none() -> None:
+    """The ``cancel`` action (Esc binding) abandons the wizard — distinct from Back."""
+    app = _WizardHost(ProjectReviewScreen("demo", "project:\n  id: demo\n"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Pilot key-press forwarding to modal bindings is flaky across
+        # Textual versions; invoke the bound action directly — the
+        # binding itself is covered by the screen's BINDINGS list.
+        screen = app.screen
+        assert isinstance(screen, ProjectReviewScreen)
+        screen.action_cancel()
         await pilot.pause()
     assert app.result is None
 
@@ -236,3 +254,35 @@ async def test_init_screen_write_failure_surfaces_in_log() -> None:
             assert close_button.disabled is False
             # The worker was never invoked on the failed-write path.
             mock_run_init.assert_not_called()
+
+
+# ── Form prefill (Back round-trip preservation) ──────────────────────
+
+
+@pytest.mark.asyncio
+async def test_form_prefill_populates_widgets() -> None:
+    """Re-opening the form with an *initial* dict restores every field."""
+    initial = {
+        "security_class": _question("security_class").choices[1][0],  # second choice
+        "base": _question("base").choices[2][0],
+        "project_id": "kept-from-back",
+        "upstream_url": "https://example.com/r.git",
+        "default_branch": "dev",
+        "user_snippet": "RUN echo hi",
+    }
+    app = _WizardHost(WizardFormScreen(initial=initial))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Text and editor fields carry the prefill verbatim.
+        assert app.screen.query_one("#wizard-field-project_id", Input).value == "kept-from-back"
+        assert (
+            app.screen.query_one("#wizard-field-upstream_url", Input).value
+            == "https://example.com/r.git"
+        )
+        assert app.screen.query_one("#wizard-field-default_branch", Input).value == "dev"
+        assert app.screen.query_one("#wizard-field-user_snippet", TextArea).text == "RUN echo hi"
+        # Radio preselection picks the prefilled slug, not the first option.
+        sec_rs = app.screen.query_one("#wizard-field-security_class", RadioSet)
+        pressed = sec_rs.pressed_button
+        assert pressed is not None
+        assert pressed.name == initial["security_class"]

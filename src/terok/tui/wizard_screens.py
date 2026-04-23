@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+from pathlib import Path
 from typing import Any
 
 from textual import on, work
@@ -110,10 +111,17 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
     }
     """
 
-    def __init__(self) -> None:
-        """Build a fresh wizard form — no prefill."""
+    def __init__(self, initial: dict[str, str] | None = None) -> None:
+        """Build a fresh wizard form, optionally pre-filled with previous answers.
+
+        *initial* is the dict returned by a prior run of this screen —
+        passed back in when the user clicks "Back" on the review screen
+        so their typing survives the round trip.  Keys not in *initial*
+        fall back to "first choice selected" / empty string.
+        """
         super().__init__()
         self._errors: dict[str, Label] = {}
+        self._initial: dict[str, str] = dict(initial) if initial else {}
 
     def compose(self) -> ComposeResult:
         """Lay out one widget per question, plus footer buttons."""
@@ -133,27 +141,32 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
         yield Label(label, classes="wizard-field")
         if q.help:
             yield Label(q.help, classes="wizard-help")
+        preset = self._initial.get(q.key, "")
         match q.kind:
             case "choice":
-                yield from self._choice_widget(q)
+                yield from self._choice_widget(q, selected_slug=preset)
             case "text":
-                yield Input(placeholder=q.placeholder, id=self._widget_id(q))
+                yield Input(value=preset, placeholder=q.placeholder, id=self._widget_id(q))
             case "editor":
-                yield TextArea(id=self._widget_id(q), language=None)
+                yield TextArea(preset, id=self._widget_id(q), language=None)
         err = Label("", classes="wizard-error", id=self._error_id(q))
         self._errors[q.key] = err
         yield err
 
-    def _choice_widget(self, q: Question) -> ComposeResult:
-        """Render a ``RadioSet`` for a choice question.
+    def _choice_widget(self, q: Question, *, selected_slug: str = "") -> ComposeResult:
+        """Render a ``RadioSet`` for a choice question, optionally preselecting *selected_slug*.
 
-        ``RadioButton.value=True`` is set on the first option so the
-        form is never in an "initially no selection" state — matches
-        the CLI where the user *must* pick something.
+        When the prefill slug matches one of the choices it takes
+        precedence; otherwise the first option is preselected — the
+        form is never in an "initially no selection" state, matching
+        the CLI's "pick a number" semantics.
         """
+        valid_slugs = {slug for slug, _ in q.choices}
+        preset_slug = selected_slug if selected_slug in valid_slugs else ""
         with RadioSet(id=self._widget_id(q)):
             for i, (slug, label) in enumerate(q.choices):
-                yield RadioButton(label, value=(i == 0), name=slug)
+                selected = (slug == preset_slug) if preset_slug else (i == 0)
+                yield RadioButton(label, value=selected, name=slug)
 
     @staticmethod
     def _widget_id(q: Question) -> str:
@@ -209,18 +222,27 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
 # ── Step 2: review rendered YAML ──────────────────────────────────────
 
 
-class ProjectReviewScreen(ModalScreen["str | None"]):
+#: Sentinel returned by :class:`ProjectReviewScreen` when the user clicks
+#: "Back" — distinguishes "go back to the form, keep my answers" from
+#: "cancel the whole wizard".  A distinct object lets the caller use
+#: ``is REVIEW_BACK`` for the three-way branch without overloading the
+#: string/None type.
+REVIEW_BACK: object = object()
+
+
+class ProjectReviewScreen(ModalScreen["str | object | None"]):
     """Show the rendered ``project.yml`` in an editable ``TextArea``.
 
-    Dismisses with the (possibly edited) YAML string when the user
-    confirms, or ``None`` on cancel / back.  The TUI equivalent of the
-    CLI wizard's "Edit configuration file before setup? [Y/n]" step,
-    but inline instead of suspending to ``$EDITOR`` — textual-serve
-    cannot do the latter.
+    Dismisses with one of three results:
+
+    - The (possibly edited) YAML string → user clicked "Initialize".
+    - :data:`REVIEW_BACK` → user clicked "Back"; caller should re-open
+      the form with the previous answers as prefill.
+    - ``None`` → user hit Escape; wizard is abandoned.
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Back"),
+        Binding("escape", "cancel", "Cancel"),
     ]
 
     CSS = """
@@ -273,12 +295,13 @@ class ProjectReviewScreen(ModalScreen["str | None"]):
                 yield Button("Initialize project", id="wizard-review-init", variant="primary")
 
     def action_cancel(self) -> None:
-        """Dismiss with ``None`` — caller may re-open the form screen."""
+        """Escape abandons the wizard — dismiss with ``None``."""
         self.dismiss(None)
 
     @on(Button.Pressed, "#wizard-review-back")
     def _on_back(self) -> None:
-        self.dismiss(None)
+        """Back returns to the form with the previous answers preserved."""
+        self.dismiss(REVIEW_BACK)
 
     @on(Button.Pressed, "#wizard-review-init")
     def _on_init(self) -> None:
@@ -394,16 +417,32 @@ class InitProgressScreen(ModalScreen[bool]):
                 yield Button("Close", id="wizard-init-close", variant="default", disabled=True)
 
     async def on_mount(self) -> None:
-        """Persist the reviewed YAML, then kick off the background worker.
+        """Confirm overwrite when needed, persist the YAML, then run init.
 
-        A write failure (read-only dir, disk full, permission change) is
-        rendered into the log pane and the Close button is re-enabled so
-        the user can dismiss the modal cleanly — we never call
-        :meth:`_run_init` on a partial-write state, which would either
-        run against a stale config on disk or fail the first facade step
-        with a confusing secondary error.
+        When a ``project.yml`` already exists for this project ID, the
+        TUI mirrors the CLI's overwrite prompt via a modal confirm.
+        The heavy lifting (confirm → write → worker) happens in a
+        ``@work`` coroutine so ``push_screen_wait`` has the worker
+        context it needs.  A write failure is rendered into the log
+        pane and the Close button is re-enabled; ``_run_init`` never
+        runs on a partial-write state.
         """
+        self._run_init_with_confirm()
+
+    @work(exclusive=True)
+    async def _run_init_with_confirm(self) -> None:
+        """Top-level coroutine that sequences overwrite-confirm → write → run."""
         log = self.query_one("#wizard-init-log", RichLog)
+        existing = self._existing_project_yaml_path()
+        if existing is not None:
+            if not await self._confirm_overwrite(existing):
+                log.write(
+                    "[yellow]Keeping existing project.yml — nothing written, "
+                    "nothing initialised.[/]"
+                )
+                self._finish_with_close_button()
+                return
+
         log.write(f"[dim]Writing project.yml for {self._project_id}…[/]")
         try:
             write_project_yaml(self._project_id, self._rendered_yaml, overwrite=True)
@@ -411,7 +450,31 @@ class InitProgressScreen(ModalScreen[bool]):
             log.write(f"[red]Failed to write project.yml: {exc}[/]")
             self._finish_with_close_button()
             return
-        self._run_init()
+        await self._run_init()
+
+    def _existing_project_yaml_path(self) -> Path | None:
+        """Return the on-disk ``project.yml`` path if it already exists, else None."""
+        from ..lib.core.config import user_projects_dir
+
+        candidate = user_projects_dir() / self._project_id / "project.yml"
+        return candidate if candidate.is_file() else None
+
+    async def _confirm_overwrite(self, path: Path) -> bool:
+        """Show the shared ``ConfirmDestructiveScreen`` for a project.yml overwrite."""
+        from .screens import ConfirmDestructiveScreen
+
+        return bool(
+            await self.app.push_screen_wait(
+                ConfirmDestructiveScreen(
+                    message=(
+                        f"A configuration for project '{self._project_id}' already "
+                        f"exists at:\n\n{path}\n\nOverwrite with the reviewed content?"
+                    ),
+                    title=f"Overwrite project.yml — {self._project_id}",
+                    confirm_label="Overwrite",
+                )
+            )
+        )
 
     def _finish_with_close_button(self) -> None:
         """Enable the Close button after the screen reaches a terminal state.
@@ -451,9 +514,13 @@ class InitProgressScreen(ModalScreen[bool]):
 
     # ── Background worker ─────────────────────────────────────────────
 
-    @work(exclusive=True)
     async def _run_init(self) -> None:
-        """Drive the four init steps, updating UI between each."""
+        """Drive the four init steps, updating UI between each.
+
+        Runs inside the ``@work`` context established by
+        :meth:`_run_init_with_confirm` — no extra decorator needed;
+        nesting workers confuses Textual's exclusivity tracking.
+        """
         import asyncio
 
         from terok.lib.core.projects import load_project
