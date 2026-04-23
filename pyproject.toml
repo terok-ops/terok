@@ -50,8 +50,8 @@ textual-serve = ">=1.1.0"
 # bumps its own sandbox pin to upstream master so Poetry doesn't reject
 # the dual pin sources here.  Release script flips both to URL pins
 # before cutting.
-terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "chore/bump-sandbox-ssh-default-reader"}
-terok-sandbox = {git = "https://github.com/terok-ai/terok-sandbox.git", branch = "master"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.115/terok_executor-0.0.115-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.96/terok_sandbox-0.0.96-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.31/terok_shield-0.6.31-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.3/terok_clearance-0.6.3-py3-none-any.whl"}
 
