@@ -240,8 +240,8 @@ class TestAuthenticate:
         assert mock_auth.call_args.args[0] == "p1"
         assert mock_auth.call_args.kwargs["image"] == "terok-p1:latest"
 
-    def test_host_wide_resolves_l1_and_uses_sentinel(self) -> None:
-        """``authenticate(provider)`` (no project) uses the host sentinel and an L1 image."""
+    def test_host_wide_resolves_l1_and_passes_none_scope(self) -> None:
+        """``authenticate(provider)`` (no project) passes ``None`` scope and an L1 image."""
         from terok.lib.domain import facade
 
         with (
@@ -257,7 +257,7 @@ class TestAuthenticate:
             facade.authenticate("claude")
 
         mock_resolve.assert_called_once_with("claude")
-        assert mock_auth.call_args.args[0] == facade._HOST_AUTH_SENTINEL
+        assert mock_auth.call_args.args[0] is None
         assert mock_auth.call_args.kwargs["image"] == "terok-l1-cli:ubuntu-24.04"
 
 

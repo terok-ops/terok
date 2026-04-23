@@ -174,15 +174,6 @@ def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
         input("Press Enter once the key is registered... ")
 
 
-#: Container-scope sentinel used when ``authenticate`` runs without a project.
-#:
-#: ``_host`` is rejected by :func:`is_valid_project_id` (leading underscore),
-#: so it can never collide with a real project ID.  The auth flow only uses
-#: the scope string for transient container naming — credentials land in the
-#: vault provider-scoped, not project-scoped — so the sentinel is cosmetic.
-_HOST_AUTH_SENTINEL = "_host"
-
-
 def authenticate(provider: str, project_id: str | None = None) -> None:
     """Run the auth flow for *provider*, host-wide by default.
 
@@ -206,13 +197,11 @@ def authenticate(provider: str, project_id: str | None = None) -> None:
 
     if project_id is None:
         image = _resolve_host_auth_image(provider)
-        container_scope = _HOST_AUTH_SENTINEL
     else:
         image = project_cli_image(project_id)
-        container_scope = project_id
 
     _authenticate_raw(
-        container_scope,
+        project_id,
         provider,
         mounts_dir=sandbox_live_mounts_dir(),
         image=image,
