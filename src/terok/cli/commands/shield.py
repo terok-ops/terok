@@ -19,6 +19,7 @@ from terok_sandbox import make_shield
 from terok_shield import COMMANDS, ArgDef, CommandDef, ExecError
 
 from ...lib.core.config import make_sandbox_config
+from ...lib.orchestration.tasks import resolve_task_id
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
@@ -168,10 +169,12 @@ def dispatch(args: argparse.Namespace) -> bool:
         print("Error: provide both <project_id> and <task_id>, or neither", file=sys.stderr)
         sys.exit(1)
     has_task = project_id is not None and task_id is not None
+    if has_task:
+        task_id = resolve_task_id(project_id, task_id)
 
     try:
         if has_task:
-            cname, task_dir = _resolve_task(args.project_id, args.task_id)
+            cname, task_dir = _resolve_task(project_id, task_id)
             shield = make_shield(task_dir, cfg=make_sandbox_config())
             kwargs = _extract_handler_kwargs(args, cmd_def)
             if cmd_def.needs_container:
@@ -190,7 +193,7 @@ def dispatch(args: argparse.Namespace) -> bool:
                 cmd_def.handler(shield, **kwargs)
     except ExecError as exc:
         print(
-            f"Error: shield operation failed for task {args.task_id}: {exc}"
+            f"Error: shield operation failed for task {task_id}: {exc}"
             if has_task
             else f"Error: shield operation failed: {exc}",
             file=sys.stderr,

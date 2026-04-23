@@ -55,7 +55,12 @@ from ...lib.core.project_model import ProjectConfig, is_valid_project_id
 from ...lib.core.projects import list_projects, load_project
 from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
-from ...lib.orchestration.tasks import container_name, is_task_id, tasks_meta_dir
+from ...lib.orchestration.tasks import (
+    container_name,
+    is_task_id,
+    resolve_task_id,
+    tasks_meta_dir,
+)
 from ...lib.util.check_reporter import CheckReporter
 from ...lib.util.yaml import load as _yaml_load
 
@@ -85,9 +90,13 @@ def dispatch(args: argparse.Namespace) -> bool:
     """Handle the sickbay command.  Returns True if handled."""
     if args.cmd != "sickbay":
         return False
+    project_id = getattr(args, "project_id", None)
+    task_id = getattr(args, "task_id", None)
+    if project_id and task_id:
+        task_id = resolve_task_id(project_id, task_id)
     _cmd_sickbay(
-        project_id=getattr(args, "project_id", None),
-        task_id=getattr(args, "task_id", None),
+        project_id=project_id,
+        task_id=task_id,
         fix=getattr(args, "fix", False),
     )
     return True

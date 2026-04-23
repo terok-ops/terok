@@ -108,6 +108,14 @@ def normalize_task_id_input(raw: str) -> str:
     ``I/L → 1``, ``O → 0`` substitutions.  The result is still subject
     to :data:`_TASK_ID_PREFIX_RE` downstream — this only widens what
     we accept, never what we emit.
+
+    **Call-site discipline:** only call this at user-interactive CLI
+    boundaries — argparse dispatch handlers and argcomplete completers.
+    Internal code paths (``lib/*``, ``tui/*``, TUI pickers, clearance,
+    anything reading task IDs from disk, OCI annotations, or runtime
+    state) always work with canonical lowercase IDs and must *never*
+    re-normalise.  Leaking this tolerance inward quietly defeats the
+    "we encode only in canonical form" invariant.
     """
     return raw.replace("-", "").lower().translate(_TASK_ID_INPUT_TRANSLATE)
 

@@ -28,6 +28,16 @@ def shield_parser() -> argparse.ArgumentParser:
     return parser
 
 
+@pytest.fixture(autouse=True)
+def _stub_resolve_task_id() -> object:
+    """Bypass filesystem-backed ``resolve_task_id`` — these tests mock ``_resolve_task``."""
+    with patch(
+        "terok.cli.commands.shield.resolve_task_id",
+        side_effect=lambda _pid, tid: tid,
+    ) as stub:
+        yield stub
+
+
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
