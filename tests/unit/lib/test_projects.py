@@ -26,6 +26,7 @@ def project_yaml(
     shield_drop_on_task_run: bool | None = None,
     shield_on_task_restart: str | None = None,
     timezone: str | None = None,
+    ssh_use_personal: bool | None = None,
 ) -> str:
     """Build project YAML for tests with optional sections."""
     lines = ["project:", f"  id: {project_id}"]
@@ -43,6 +44,8 @@ def project_yaml(
         lines += ["shield:", *shield_lines]
     if timezone is not None:
         lines += ["run:", f"  timezone: {timezone}"]
+    if ssh_use_personal is not None:
+        lines += ["ssh:", f"  use_personal: {str(ssh_use_personal).lower()}"]
     return "\n".join(lines) + "\n"
 
 
@@ -100,6 +103,63 @@ class TestProject:
                 with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(config_file)}):
                     project = load_project(project_id)
         assert project.git_authorship == expected
+
+    @pytest.mark.parametrize(
+        ("project_id", "yaml_text", "config_text", "expected"),
+        [
+            pytest.param(
+                "ssh-default", project_yaml("ssh-default"), None, False, id="default-false"
+            ),
+            pytest.param(
+                "ssh-project-on",
+                project_yaml("ssh-project-on", ssh_use_personal=True),
+                None,
+                True,
+                id="project-yaml-on",
+            ),
+            pytest.param(
+                "ssh-global-on",
+                project_yaml("ssh-global-on"),
+                "ssh:\n  use_personal: true\n",
+                True,
+                id="global-config-on",
+            ),
+            pytest.param(
+                "ssh-project-overrides-global",
+                project_yaml("ssh-project-overrides-global", ssh_use_personal=False),
+                "ssh:\n  use_personal: true\n",
+                False,
+                id="project-overrides-global",
+            ),
+        ],
+    )
+    def test_ssh_use_personal_resolution(
+        self,
+        project_id: str,
+        yaml_text: str,
+        config_text: str | None,
+        expected: bool,
+    ) -> None:
+        """``ssh.use_personal`` resolves through the layered config tiers.
+
+        Order (lowest → highest, applied at load time):
+        global ``config.yml`` ssh section → ``project.yml`` ssh section.
+        The CLI override ``--use-personal-ssh`` sits one tier above
+        this and is applied in :func:`make_git_gate`, not here.
+
+        Sandbox owns both the schema (``RawSSHSection``) and the
+        global-tier reader (``gate_use_personal_ssh_default``); terok
+        composes the project layer via ``_build_project_config``.
+        """
+        with project_env(yaml_text, project_id=project_id) as ctx:
+            if config_text is None:
+                project = load_project(project_id)
+            else:
+                config_file = ctx.base / "config.yml"
+                config_file.write_text(config_text, encoding="utf-8")
+                with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(config_file)}):
+                    project = load_project(project_id)
+        assert project.ssh_use_personal is expected
 
     def test_load_project_invalid_git_authorship_raises(self) -> None:
         with project_env(

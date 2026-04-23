@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
-from terok_sandbox import ConfigScope, ConfigStack
+from terok_sandbox import ConfigScope, ConfigStack, gate_use_personal_ssh_default
 
 from ..util.yaml import YAMLError, dump as _yaml_dump, load as _yaml_load
 from .config import (
@@ -211,11 +211,24 @@ def _build_project_config(
         gate_path=gate_path,
         gate_enabled=raw.gate.enabled,
         staging_root=staging_root,
-        # ``RawSSHSection.use_personal`` defaults to ``None`` (unset) so future
-        # layering with the global ``config.yml`` ssh section can distinguish
-        # *unset* from *explicitly false* via ``model_dump(exclude_none=True)``.
-        # PR 4 wires that layering; for now this just preserves the False default.
-        ssh_use_personal=raw.ssh.use_personal or False,
+        # ssh.use_personal resolves through three tiers:
+        #
+        #     CLI ``--use-personal-ssh``     (highest, applied in make_git_gate)
+        #     project ``project.yml`` ssh
+        #     global ``config.yml`` ssh      ← read via sandbox helper
+        #     False                          (default)
+        #
+        # ``RawSSHSection.use_personal`` defaults to ``None`` (unset),
+        # which lets us tell *unset* from *explicitly false* — only when
+        # the project layer is unset do we fall through to the sandbox-side
+        # global reader.  Sandbox owns both the schema (``RawSSHSection``)
+        # and the consumer (``gate/mirror.py:_git_env_with_ssh``); terok
+        # composes the project layer on top.
+        ssh_use_personal=(
+            raw.ssh.use_personal
+            if raw.ssh.use_personal is not None
+            else gate_use_personal_ssh_default()
+        ),
         expose_external_remote=raw.gatekeeping.expose_external_remote,
         human_name=identity.get("human_name") or "Nobody",
         human_email=identity.get("human_email") or "nobody@localhost",
