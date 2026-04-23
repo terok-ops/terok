@@ -211,7 +211,11 @@ def _build_project_config(
         gate_path=gate_path,
         gate_enabled=raw.gate.enabled,
         staging_root=staging_root,
-        ssh_use_personal=raw.ssh.use_personal,
+        # ``RawSSHSection.use_personal`` defaults to ``None`` (unset) so future
+        # layering with the global ``config.yml`` ssh section can distinguish
+        # *unset* from *explicitly false* via ``model_dump(exclude_none=True)``.
+        # PR 4 wires that layering; for now this just preserves the False default.
+        ssh_use_personal=raw.ssh.use_personal or False,
         expose_external_remote=raw.gatekeeping.expose_external_remote,
         human_name=identity.get("human_name") or "Nobody",
         human_email=identity.get("human_email") or "nobody@localhost",

@@ -33,6 +33,7 @@ from terok_clearance.runtime.installer import (
     HUB_UNIT_NAME as _CLEARANCE_HUB_UNIT_NAME,
 )
 from terok_sandbox import (
+    SERVICES_TCP_OPTOUT_YAML,
     check_environment,
     check_units_outdated,
     get_server_status,
@@ -52,7 +53,6 @@ from ...lib.core import runtime as _rt
 from ...lib.core.config import get_services_mode, global_config_path, make_sandbox_config
 from ...lib.core.project_model import ProjectConfig, is_valid_project_id
 from ...lib.core.projects import list_projects, load_project
-from ...lib.core.yaml_schema import SERVICES_TCP_OPTOUT_YAML
 from ...lib.orchestration.container_doctor import run_container_doctor
 from ...lib.orchestration.hooks import run_hook
 from ...lib.orchestration.tasks import container_name, is_task_id, tasks_meta_dir

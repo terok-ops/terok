@@ -48,6 +48,7 @@ allowed_importers =
     terok.lib.core.config
     terok.lib.core.projects
     terok.lib.core.runtime
+    terok.lib.core.yaml_schema
     terok.lib.domain.facade
     terok.lib.domain.image_cleanup
     terok.lib.domain.panic
@@ -77,6 +78,7 @@ allowed_importers =
     terok.cli.main
     terok.cli.wiring
     terok.lib.core.images
+    terok.lib.core.yaml_schema
     terok.lib.domain.facade
     terok.lib.domain.project
     terok.lib.domain.storage

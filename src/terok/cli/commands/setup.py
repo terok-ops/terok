@@ -18,10 +18,10 @@ import sys
 from pathlib import Path
 
 from terok_executor import AUTH_PROVIDERS
+from terok_sandbox import SERVICES_TCP_OPTOUT_YAML
 
 from ...lib.core.config import global_config_path
 from ...lib.core.projects import load_project
-from ...lib.core.yaml_schema import SERVICES_TCP_OPTOUT_YAML
 from ...lib.domain.facade import (
     build_images,
     generate_dockerfiles,

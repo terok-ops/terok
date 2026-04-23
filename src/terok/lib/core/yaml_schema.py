@@ -7,6 +7,21 @@ These are **Tier 1** models: they validate types, enums, and unknown-key typos
 (``extra="forbid"``) but do *not* resolve paths or merge config layers.  The
 companion modules :mod:`~terok.lib.core.projects` and
 :mod:`~terok.lib.core.config` transform these into resolved runtime objects.
+
+Sections owned by lower-level packages live in those packages' own
+``config_schema`` modules and are imported here for composition:
+
+- :mod:`terok_sandbox.config_schema` owns ``paths``, ``credentials``,
+  ``vault``, ``gate_server``, ``services``, ``shield``, ``network``,
+  ``ssh`` (eight sandbox-consumed sections).
+- :mod:`terok_executor.config_schema` owns ``image``.
+
+terok itself owns the remaining five sections (``tui``, ``logs``,
+``tasks``-global, ``git``-global, ``hooks``-global) plus every
+``project.yml``-only section.  :class:`RawGlobalConfig` inherits from
+:class:`~terok_executor.config_schema.ExecutorConfigView` and flips
+back to ``extra="forbid"`` because terok knows the full ecosystem
+section set — a typo at the top level (``tuii:``) is caught here.
 """
 
 from __future__ import annotations
@@ -14,6 +29,8 @@ from __future__ import annotations
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
+from terok_executor import ExecutorConfigView, RawImageSection
+from terok_sandbox import RawSSHSection
 
 # ---------------------------------------------------------------------------
 # Shared reusable validators / annotated types
@@ -150,21 +167,6 @@ class RawGlobalGitSection(BaseModel):
         description=(
             "How agent/human map to git author/committer."
             " Values: ``agent-human``, ``human-agent``, ``agent``, ``human``"
-        ),
-    )
-
-
-class RawSSHSection(BaseModel):
-    """The ``ssh:`` section of project.yml."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    use_personal: bool = Field(
-        default=False,
-        description=(
-            "Opt in to the user's ``~/.ssh`` keys for host-side ``gate-sync``. "
-            "Default ``false`` — terok uses only its vault-managed key. "
-            "See also the per-invocation override ``--use-personal-ssh``."
         ),
     )
 
@@ -336,35 +338,6 @@ class RawShieldProjectSection(BaseModel):
     )
 
 
-class RawImageSection(BaseModel):
-    """The ``image:`` section of project.yml."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    base_image: str = Field(default="ubuntu:24.04", description="Base container image for builds")
-    family: Literal["deb", "rpm"] | None = Field(
-        default=None,
-        description=(
-            "Package family for the L0/L1 build (``deb`` or ``rpm``). "
-            "Leave unset to auto-detect from *base_image*; set explicitly "
-            "when the image is outside the known allowlist."
-        ),
-    )
-    agents: str | None = Field(
-        default=None,
-        description=(
-            'Comma-separated roster entries to install in L1, or "all". '
-            "Inherits from the global config when unset."
-        ),
-    )
-    user_snippet_inline: str | None = Field(
-        default=None, description="Inline Dockerfile snippet injected into the project image"
-    )
-    user_snippet_file: str | None = Field(
-        default=None, description="Path to a file containing a Dockerfile snippet"
-    )
-
-
 # ---------------------------------------------------------------------------
 # Top-level project YAML
 # ---------------------------------------------------------------------------
@@ -420,56 +393,14 @@ class RawProjectYaml(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Global config section models
+# Global config section models — terok-owned only
+#
+# Sandbox-owned sections (paths, credentials, vault, gate_server, services,
+# shield, network, ssh) live in :mod:`terok_sandbox.config_schema`; the
+# executor-owned ``image`` section lives in :mod:`terok_executor.config_schema`.
+# Both are pulled in by :class:`RawGlobalConfig` via inheritance from
+# :class:`~terok_executor.config_schema.ExecutorConfigView`.
 # ---------------------------------------------------------------------------
-
-
-class RawCredentialsSection(BaseModel):
-    """Global ``credentials:`` section."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    dir: str | None = Field(
-        default=None,
-        description="Shared credentials directory (proxy DB, agent config mounts)",
-    )
-
-
-class RawPathsSection(BaseModel):
-    """Global ``paths:`` section.
-
-    ``root`` is the namespace state root read by all ecosystem packages
-    (Podman model).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    root: str | None = Field(
-        default=None,
-        description=(
-            "Namespace state root shared by all ecosystem packages"
-            " (Podman model — one config, multiple readers)"
-        ),
-    )
-    build_dir: str | None = Field(
-        default=None, description="Build artifacts directory (generated Dockerfiles)"
-    )
-    sandbox_live_dir: str | None = Field(
-        default=None,
-        description=(
-            "Container-writable runtime data (tasks, agent mounts)."
-            " For hardened installs, mount the target with ``noexec,nosuid,nodev``"
-        ),
-    )
-    user_projects_dir: str | None = Field(
-        default=None, description="User projects directory (per-user project configs)"
-    )
-    user_presets_dir: str | None = Field(
-        default=None, description="User presets directory (per-user preset configs)"
-    )
-    port_registry_dir: str | None = Field(
-        default=None, description="Shared port registry directory for multi-user isolation"
-    )
 
 
 class RawTUISection(BaseModel):
@@ -492,69 +423,6 @@ class RawLogsSection(BaseModel):
     )
 
 
-class RawShieldGlobalSection(BaseModel):
-    """Global ``shield:`` section."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    bypass_firewall_no_protection: bool = Field(
-        default=False, description="**Dangerous**: disable egress firewall entirely"
-    )
-    profiles: dict[str, Any] | None = Field(
-        default=None, description="Named shield profiles for per-project firewall rules"
-    )
-    audit: bool = Field(default=True, description="Enable shield audit logging")
-    drop_on_task_run: bool = True
-    on_task_restart: Literal["retain", "up"] = "retain"
-
-
-SERVICES_TCP_OPTOUT_YAML = "services: {mode: tcp}"
-"""User-facing opt-out snippet shown in SELinux hints — keep in one place
-so setup, sickbay, tests and docs stay in sync."""
-
-
-class RawServicesSection(BaseModel):
-    """Global ``services:`` section — transport mode for host ↔ container IPC."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    mode: Literal["tcp", "socket"] = "socket"
-    """Transport for host↔container IPC.  Default ``socket`` since 0.7.3;
-    set to ``tcp`` to opt out.  See ``docs/selinux.md``."""
-
-
-class RawVaultSection(BaseModel):
-    """Global ``vault:`` section (token broker + SSH signer).
-
-    The container-side transport was previously configured via
-    ``vault.transport``; since 0.7.4 it is derived from
-    ``services.mode`` so the two knobs stay in lockstep (tcp listener
-    ↔ direct routing, socket listener ↔ socket routing).  Any prior
-    ``vault.transport:`` line in ``config.yml`` must be removed.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    bypass_no_secret_protection: bool = False
-    port: int | None = Field(default=None, ge=1, le=65535)
-    ssh_signer_port: int | None = Field(default=None, ge=1, le=65535)
-
-
-class RawGateServerSection(BaseModel):
-    """Global ``gate_server:`` section."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    port: int | None = Field(default=None, ge=1, le=65535, description="Gate server listen port")
-    repos_dir: str | None = Field(
-        default=None,
-        description="Override gate repo directory (default: ``state_dir/gate``)",
-    )
-    suppress_systemd_warning: bool = Field(
-        default=False, description="Suppress the systemd unit installation suggestion"
-    )
-
-
 class RawTasksGlobalSection(BaseModel):
     """Global ``tasks:`` section."""
 
@@ -566,44 +434,37 @@ class RawTasksGlobalSection(BaseModel):
     )
 
 
-class RawNetworkSection(BaseModel):
-    """Global ``network:`` section — port range and future network settings."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    port_range_start: int = Field(default=18700, ge=1024, le=65535)
-    port_range_end: int = Field(default=32700, ge=1024, le=65535)
-
-    @model_validator(mode="after")
-    def _check_port_range(self) -> RawNetworkSection:
-        if self.port_range_start > self.port_range_end:
-            raise ValueError("port_range_start must be <= port_range_end")
-        return self
-
-
 # ---------------------------------------------------------------------------
 # Top-level global config YAML
 # ---------------------------------------------------------------------------
 
 
-class RawGlobalConfig(BaseModel):
-    """Validated structure of the global ``config.yml`` file."""
+class RawGlobalConfig(ExecutorConfigView):
+    """Validated structure of the global ``config.yml`` file.
+
+    Composed from the ecosystem's per-package schemas:
+
+    - Sandbox-owned sections (``paths``, ``credentials``, ``vault``,
+      ``gate_server``, ``services``, ``shield``, ``network``, ``ssh``)
+      come from :class:`~terok_sandbox.config_schema.SandboxConfigView`
+      via :class:`~terok_executor.config_schema.ExecutorConfigView`.
+    - Executor-owned ``image`` comes from
+      :class:`~terok_executor.config_schema.ExecutorConfigView`.
+    - The five terok-owned sections below are added explicitly.
+
+    ``extra="forbid"`` flips back on at this top-of-stack layer because
+    terok knows every legitimate section.  A typo at the top level
+    (``tuii:``) is caught here, even though sandbox / executor would
+    have tolerated it via their ``extra="allow"`` posture.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    credentials: RawCredentialsSection = Field(default_factory=RawCredentialsSection)
-    paths: RawPathsSection = Field(default_factory=RawPathsSection)
     tui: RawTUISection = Field(default_factory=RawTUISection)
     logs: RawLogsSection = Field(default_factory=RawLogsSection)
-    shield: RawShieldGlobalSection = Field(default_factory=RawShieldGlobalSection)
-    services: RawServicesSection = Field(default_factory=RawServicesSection)
-    vault: RawVaultSection = Field(default_factory=RawVaultSection)
-    gate_server: RawGateServerSection = Field(default_factory=RawGateServerSection)
-    network: RawNetworkSection = Field(default_factory=RawNetworkSection)
     tasks: RawTasksGlobalSection = Field(default_factory=RawTasksGlobalSection)
     git: RawGlobalGitSection = Field(default_factory=RawGlobalGitSection)
     hooks: RawHooksSection = Field(default_factory=RawHooksSection)
-    image: RawImageSection = Field(default_factory=RawImageSection)
     experimental: bool = False
     default_agent: str | None = None
     default_login: str | None = None
@@ -620,6 +481,7 @@ class RawGlobalConfig(BaseModel):
             "vault",
             "gate_server",
             "network",
+            "ssh",
             "tasks",
             "git",
             "hooks",

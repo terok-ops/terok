@@ -44,14 +44,14 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-# DEV-TIME BRANCH PINS — feat/optional-gate-and-upstream chain across
-# the two siblings that ship the feature (sandbox + executor).  Shield
-# and dbus track upstream's latest release wheels.  The release script
-# replaces the git pins with release-URL pins before cutting.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.110/terok_executor-0.0.110-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.91/terok_sandbox-0.0.91-py3-none-any.whl"}
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.29/terok_shield-0.6.29-py3-none-any.whl"}
-terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.1/terok_clearance-0.6.1-py3-none-any.whl"}
+# DEV-TIME BRANCH PINS — refactor/config-schema-ownership chain across
+# both siblings that publish the new section schemas (sandbox PR #202,
+# executor PR #224).  Shield and clearance track release wheels.  The
+# release script flips the git pins back to URL pins before cutting.
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "refactor/config-schema-ownership"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "refactor/config-schema-ownership"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.31/terok_shield-0.6.31-py3-none-any.whl"}
+terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.3/terok_clearance-0.6.3-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"
