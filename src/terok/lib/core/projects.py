@@ -116,13 +116,13 @@ def _parse_project_yaml(cfg_path: Path) -> RawProjectYaml:
     try:
         raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, YAMLError) as exc:
-        raise SystemExit(f"Failed to read {cfg_path}: {exc}")
+        raise SystemExit(f"Failed to read {cfg_path}: {exc}") from exc
     except Exception as exc:  # noqa: BLE001 — YAML parsers can raise anything; quarantine it
         raise SystemExit(f"Failed to read {cfg_path}: {type(exc).__name__}: {exc}") from exc
     try:
         return RawProjectYaml.model_validate(raw)
     except ValidationError as exc:
-        raise SystemExit(_format_validation_error(exc, cfg_path))
+        raise SystemExit(_format_validation_error(exc, cfg_path)) from exc
     except Exception as exc:  # noqa: BLE001 — defensive against non-Validation pydantic surprises
         raise SystemExit(f"Failed to validate {cfg_path}: {type(exc).__name__}: {exc}") from exc
 

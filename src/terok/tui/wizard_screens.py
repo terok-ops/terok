@@ -629,19 +629,21 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             self._mark("generate", "done")
 
             # Step 3: Build.  ``build_images`` invokes ``podman build``
-            # subprocesses that inherit terok's stdout/stderr file
+            # subprocesses that inherit the caller's stdout/stderr file
             # descriptors; left alone, their raw output *corrupts the
-            # TUI frame* (colour codes, cursor moves, et al.).  Redirect
-            # fd 1 and 2 to /dev/null for the duration of the build so
-            # the TUI keeps rendering cleanly.  A proper log-tailer
-            # widget that streams subprocess output into this pane is
-            # tracked in issue #473.
+            # TUI frame* (colour codes, cursor moves, et al.).  We run
+            # the whole build in a fresh Python subprocess whose fds
+            # are captured by ``subprocess.run`` — parent-side fds stay
+            # untouched no matter what the build crashes on.  A proper
+            # log-tailer widget that streams subprocess output into
+            # this pane is tracked in issue #473.
             self._mark("build", "running", "this can take several minutes")
             log.write(
-                "[dim]Running image build (output suppressed to keep the TUI intact; "
-                "watch `podman images` or see #473 for the planned log-tailer widget).[/]"
+                "[dim]Running image build in a subprocess (output suppressed to keep "
+                "the TUI intact; watch `podman images`, or see #473 for the planned "
+                "log-tailer widget).[/]"
             )
-            await asyncio.to_thread(_build_with_silenced_fds, self._project_id)
+            await asyncio.to_thread(_build_in_subprocess, self._project_id)
             self._mark("build", "done")
 
             # Step 4: Gate sync — load_project to read gate_enabled
@@ -743,32 +745,33 @@ def _log_capture(log: RichLog):
                 log.write(text)
 
 
-def _build_with_silenced_fds(project_id: str) -> None:
-    """Call :func:`build_images` with fd 1/2 redirected to ``/dev/null``.
+def _build_in_subprocess(project_id: str) -> None:
+    """Run :func:`build_images` in a child Python process.
 
-    ``build_images`` delegates to ``podman build`` via ``subprocess.run``
-    without ``capture_output``; the subprocess inherits the parent's
-    stdout/stderr file descriptors and writes TTY escape sequences that
-    scramble the Textual frame.  Redirecting at the fd level is the
-    minimum-viable fix for v1 — the trade-off is that build progress
-    stops being visible during the wizard's init step.  Users who want
-    the raw output can still run ``terok project init`` from the CLI,
-    and the proper log-tailer widget (issue #473) will reclaim it.
+    Isolating the build in a subprocess is the robust way to keep
+    ``podman build``'s inherited stdout/stderr from scrambling the
+    Textual frame: the child gets its own fds, ``capture_output``
+    swallows them, and the parent's terminal is untouched regardless
+    of what the build prints (or crashes with).
+
+    Any non-zero exit propagates as ``RuntimeError`` carrying the last
+    few KiB of the child's stderr, which the wizard's worker already
+    logs as the failed-step's detail.  Proper streaming (subprocess
+    stdout → RichLog via a reader thread) is tracked in issue #473 —
+    this is the minimum-viable isolation, not the final UX.
     """
-    import os
+    import subprocess  # noqa: S404 — launching a known python interpreter with fixed argv
+    import sys
 
-    from ..lib.domain.facade import build_images
-
-    devnull_fd = os.open(os.devnull, os.O_WRONLY)
-    saved_out = os.dup(1)
-    saved_err = os.dup(2)
-    try:
-        os.dup2(devnull_fd, 1)
-        os.dup2(devnull_fd, 2)
-        build_images(project_id)
-    finally:
-        os.dup2(saved_out, 1)
-        os.dup2(saved_err, 2)
-        os.close(saved_out)
-        os.close(saved_err)
-        os.close(devnull_fd)
+    # Literal repr keeps project_id safely escaped into the -c body.
+    child_body = f"from terok.lib.domain.facade import build_images; build_images({project_id!r})"
+    result = subprocess.run(  # noqa: S603 — argv is sys.executable + -c + terok code we control
+        [sys.executable, "-c", child_body],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        tail = (result.stderr or result.stdout or "").strip().splitlines()
+        snippet = "\n".join(tail[-20:]) if tail else "(no output)"
+        raise RuntimeError(f"build_images exited with code {result.returncode}:\n{snippet}")

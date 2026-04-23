@@ -278,6 +278,11 @@ class TestProject:
         case.  Without a broad catch, the exception would bubble all the
         way up to the Textual keypress handler and take down the TUI —
         instead the file becomes a "broken project" visible in the list.
+
+        The assertion checks the *full* shape of the surfaced message
+        — the "Failed to read" prefix **and** the original exception's
+        type and details — so future refactors can't silently drop the
+        parser diagnostics on the floor.
         """
         import terok.lib.core.projects as projects_mod
 
@@ -288,8 +293,15 @@ class TestProject:
             with unittest.mock.patch.object(
                 projects_mod, "_yaml_load", side_effect=_raise_index_error
             ):
-                with pytest.raises(SystemExit, match="Failed to read"):
+                with pytest.raises(SystemExit) as exc_info:
                     load_project("weird")
+        message = str(exc_info.value)
+        assert "Failed to read" in message
+        assert "IndexError" in message
+        assert "string index out of range" in message
+        # Chained cause is preserved so `__cause__` gives debuggers the
+        # full traceback of the underlying scanner crash.
+        assert isinstance(exc_info.value.__cause__, IndexError)
 
     @pytest.mark.parametrize(
         ("project_id", "yaml_text", "expected"),
