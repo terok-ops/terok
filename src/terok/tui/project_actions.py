@@ -480,7 +480,7 @@ class ProjectActionsMixin:
         """
         self._run_wizard_flow()
 
-    @work(exclusive=True)
+    @work(exclusive=True, group="wizard-flow", exit_on_error=False)
     async def _run_wizard_flow(self) -> None:
         """Drive form → review → init-progress, refreshing the list at the end.
 
@@ -489,10 +489,28 @@ class ProjectActionsMixin:
         screen's ``REVIEW_BACK`` sentinel tells us to re-open the form
         with the user's previous input instead of starting fresh.
         ``None`` from either screen abandons the wizard.
+
+        Any unhandled exception is surfaced as a TUI notification —
+        ``exit_on_error=False`` on the decorator keeps errors from
+        killing the app, but we do not want them silently vanishing
+        either.
         """
+        try:
+            await self._run_wizard_flow_body()
+        except Exception as exc:  # noqa: BLE001 — last-resort wizard error surface
+            self.notify(
+                f"New-project wizard failed: {exc}",
+                severity="error",
+                timeout=15,
+            )
+            raise
+
+    async def _run_wizard_flow_body(self) -> None:
+        """Inner wizard orchestration — see the decorator wrapper for docs."""
         from ..lib.domain.wizards.new_project import render_project_yaml
         from .wizard_screens import (
             REVIEW_BACK,
+            InitOutcome,
             InitProgressScreen,
             ProjectReviewScreen,
             WizardFormScreen,
@@ -517,7 +535,6 @@ class ProjectActionsMixin:
             break
 
         outcome = await self.push_screen_wait(InitProgressScreen(values["project_id"], final_yaml))
-        from .wizard_screens import InitOutcome
 
         match outcome:
             case InitOutcome.SUCCESS:

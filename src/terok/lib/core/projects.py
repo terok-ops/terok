@@ -99,15 +99,32 @@ def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
 
 
 def _parse_project_yaml(cfg_path: Path) -> RawProjectYaml:
-    """Parse and validate a project.yml file, returning a typed model."""
+    """Parse and validate a project.yml file, returning a typed model.
+
+    Any error reading or parsing the file — including internal crashes
+    from the YAML library itself — is converted into a single
+    ``SystemExit`` with the path embedded in the message.  The narrow
+    catch list (OSError, UnicodeDecodeError, YAMLError) would let
+    ruamel.yaml's own quirks (``IndexError`` on certain inputs,
+    ``AttributeError`` mid-scan, etc.) escape and crash whatever
+    called us — the TUI's project-list keypress handler was one such
+    path.  ``discover_projects`` already treats ``SystemExit`` from
+    this module as "broken project" and surfaces the entry in-UI, so
+    the robust policy is: no matter what goes wrong per file, the app
+    keeps running and the user sees a damaged project in the list.
+    """
     try:
         raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, YAMLError) as exc:
-        raise SystemExit(f"Failed to read {cfg_path}: {exc}")
+        raise SystemExit(f"Failed to read {cfg_path}: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — YAML parsers can raise anything; quarantine it
+        raise SystemExit(f"Failed to read {cfg_path}: {type(exc).__name__}: {exc}") from exc
     try:
         return RawProjectYaml.model_validate(raw)
     except ValidationError as exc:
-        raise SystemExit(_format_validation_error(exc, cfg_path))
+        raise SystemExit(_format_validation_error(exc, cfg_path)) from exc
+    except Exception as exc:  # noqa: BLE001 — defensive against non-Validation pydantic surprises
+        raise SystemExit(f"Failed to validate {cfg_path}: {type(exc).__name__}: {exc}") from exc
 
 
 def _resolve_shield_config(raw: RawProjectYaml) -> tuple[bool, str]:

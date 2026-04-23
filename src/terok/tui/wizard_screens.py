@@ -424,11 +424,21 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
                         classes="wizard-init-step",
                         id=self._step_id(key),
                     )
-            # Hidden until ssh-init runs + upstream is SSH-scheme
+            # Hidden until ssh-init runs + upstream is SSH-scheme.  A
+            # ``Static`` (rather than ``TextArea``) renders selectable
+            # plain text without the editor's line-number gutter or
+            # cursor — copying from the terminal's mouse works cleanly,
+            # and the "Copy" button bypasses that path entirely via the
+            # shared clipboard helper.
             with Vertical(id="wizard-init-ssh-key"):
                 yield Label("SSH public key — register this on your git remote:")
-                yield TextArea("", id="wizard-init-ssh-pubkey", read_only=True)
-                with Horizontal():
+                yield Static("", id="wizard-init-ssh-pubkey")
+                with Horizontal(id="wizard-init-ssh-buttons"):
+                    yield Button(
+                        "Copy",
+                        id="wizard-init-ssh-copy",
+                        variant="default",
+                    )
                     yield Button(
                         "I've registered the key — continue",
                         id="wizard-init-ssh-continue",
@@ -451,32 +461,48 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
         """
         self._run_init_with_confirm()
 
-    @work(exclusive=True)
+    # Distinct ``group`` from the outer wizard flow is essential:
+    # ``@work(exclusive=True)`` cancels every running worker sharing the
+    # same group, so inheriting the default "default" group would have
+    # the init worker cancel its own parent the moment it started —
+    # symptom: click "Initialize" on the review screen, the init modal
+    # pops off immediately, and the wizard silently completes with no
+    # project created.  Keep these two groups isolated.
+    @work(exclusive=True, group="wizard-init", exit_on_error=False)
     async def _run_init_with_confirm(self) -> None:
-        """Top-level coroutine that sequences overwrite-confirm → write → run."""
-        log = self.query_one("#wizard-init-log", RichLog)
-        existing = self._existing_project_yaml_path()
-        if existing is not None:
-            if not await self._confirm_overwrite(existing):
-                log.write(
-                    "[yellow]Keeping existing project.yml — nothing written, "
-                    "nothing initialised.[/]"
-                )
-                # A declined overwrite is the user's deliberate choice —
-                # not a failure — so the screen dismisses with a distinct
-                # outcome the caller can branch on.
-                self._outcome = InitOutcome.DECLINED
-                self._finish_with_close_button()
-                return
+        """Top-level coroutine that sequences overwrite-confirm → write → run.
 
-        log.write(f"[dim]Writing project.yml for {self._project_id}…[/]")
+        The outer try/except is a safety net: any unexpected exception
+        from confirm/write/run is logged and the Close button is
+        enabled, so a user is never stuck in front of a frozen modal
+        wondering why nothing is happening.
+        """
+        log = self.query_one("#wizard-init-log", RichLog)
         try:
-            write_project_yaml(self._project_id, self._rendered_yaml, overwrite=True)
-        except (OSError, SystemExit) as exc:
-            log.write(f"[red]Failed to write project.yml: {exc}[/]")
+            existing = self._existing_project_yaml_path()
+            if existing is not None:
+                if not await self._confirm_overwrite(existing):
+                    log.write(
+                        "[yellow]Keeping existing project.yml — nothing written, "
+                        "nothing initialised.[/]"
+                    )
+                    # A declined overwrite is the user's deliberate choice —
+                    # not a failure — so the screen dismisses with a distinct
+                    # outcome the caller can branch on.
+                    self._outcome = InitOutcome.DECLINED
+                    return
+
+            log.write(f"[dim]Writing project.yml for {self._project_id}…[/]")
+            try:
+                write_project_yaml(self._project_id, self._rendered_yaml, overwrite=True)
+            except (OSError, SystemExit) as exc:
+                log.write(f"[red]Failed to write project.yml: {exc}[/]")
+                return
+            await self._run_init()
+        except Exception as exc:  # noqa: BLE001 — modal must never freeze silently
+            log.write(f"[red]Unexpected wizard error: {exc}[/]")
+        finally:
             self._finish_with_close_button()
-            return
-        await self._run_init()
 
     def _existing_project_yaml_path(self) -> Path | None:
         """Return the on-disk ``project.yml`` path if it already exists, else None."""
@@ -561,7 +587,6 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
 
         from terok.lib.core.projects import load_project
         from terok.lib.domain.facade import (
-            build_images,
             generate_dockerfiles,
             make_git_gate,
             provision_ssh_key,
@@ -579,7 +604,10 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             log.write(f"[green]✓[/] SSH key minted: {result['comment']}")
 
             if project_needs_key_registration(self._project_id):
-                self.query_one("#wizard-init-ssh-pubkey", TextArea).text = result["public_line"]
+                self.query_one("#wizard-init-ssh-pubkey", Static).update(result["public_line"])
+                # Stash for the Copy button handler — Static doesn't keep
+                # the raw text the way TextArea.text does.
+                self._ssh_pub_line = result["public_line"]
                 self.query_one("#wizard-init-ssh-key").styles.display = "block"
                 log.write(
                     "[yellow]Register the public key on the git remote, then click Continue.[/]"
@@ -600,13 +628,22 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
                 await asyncio.to_thread(generate_dockerfiles, self._project_id)
             self._mark("generate", "done")
 
-            # Step 3: Build
+            # Step 3: Build.  ``build_images`` invokes ``podman build``
+            # subprocesses that inherit the caller's stdout/stderr file
+            # descriptors; left alone, their raw output *corrupts the
+            # TUI frame* (colour codes, cursor moves, et al.).  We run
+            # the whole build in a fresh Python subprocess whose fds
+            # are captured by ``subprocess.run`` — parent-side fds stay
+            # untouched no matter what the build crashes on.  A proper
+            # log-tailer widget that streams subprocess output into
+            # this pane is tracked in issue #473.
             self._mark("build", "running", "this can take several minutes")
             log.write(
-                "[dim]Running image build in the background — podman's output goes to the "
-                "terminal that launched terok, not this pane.[/]"
+                "[dim]Running image build in a subprocess (output suppressed to keep "
+                "the TUI intact; watch `podman images`, or see #473 for the planned "
+                "log-tailer widget).[/]"
             )
-            await asyncio.to_thread(build_images, self._project_id)
+            await asyncio.to_thread(_build_in_subprocess, self._project_id)
             self._mark("build", "done")
 
             # Step 4: Gate sync — load_project to read gate_enabled
@@ -644,8 +681,10 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
                 if "⋯" in str(widget.renderable):
                     self._mark(key, "failed", str(exc))
                     break
-        finally:
-            self._finish_with_close_button()
+        # Close-button enabling is consolidated in the outer
+        # ``_run_init_with_confirm`` finally — keeping it there prevents
+        # the button from flashing enabled then disabled between the
+        # two coroutines.
 
     # ── Button handlers ───────────────────────────────────────────────
 
@@ -653,6 +692,25 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
     def _on_ssh_continue(self) -> None:
         if self._ssh_continue is not None:
             self._ssh_continue.set()
+
+    @on(Button.Pressed, "#wizard-init-ssh-copy")
+    def _on_ssh_copy(self) -> None:
+        """Copy the SSH public key to the system clipboard via the shared helper."""
+        from .clipboard import copy_to_clipboard_detailed
+
+        key = getattr(self, "_ssh_pub_line", "")
+        if not key:
+            return
+        result = copy_to_clipboard_detailed(key)
+        if result.ok:
+            self.notify("SSH public key copied to clipboard.")
+        else:
+            hint = result.hint or result.error or "no clipboard helper found"
+            self.notify(
+                f"Copy failed: {hint}",
+                severity="warning",
+                timeout=10,
+            )
 
     @on(Button.Pressed, "#wizard-init-close")
     def _on_close(self) -> None:
@@ -685,3 +743,35 @@ def _log_capture(log: RichLog):
             text = buffer.getvalue().rstrip()
             if text:
                 log.write(text)
+
+
+def _build_in_subprocess(project_id: str) -> None:
+    """Run :func:`build_images` in a child Python process.
+
+    Isolating the build in a subprocess is the robust way to keep
+    ``podman build``'s inherited stdout/stderr from scrambling the
+    Textual frame: the child gets its own fds, ``capture_output``
+    swallows them, and the parent's terminal is untouched regardless
+    of what the build prints (or crashes with).
+
+    Any non-zero exit propagates as ``RuntimeError`` carrying the last
+    few KiB of the child's stderr, which the wizard's worker already
+    logs as the failed-step's detail.  Proper streaming (subprocess
+    stdout → RichLog via a reader thread) is tracked in issue #473 —
+    this is the minimum-viable isolation, not the final UX.
+    """
+    import subprocess  # noqa: S404 — launching a known python interpreter with fixed argv
+    import sys
+
+    # Literal repr keeps project_id safely escaped into the -c body.
+    child_body = f"from terok.lib.domain.facade import build_images; build_images({project_id!r})"
+    result = subprocess.run(  # noqa: S603 — argv is sys.executable + -c + terok code we control
+        [sys.executable, "-c", child_body],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        tail = (result.stderr or result.stdout or "").strip().splitlines()
+        snippet = "\n".join(tail[-20:]) if tail else "(no output)"
+        raise RuntimeError(f"build_images exited with code {result.returncode}:\n{snippet}")
