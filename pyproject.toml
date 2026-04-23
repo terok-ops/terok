@@ -50,8 +50,11 @@ textual-serve = ">=1.1.0"
 # bumps its own sandbox pin to upstream master so Poetry doesn't reject
 # the dual pin sources here.  Release script flips both to URL pins
 # before cutting.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.115/terok_executor-0.0.115-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.96/terok_sandbox-0.0.96-py3-none-any.whl"}
+# DEV-TIME BRANCH PIN — executor's chore/bump-sandbox-0.0.97 branch
+# aligns its sandbox URL pin with ours (0.0.97) so Poetry converges.
+# Release script flips this to the next executor wheel URL at merge.
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "chore/bump-sandbox-0.0.97"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.97/terok_sandbox-0.0.97-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.31/terok_shield-0.6.31-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.3/terok_clearance-0.6.3-py3-none-any.whl"}
 
@@ -106,7 +109,6 @@ terokctl = "terok.cli.main:terokctl_main"
 terok-tui = "terok.tui.app:main"
 terok-web = "terok.tui.serve:main"
 terok-clearance = "terok.tui.clearance_screen:main"
-terok-clearance-notifier = "terok.clearance.notifier.app:main"
 terok-gate = "terok_sandbox.gate.server:main"
 
 [tool.ruff]

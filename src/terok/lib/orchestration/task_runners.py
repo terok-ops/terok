@@ -59,6 +59,7 @@ from .tasks import (
     container_name,
     load_task_meta,
     task_new,
+    tasks_meta_dir,
     update_task_exit_code,
 )
 
@@ -460,14 +461,20 @@ def _run_container(
         command: Optional command + args appended after the image name.
         hooks: Optional lifecycle callbacks fired around the launch.
     """
-    # OCI annotations picked up by terok.clearance.identity to render
-    # task-aware clearance popups.  Shield already writes its own set
-    # through the same path; these are additive.
+    # OCI annotations picked up by ``terok_clearance.IdentityResolver``
+    # to render task-aware clearance popups.  Shield writes its own set
+    # through the same path; these are additive.  The ``task_meta_path``
+    # annotation is a data contract: clearance reads the YAML at that
+    # path on every dispatch, so a ``task_rename`` mid-run surfaces the
+    # fresh name in the next popup without touching the annotation.
+    task_meta_path = tasks_meta_dir(project.id) / f"{task_id}.yml"
     annotations = [
         "--annotation",
         f"ai.terok.project={project.id}",
         "--annotation",
         f"ai.terok.task={task_id}",
+        "--annotation",
+        f"ai.terok.task_meta_path={task_meta_path}",
     ]
     merged_args = annotations + list(extra_args or ()) + _project_runtime_flags(project)
     try:

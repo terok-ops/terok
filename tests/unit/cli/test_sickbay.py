@@ -713,11 +713,16 @@ class TestCheckShieldAnnotations:
         assert mock_check.call_args.args[1] == "g1abc"
 
 
-class TestCheckClearanceHub:
-    """Drift probe on the ``terok-clearance-hub.service`` unit."""
+class TestCheckClearanceStack:
+    """Unified drift probe over the clearance hub + verdict + notifier triple.
+
+    ``terok_clearance.check_units_outdated`` returns a single warning
+    string when any of the three units are stale or half-installed,
+    so sickbay collapses the previous per-unit checks into one stage.
+    """
 
     def test_current_version_is_ok(self) -> None:
-        from terok.cli.commands.sickbay import _check_clearance_hub
+        from terok.cli.commands.sickbay import _check_clearance_stack
 
         with (
             unittest.mock.patch(
@@ -727,28 +732,25 @@ class TestCheckClearanceHub:
                 "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=1
             ),
         ):
-            sev, label, detail = _check_clearance_hub()
+            sev, label, detail = _check_clearance_stack()
         assert sev == "ok"
-        assert label == "Clearance hub"
+        assert label == "Clearance stack"
         assert "terok-clearance-hub.service v1" in detail
 
     def test_outdated_is_warn(self) -> None:
-        from terok.cli.commands.sickbay import _check_clearance_hub
+        from terok.cli.commands.sickbay import _check_clearance_stack
 
-        with (
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._clearance_check_units_outdated",
-                return_value="is outdated (installed unversioned, expected v1) — rerun `terok setup`.",
-            ),
+        with unittest.mock.patch(
+            "terok.cli.commands.sickbay._clearance_check_units_outdated",
+            return_value="is outdated (installed unversioned, expected v1) — rerun setup.",
         ):
-            sev, _, detail = _check_clearance_hub()
+            sev, _, detail = _check_clearance_stack()
         assert sev == "warn"
         assert "outdated" in detail
-        assert "terok setup" in detail
 
     def test_absent_unit_is_ok_not_installed(self) -> None:
-        """No unit on disk = headless host (or pre-setup) → silent ok."""
-        from terok.cli.commands.sickbay import _check_clearance_hub
+        """No hub unit on disk = headless host (or pre-setup) → silent ok."""
+        from terok.cli.commands.sickbay import _check_clearance_stack
 
         with (
             unittest.mock.patch(
@@ -758,54 +760,6 @@ class TestCheckClearanceHub:
                 "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=None
             ),
         ):
-            sev, _, detail = _check_clearance_hub()
-        assert sev == "ok"
-        assert "not installed" in detail
-
-
-class TestCheckClearanceNotifier:
-    """Drift probe on the ``terok-clearance-notifier.service`` unit."""
-
-    def test_current_version_is_ok(self) -> None:
-        from terok.cli.commands.sickbay import _check_clearance_notifier
-
-        with (
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._notifier_check_units_outdated", return_value=None
-            ),
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._notifier_read_unit_version", return_value=2
-            ),
-        ):
-            sev, label, detail = _check_clearance_notifier()
-        assert sev == "ok"
-        assert label == "Clearance notifier"
-        assert "terok-clearance-notifier.service v2" in detail
-
-    def test_outdated_is_warn(self) -> None:
-        from terok.cli.commands.sickbay import _check_clearance_notifier
-
-        with (
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._notifier_check_units_outdated",
-                return_value="is outdated (installed v1, expected v2) — rerun `terok setup`.",
-            ),
-        ):
-            sev, _, detail = _check_clearance_notifier()
-        assert sev == "warn"
-        assert "v1" in detail and "v2" in detail
-
-    def test_absent_unit_is_ok_not_installed(self) -> None:
-        from terok.cli.commands.sickbay import _check_clearance_notifier
-
-        with (
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._notifier_check_units_outdated", return_value=None
-            ),
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay._notifier_read_unit_version", return_value=None
-            ),
-        ):
-            sev, _, detail = _check_clearance_notifier()
+            sev, _, detail = _check_clearance_stack()
         assert sev == "ok"
         assert "not installed" in detail

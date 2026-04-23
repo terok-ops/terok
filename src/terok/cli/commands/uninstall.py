@@ -3,11 +3,15 @@
 
 """Mirror of ``terok setup``: tears down everything the bootstrap installs.
 
-Runs the phases in reverse install order — desktop entry first (most
-user-visible), then the D-Bus bridge, then the sandbox aggregator
-(gate → vault → shield hooks).  The vault credential DB is left on
-disk so a re-install picks up the operator's tokens and SSH keys
-without a fresh auth cycle; ``--purge-credentials`` deletes it.
+Reverse install order: desktop entry first (most user-visible), then
+the sandbox aggregator's symmetric uninstall (clearance hub/verdict/
+notifier → gate → vault → shield hooks).  The NFLOG reader script is
+a shield artefact that the sandbox aggregator's shield phase doesn't
+clean up today, so we tear it down alongside the aggregator call.
+
+The vault credential DB is left on disk so a re-install picks up the
+operator's tokens and SSH keys without a fresh auth cycle;
+``--purge-credentials`` deletes it.
 """
 
 from __future__ import annotations
@@ -25,10 +29,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "uninstall",
         help="Remove everything `terok setup` installed",
         description=(
-            "Symmetric teardown of `terok setup` — removes desktop entry, "
-            "D-Bus bridge, gate, vault, and shield hooks from user-local "
-            "directories.  The vault credential DB is preserved unless "
-            "--purge-credentials is passed.  Safe to re-run."
+            "Symmetric teardown of `terok setup` — removes desktop entry "
+            "plus the full sandbox stack (clearance, gate, vault, shield "
+            "hooks, NFLOG reader) via the sandbox aggregator.  The vault "
+            "credential DB is preserved unless --purge-credentials is passed."
         ),
     )
     p.add_argument(
@@ -42,14 +46,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Skip the XDG desktop entry removal",
     )
     p.add_argument(
-        "--no-dbus-bridge",
-        action="store_true",
-        help="Skip the D-Bus clearance bridge removal",
-    )
-    p.add_argument(
         "--no-sandbox",
         action="store_true",
-        help="Skip the shield+vault+gate teardown",
+        help="Skip the sandbox stack teardown (shield + vault + gate + clearance)",
     )
     p.add_argument(
         "--purge-credentials",
@@ -65,7 +64,6 @@ def dispatch(args: argparse.Namespace) -> bool:
     cmd_uninstall(
         root=getattr(args, "root", False),
         no_desktop_entry=getattr(args, "no_desktop_entry", False),
-        no_dbus_bridge=getattr(args, "no_dbus_bridge", False),
         no_sandbox=getattr(args, "no_sandbox", False),
         purge_credentials=getattr(args, "purge_credentials", False),
     )
@@ -79,31 +77,25 @@ def cmd_uninstall(
     *,
     root: bool = False,
     no_desktop_entry: bool = False,
-    no_dbus_bridge: bool = False,
     no_sandbox: bool = False,
     purge_credentials: bool = False,
 ) -> None:
     """Tear down every phase ``terok setup`` installs.
 
-    Phase order is the reverse of install: user-visible surfaces first
-    (desktop entry), then operator-visible surfaces (D-Bus bridge),
-    then the sandbox stack.  A running container survives a gate/vault
-    teardown more gracefully than it survives losing its shield hooks,
-    so shield-hooks go last.
+    Desktop entry first (user-visible surface), sandbox aggregator
+    next (does clearance → gate → vault → shield in reverse install
+    order), credential DB last (only when ``--purge-credentials``).
+    A running container survives a gate/vault teardown more gracefully
+    than it survives losing its shield hooks, so the aggregator's
+    order keeps shield-hooks last.
     """
     print(_bold("\nUninstalling terok host services\n"))
 
     all_ok = True
-
     if not no_desktop_entry:
         all_ok &= _uninstall_desktop_entry()
-
-    if not no_dbus_bridge:
-        all_ok &= _uninstall_dbus_bridge()
-
     if not no_sandbox:
-        all_ok &= _uninstall_sandbox_services(root=root)
-
+        all_ok &= _uninstall_sandbox_stack(root=root)
     if purge_credentials:
         all_ok &= _purge_credential_db()
 
@@ -132,45 +124,29 @@ def _uninstall_desktop_entry() -> bool:
     return True
 
 
-def _uninstall_dbus_bridge() -> bool:
-    """Remove the NFLOG reader resource + clearance hub/verdict pair.
+def _uninstall_sandbox_stack(*, root: bool) -> bool:
+    """Remove the NFLOG reader script, then delegate the rest to the aggregator.
 
-    ``terok_clearance.uninstall_service`` owns the systemctl teardown
-    + unlink + daemon-reload sequence for both units — including
-    migration of a legacy pre-split ``terok-dbus.service`` — so this
-    stage is thin on top of it.
+    The aggregator's shield-hooks teardown doesn't touch the reader
+    script today — a shield-side bug that's filed as deferred work.
+    Handle it here until shield's ``run_uninstall`` subsumes it; the
+    reader is harmless without the hooks that feed it, but leaving
+    orphans on disk is the wrong default.
     """
-    from terok_clearance import uninstall_service
-    from terok_sandbox import uninstall_shield_bridge
+    from terok_sandbox import sandbox_uninstall, uninstall_shield_bridge
 
-    _stage_begin("Clearance bridge")
+    _stage_begin("Sandbox stack")
     try:
         uninstall_shield_bridge()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — soft-fail, next step is authoritative
         print(f"{_status_label(False)} (reader: {exc})")
         return False
-
     try:
-        uninstall_service()
-    except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False)} (hub/verdict teardown: {exc})")
-        return False
-
-    print(f"{_status_label(True)} (removed)")
-    return True
-
-
-def _uninstall_sandbox_services(*, root: bool) -> bool:
-    """Delegate gate + vault + shield-hooks teardown to the sandbox aggregator."""
-    from terok_sandbox.commands import _handle_sandbox_uninstall
-
-    _stage_begin("Sandbox services")
-    try:
-        _handle_sandbox_uninstall(root=root)
-    except (SystemExit, Exception) as exc:  # noqa: BLE001
+        sandbox_uninstall(root=root)
+    except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
         print(f"{_status_label(False)} ({exc})")
         return False
-    print(f"  {_status_label(True)} (shield + vault + gate removed)")
+    print(f"  {_status_label(True)} (clearance + gate + vault + shield removed)")
     return True
 
 
