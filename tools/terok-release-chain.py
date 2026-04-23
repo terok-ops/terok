@@ -49,27 +49,46 @@ console = Console(stderr=True)
 # ── Attention-grabbing interactive prompts ────────────────────────────────
 #
 # Long stages (clones, CI waits) make it easy for the operator to wander
-# off.  Every confirmation/prompt goes through these helpers: terminal
-# bell + a reverse-video banner in the one colour the rest of the script
-# does not use, so the prompt stands out in peripheral vision.
+# off.  Every confirmation/prompt routes through these helpers — terminal
+# bell plus a reverse-video banner in a colour used nowhere else — so
+# the prompt lands in peripheral vision instead of scrolling past.
 
 
 def _alert_banner(text: str) -> None:
-    """Emit terminal bell and an attention-styled banner line."""
+    """Pull the operator's eyes back to the terminal: bell + banner."""
     console.bell()
     console.print(f"\n[black on bright_yellow] {text} [/]")
 
 
 def alert_confirm(prompt: str, **kwargs: Any) -> bool:
-    """``click.confirm`` preceded by a bell + attention banner."""
+    """Ask a yes/no question loudly enough that a distracted operator notices."""
     _alert_banner("INPUT NEEDED")
     return click.confirm(prompt, **kwargs)
 
 
 def alert_prompt(prompt: str, **kwargs: Any) -> Any:
-    """``click.prompt`` preceded by a bell + attention banner."""
+    """Ask for free-form input loudly enough that a distracted operator notices."""
     _alert_banner("INPUT NEEDED")
     return click.prompt(prompt, **kwargs)
+
+
+# ── Domain types ──────────────────────────────────────────────────────────
+#
+# Aliases that read like the domain: "sibling-dep graph" not "dict of str
+# to list of str".  Used at module boundaries where the shape matters for
+# the reader.
+
+DepGraph = dict[str, list[str]]
+"""Package → in-chain packages it depends on."""
+
+SiblingVersions = dict[str, str]
+"""Sibling package → version string to pin for it."""
+
+PrSpecs = dict[str, int]
+"""Package → GitHub PR number (the release-from-PR workflow)."""
+
+ReleasedVersions = dict[str, str]
+"""Package → new version string, for packages already processed in this run."""
 
 
 # ── Chain config ──────────────────────────────────────────────────────────
@@ -78,27 +97,51 @@ def alert_prompt(prompt: str, **kwargs: Any) -> Any:
 
 CHAIN = ["terok-clearance", "terok-shield", "terok-sandbox", "terok-executor", "terok"]
 
-DEPS: dict[str, list[str]] = {
+# Declared sibling-dep graph.  A human-readable audit of the chain shape;
+# the planner cross-checks it against each package's live ``pyproject.toml``
+# after cloning and aborts on any drift (see ``_verify_dep_graph``).  When
+# you add a new inter-package dep, update both this table and the
+# consuming package's ``pyproject.toml`` in the same PR — otherwise the
+# next release will fail fast with a diff.
+DEPS: DepGraph = {
     "terok-clearance": [],
     "terok-shield": ["terok-clearance"],
     "terok-sandbox": ["terok-shield"],
     "terok-executor": ["terok-sandbox"],
-    # terok pins terok-shield directly (src/terok/cli/commands/shield.py
-    # imports from it), so it must be in this list even though shield would
-    # also come transitively via sandbox.  Without it, a release that
-    # converts sandbox's branch-pin to a release-URL pin leaves shield as
-    # a leftover branch-pin, and Poetry can't reconcile the branch HEAD
-    # version against the shield version sandbox's release wheel declares.
     "terok": ["terok-executor", "terok-sandbox", "terok-shield", "terok-clearance"],
 }
 
-ALIASES = {
-    "clearance": "terok-clearance",
-    "shield": "terok-shield",
-    "sandbox": "terok-sandbox",
-    "executor": "terok-executor",
-    "terok": "terok",
-} | {n: n for n in CHAIN}
+# Shorthand → canonical repo name.  Derived from CHAIN so there is no
+# second list to keep in sync.  ``terok`` has no prefix to strip, so its
+# shorthand coincides with its canonical name.
+ALIASES = {repo.removeprefix("terok-"): repo for repo in CHAIN} | {repo: repo for repo in CHAIN}
+
+
+# ── Tuning ────────────────────────────────────────────────────────────────
+#
+# Operational knobs — timeouts, poll intervals, and the string literals
+# that branch names, commit messages and PR labels are built from.
+# Gathered here so policy changes don't require hunting through the
+# executor.  Seconds everywhere unless noted.
+
+DEFAULT_CHECK_TIMEOUT = 1800  # 30 min — long enough for a full CI matrix
+DEFAULT_WHEEL_TIMEOUT = 300
+
+CHECK_POLL_INTERVAL = 2
+CHECK_GRACE_WINDOW = 30  # leniency before missing check data becomes a hard fail
+CHECK_STATE_RECHECK = 10  # cadence for PR-state (MERGED/CLOSED) lookups
+
+WHEEL_POLL_INTERVAL = 5
+WHEEL_HEAD_TIMEOUT = 10  # per HEAD probe of the actual download URL
+
+MERGE_RACE_POLL_COUNT = 15
+MERGE_RACE_POLL_INTERVAL = 2
+
+RELEASE_BRANCH_PREFIX = "chore/release-"
+BUMP_DEPS_BRANCH_PREFIX = "chore/bump-deps"
+RELEASE_COMMIT_PREFIX = "chore: release"
+BUMP_DEPS_COMMIT = "chore: bump sibling deps"
+AUTOMATED_RELEASE_LABEL = "automated-release"
 
 
 def die(msg: str) -> Never:
@@ -225,14 +268,14 @@ class Plan(BaseModel):
 
 @dataclass
 class Ctx:
-    """Mutable runtime state for the executor."""
+    """Mutable runtime state threaded through executor calls."""
 
     cache_dir: Path
     dry_run: bool = False
     auto_yes: bool = False
     skip_checks: bool = False
-    check_timeout: int = 1800
-    wheel_timeout: int = 300
+    check_timeout: int = DEFAULT_CHECK_TIMEOUT
+    wheel_timeout: int = DEFAULT_WHEEL_TIMEOUT
     plan_path: Path | None = None
 
 
@@ -300,6 +343,58 @@ def pinned_version(path: Path, dep_repo: str, org: str) -> str | None:
     """Extract version from a URL wheel dep, or None if git/missing."""
     m = re.search(rf"{org}/{dep_repo}/releases/download/v([^/]+)/", path.read_text())
     return m.group(1) if m else None
+
+
+# ── Dep-graph verifier ────────────────────────────────────────────────────
+#
+# ``DEPS`` is the declared (vendored) chain shape.  Every ``pyproject.toml``
+# in the cloned workspace is reality.  Before the planner emits any step,
+# we reconcile the two — a stale sibling pin in a pyproject (or a missing
+# entry in DEPS) means the planner would silently ship a release with a
+# stale transitive pin, which is exactly the class of bug that motivated
+# this verifier.  So: fail fast with a diff, no heuristic recovery.
+
+
+def _discover_sibling_deps(pyproject_path: Path, chain: list[str]) -> list[str]:
+    """CHAIN members that appear as dependency keys in ``pyproject_path``.
+
+    Matches both hyphen (``terok-shield``) and underscore (``terok_shield``)
+    forms, since Poetry accepts either.  Ordered by CHAIN position.
+    """
+    _, deps = _toml_deps(pyproject_path)
+    return [m for m in chain if m in deps or pkg_name(m) in deps]
+
+
+def _verify_dep_graph(chain: list[str], cache_dir: Path) -> DepGraph:
+    """Cross-check vendored ``DEPS`` against each cloned ``pyproject.toml``.
+
+    Walks the whole chain first, collects every discrepancy, then calls
+    ``die()`` once with a combined diff — one bad run should surface *all*
+    drift in a single shot so the operator can fix everything before the
+    next attempt, not one mismatch at a time.  Returns the verified live
+    graph (identical to ``DEPS`` after a successful check).
+    """
+    live: DepGraph = {}
+    mismatches: list[str] = []
+    for repo in chain:
+        found = _discover_sibling_deps(cache_dir / repo / "pyproject.toml", chain)
+        declared = DEPS.get(repo, [])
+        live[repo] = found
+        if set(found) != set(declared):
+            mismatches.append(
+                f"  {repo}:\n"
+                f"    declared in DEPS:   {declared or '[]'}\n"
+                f"    found in pyproject: {found or '[]'}"
+            )
+    if mismatches:
+        die(
+            "Dependency graph mismatch between vendored DEPS and live pyproject.toml:\n\n"
+            + "\n".join(mismatches)
+            + "\n\nReconcile before releasing: either update DEPS in this script "
+            "(if the sibling dep is legitimate and newly added) or remove the "
+            "stale pin from the package's pyproject.toml."
+        )
+    return live
 
 
 # ── Clone cache ───────────────────────────────────────────────────────────
@@ -398,7 +493,14 @@ def _check_gh_version() -> None:
 
 
 def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
-    """Wait for CI. Returns 'passed' or 'merged'."""
+    """Block until CI settles on the PR.
+
+    Returns ``"passed"`` when all checks are green, or ``"merged"`` if
+    somebody merged the PR out-of-band while we were waiting.  On a
+    check failure, prompts the operator to force-merge; on a flat
+    timeout, calls ``die()``.  The grace window tolerates the brief gap
+    between push and check registration.
+    """
     if ctx.skip_checks:
         console.print("[yellow]Skipping CI checks[/]")
         return "passed"
@@ -407,10 +509,9 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
         return "passed"
 
     console.print(f"Waiting for PR checks (timeout {ctx.check_timeout}s)...")
-    grace, poll = 30, 2
 
-    for elapsed in range(0, ctx.check_timeout, poll):
-        if elapsed and elapsed % 10 == 0:
+    for elapsed in range(0, ctx.check_timeout, CHECK_POLL_INTERVAL):
+        if elapsed and elapsed % CHECK_STATE_RECHECK == 0:
             st = pr_state(pr_url, gh_repo)
             if st == "MERGED":
                 console.print("[green]PR merged externally.[/]")
@@ -425,16 +526,16 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
         )
 
         if r.returncode not in (0, 8) and not r.stdout.strip():
-            if elapsed < grace:
-                time.sleep(poll)
+            if elapsed < CHECK_GRACE_WINDOW:
+                time.sleep(CHECK_POLL_INTERVAL)
                 continue
             detail = (r.stderr or r.stdout or "").strip()
             die(f"gh pr checks failed (exit {r.returncode}): {detail}")
 
         checks = json.loads(r.stdout) if r.stdout.strip() else []
         if not checks:
-            if elapsed < grace:
-                time.sleep(poll)
+            if elapsed < CHECK_GRACE_WINDOW:
+                time.sleep(CHECK_POLL_INTERVAL)
                 continue
             console.print("[green]No checks configured.[/]")
             return "passed"
@@ -443,7 +544,7 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
         failing = [c for c in checks if c["bucket"] in ("fail", "cancel")]
 
         if pending:
-            time.sleep(poll)
+            time.sleep(CHECK_POLL_INTERVAL)
             continue
         if not failing:
             console.print("[green]All checks passed![/]")
@@ -461,8 +562,24 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
     die(f"Timed out after {ctx.check_timeout}s")
 
 
+def _gh_merge_commit(pr_url: str, gh_repo: str) -> str:
+    """Commit SHA that the PR was merged into."""
+    r = sh(
+        "gh", "pr", "view", pr_url, "--repo", gh_repo,
+        "--json", "mergeCommit", "--jq", ".mergeCommit.oid",
+        capture=True,
+    )  # fmt: skip
+    return r.stdout.strip()
+
+
 def squash_merge(pr_url: str, gh_repo: str) -> str:
-    """Squash-merge PR. Returns merge SHA. Handles race conditions."""
+    """Squash-merge the PR and return the resulting master commit SHA.
+
+    Tolerates a narrow race: ``gh pr merge`` can report "already in
+    progress" or "already merged" when another automation (or a fast
+    operator) got there first — in that case we poll PR state briefly
+    rather than giving up.
+    """
     console.print("Squash-merging PR...")
     r = subprocess.run(
         ["gh", "pr", "merge", pr_url, "--repo", gh_repo, "--squash", "--delete-branch", "--admin"],
@@ -473,76 +590,56 @@ def squash_merge(pr_url: str, gh_repo: str) -> str:
         err = r.stderr + r.stdout
         if "already in progress" in err or "already been merged" in err:
             console.print("[yellow]Merge race — waiting...[/]")
-            for _ in range(15):
+            for _ in range(MERGE_RACE_POLL_COUNT):
                 if pr_state(pr_url, gh_repo) == "MERGED":
                     break
-                time.sleep(2)
+                time.sleep(MERGE_RACE_POLL_INTERVAL)
             else:
-                die("PR still not merged after 30s")
+                die(
+                    f"PR still not merged after {MERGE_RACE_POLL_COUNT * MERGE_RACE_POLL_INTERVAL}s"
+                )
         else:
             die(f"Merge failed: {err.strip()}")
 
-    r = sh(
-        "gh",
-        "pr",
-        "view",
-        pr_url,
-        "--repo",
-        gh_repo,
-        "--json",
-        "mergeCommit",
-        "--jq",
-        ".mergeCommit.oid",
-        capture=True,
-    )
-    sha = r.stdout.strip()
+    sha = _gh_merge_commit(pr_url, gh_repo)
     console.print(f"[green]Merged ({sha[:12]})[/]")
     return sha
 
 
 def _wheel_downloadable(url: str) -> bool:
-    """HEAD-check the actual wheel download URL to confirm CDN propagation."""
+    """Whether the wheel is actually downloadable right now (past the GitHub CDN)."""
     req = urllib.request.Request(url, method="HEAD")  # noqa: S310 — GitHub release URL
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=WHEEL_HEAD_TIMEOUT) as resp:  # noqa: S310
             return resp.status == 200  # noqa: PLR2004
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
         return False
 
 
-def wait_for_wheel(repo: str, version: str, org: str, timeout: int = 300):
-    """Poll release assets until the wheel is downloadable.
+def wait_for_wheel(repo: str, version: str, org: str, timeout: int = DEFAULT_WHEEL_TIMEOUT):
+    """Block until the released wheel is downloadable.
 
-    Two-phase check: the GitHub API reports the asset name first, but the
-    actual download URL may 404 briefly while the CDN propagates.  We
-    confirm both before proceeding.
+    Two-phase check: the GitHub API lists the asset name first, then the
+    actual download URL goes live a few seconds later as the CDN
+    propagates.  Only both together mean consumers can poetry-resolve it.
     """
     expected = wheel_filename(repo, version)
     url = wheel_url(org, repo, version)
     console.print(f"Waiting for {expected}...")
     api_ready = False
-    for _elapsed in range(0, timeout, 5):
+    for _elapsed in range(0, timeout, WHEEL_POLL_INTERVAL):
         if not api_ready:
             r = sh(
-                "gh",
-                "release",
-                "view",
-                f"v{version}",
-                "--repo",
-                f"{org}/{repo}",
-                "--json",
-                "assets",
-                "-q",
-                ".assets[].name",
-                capture=True,
-                check=False,
-            )
+                "gh", "release", "view", f"v{version}", "--repo", f"{org}/{repo}",
+                "--json", "assets", "-q", ".assets[].name",
+                capture=True, check=False,
+            )  # fmt: skip
             if expected in (r.stdout or ""):
                 api_ready = True
         if api_ready and _wheel_downloadable(url):
             console.print("[green]Wheel available![/]")
             return
-        time.sleep(5)
+        time.sleep(WHEEL_POLL_INTERVAL)
     die(f"Timed out waiting for {expected}")
 
 
@@ -553,63 +650,97 @@ def _step(pkg: str, seq: int, kind: StepKind, **params: Any) -> Step:
     return Step(id=f"{pkg}.{seq}.{kind}", kind=kind, package=pkg, params=params)
 
 
+def _branch_for(pkg: PackagePlan, release_name: str) -> tuple[str, dict[str, str]]:
+    """Branch name + checkout parameters for *pkg*'s work on this run.
+
+    Three shapes:
+      * reuse a developer's open PR (``source="pr"``);
+      * cut a fresh ``chore/release-X.Y.Z`` from upstream/master;
+      * cut a fresh ``chore/bump-deps[-slug]`` from upstream/master
+        (deps-only / open-top case).
+    """
+    if pkg.pr_branch:
+        return pkg.pr_branch, {"branch": pkg.pr_branch, "source": "pr"}
+    if pkg.action in (Action.RELEASE_MASTER, Action.RELEASE_PR):
+        branch = f"{RELEASE_BRANCH_PREFIX}{pkg.new_version}"
+        return branch, {"branch": branch, "base": "upstream/master"}
+    suffix = slugify(release_name)
+    branch = f"{BUMP_DEPS_BRANCH_PREFIX}{'-' + suffix if suffix else ''}"
+    return branch, {"branch": branch, "base": "upstream/master"}
+
+
 def plan_steps(pkg: PackagePlan, org: str, fork: str, name: str) -> list[Step]:
-    """Generate the step sequence for one package based on its action."""
-    r, s = pkg.repo, 0
-    has_pr = bool(pkg.pr_branch)
+    """Linear step sequence that realises one package's work in the plan."""
     do_release = pkg.action in (Action.RELEASE_MASTER, Action.RELEASE_PR)
     needs_new_pr = pkg.action == Action.RELEASE_MASTER or (
-        pkg.action == Action.DEPS_ONLY and not has_pr
+        pkg.action == Action.DEPS_ONLY and not pkg.pr_branch
     )
 
+    branch, checkout_params = _branch_for(pkg, name)
     title = f"{pkg.new_version} {name}".strip() if pkg.new_version else ""
+    commit_msg = f"{RELEASE_COMMIT_PREFIX} {title}" if do_release else BUMP_DEPS_COMMIT
 
-    if has_pr:
-        branch = pkg.pr_branch
-        base_params = {"branch": branch, "source": "pr"}
-    elif do_release:
-        branch = f"chore/release-{pkg.new_version}"
-        base_params = {"branch": branch, "base": "upstream/master"}
-    else:
-        suffix = slugify(name)
-        branch = f"chore/bump-deps{'-' + suffix if suffix else ''}"
-        base_params = {"branch": branch, "base": "upstream/master"}
+    steps: list[Step] = []
 
-    steps = [_step(r, s, StepKind.CLONE_SYNC)]
-    s += 1
-    steps.append(_step(r, s, StepKind.CHECKOUT, **base_params))
-    s += 1
+    def add(kind: StepKind, **params: Any) -> None:
+        steps.append(_step(pkg.repo, len(steps), kind, **params))
+
+    add(StepKind.CLONE_SYNC)
+    add(StepKind.CHECKOUT, **checkout_params)
     for dep, ver in pkg.sibling_deps.items():
-        steps.append(_step(r, s, StepKind.DEP_UPDATE, dep_repo=dep, dep_version=ver))
-        s += 1
+        add(StepKind.DEP_UPDATE, dep_repo=dep, dep_version=ver)
     if do_release:
-        steps.append(_step(r, s, StepKind.VERSION_BUMP, version=pkg.new_version))
-        s += 1
-    steps.append(_step(r, s, StepKind.POETRY_LOCK))
-    s += 1
-    msg = f"chore: release {title}" if do_release else "chore: bump sibling deps"
-    steps.append(_step(r, s, StepKind.GIT_COMMIT, message=msg))
-    s += 1
-    steps.append(_step(r, s, StepKind.GIT_PUSH, branch=branch, fork=fork))
-    s += 1
+        add(StepKind.VERSION_BUMP, version=pkg.new_version)
+    add(StepKind.POETRY_LOCK)
+    add(StepKind.GIT_COMMIT, message=commit_msg)
+    add(StepKind.GIT_PUSH, branch=branch, fork=fork)
     if needs_new_pr:
-        pr_title = f"chore: release {title}" if do_release else "chore: bump sibling deps"
         pr_body = (
             f"Automated release bump to v{pkg.new_version}."
             if do_release
             else "Automated dependency update."
         )
-        steps.append(_step(r, s, StepKind.PR_CREATE, branch=branch, title=pr_title, body=pr_body))
-        s += 1
+        add(StepKind.PR_CREATE, branch=branch, title=commit_msg, body=pr_body)
     if do_release:
-        steps.append(_step(r, s, StepKind.PR_MERGE))
-        s += 1
-        steps.append(_step(r, s, StepKind.TAG, tag=f"v{pkg.new_version}", title=title))
-        s += 1
-        steps.append(_step(r, s, StepKind.RELEASE, tag=f"v{pkg.new_version}", title=title))
-        s += 1
-        steps.append(_step(r, s, StepKind.WHEEL_POLL, version=pkg.new_version))
+        tag = f"v{pkg.new_version}"
+        add(StepKind.PR_MERGE)
+        add(StepKind.TAG, tag=tag, title=title)
+        add(StepKind.RELEASE, tag=tag, title=title)
+        add(StepKind.WHEEL_POLL, version=pkg.new_version)
     return steps
+
+
+def _resolve_sibling_version(
+    dep: str,
+    repo_deps: list[str],
+    released: ReleasedVersions,
+    planned_pins: dict[str, str],
+    repo_dir: Path,
+    org: str,
+    upgrade_pinned: bool,
+) -> str:
+    """Pick the version to pin for *dep* in the current repo.
+
+    Preference order, most-local first:
+      1. a version we're already shipping in this run (``released``);
+      2. a version an earlier sibling in this run already pinned
+         (``planned_pins`` — keeps the chain internally consistent when
+         two downstream repos share the same upstream);
+      3. the version currently in the repo's own ``pyproject.toml``;
+      4. the latest GitHub release (fallback, or when ``upgrade_pinned``
+         tells us to override the current pin).
+    """
+    if dep in released:
+        return released[dep]
+    for other in repo_deps:
+        if other == dep or other not in released:
+            continue
+        if from_sibling := planned_pins.get(f"{other}:{dep}"):
+            return from_sibling
+    current = pinned_version(repo_dir / "pyproject.toml", dep, org)
+    if current and not upgrade_pinned:
+        return current
+    return latest_version(dep, org)
 
 
 def generate_plan(
@@ -623,12 +754,21 @@ def generate_plan(
     cache_dir: Path,
     stop_at: str | None = None,
     upgrade_pinned: bool = False,
-    pr_specs: dict[str, int] | None = None,
+    pr_specs: PrSpecs | None = None,
     prerelease: bool = False,
 ) -> Plan:
-    """Build a complete release plan for the given chain."""
-    packages, all_steps = [], []
-    released: dict[str, str] = {}
+    """Build the full, serialisable release plan for *chain*.
+
+    Fails fast if any repo's live pyproject.toml disagrees with ``DEPS``.
+    Otherwise emits one ``PackagePlan`` + step sequence per repo, in
+    order; downstream repos pick sibling versions from what upstream
+    repos ship in the same run.
+    """
+    live_deps = _verify_dep_graph(chain, cache_dir)
+
+    packages: list[PackagePlan] = []
+    all_steps: list[Step] = []
+    released: ReleasedVersions = {}
     planned_pins: dict[str, str] = {}
 
     for i, repo in enumerate(chain):
@@ -654,28 +794,15 @@ def generate_plan(
         else:
             action = Action.RELEASE_MASTER
 
-        # Version
         level = version_step if (i == 0 or uniform) else "patch"
         new_ver = bump_version(current, level) if action != Action.DEPS_ONLY else None
 
-        # Resolve sibling deps
-        sibling_deps: dict[str, str] = {}
-        for dep in DEPS.get(repo, []):
-            if dep in released:
-                ver = released[dep]
-            else:
-                # Check planned pins from siblings released in this run
-                ver = None
-                for other in DEPS[repo]:
-                    if other != dep and other in released:
-                        key = f"{other}:{dep}"
-                        if key in planned_pins:
-                            ver = planned_pins[key]
-                            break
-                if not ver:
-                    ver = pinned_version(repo_dir / "pyproject.toml", dep, org)
-                if not ver or upgrade_pinned:
-                    ver = latest_version(dep, org)
+        repo_deps = live_deps[repo]
+        sibling_deps: SiblingVersions = {}
+        for dep in repo_deps:
+            ver = _resolve_sibling_version(
+                dep, repo_deps, released, planned_pins, repo_dir, org, upgrade_pinned
+            )
             sibling_deps[dep] = ver
             planned_pins[f"{repo}:{dep}"] = ver
 
@@ -707,15 +834,26 @@ def generate_plan(
 
 
 def _find_pr_url(package: str, plan: Plan) -> str:
-    """Find the PR URL for a package — from pr_create result or PR number."""
+    """URL of the PR the executor should act on for *package*.
+
+    Prefers the URL captured by an earlier PR_CREATE step (authoritative);
+    falls back to the PR number from a ``--from-prs`` spec.
+    """
     for s in plan.steps:
         if s.package == package and s.kind == StepKind.PR_CREATE and s.result.get("pr_url"):
             return s.result["pr_url"]
-    # Fall back to PR number
     for pkg in plan.packages:
         if pkg.repo == package and pkg.pr_number:
             return str(pkg.pr_number)
     die(f"No PR URL found for {package}")
+
+
+def _merge_sha_for(package: str, plan: Plan) -> str | None:
+    """Commit SHA recorded by *package*'s PR_MERGE step, if it ran."""
+    for s in plan.steps:
+        if s.package == package and s.kind == StepKind.PR_MERGE:
+            return s.result.get("merge_sha")
+    return None
 
 
 def _branch_matches_upstream(repo_dir: Path) -> bool:
@@ -730,7 +868,12 @@ def _branch_matches_upstream(repo_dir: Path) -> bool:
 
 
 def execute_step(step: Step, plan: Plan, ctx: Ctx):
-    """Execute a single step."""
+    """Perform the side-effect prescribed by one plan step.
+
+    All irreversible operations live in this dispatch — the planner
+    decides, the executor acts.  Each case is idempotent where possible
+    so a resumed plan doesn't re-push, re-merge, or re-tag.
+    """
     repo_dir = ctx.cache_dir / step.package
     gh_repo = f"{plan.gh_org}/{step.package}"
     p = step.params
@@ -802,23 +945,13 @@ def execute_step(step: Step, plan: Plan, ctx: Ctx):
                 console.print(f"PR already exists: {step.result['pr_url']}")
             else:
                 r = sh(
-                    "gh",
-                    "pr",
-                    "create",
-                    "--repo",
-                    gh_repo,
-                    "--base",
-                    "master",
-                    "--head",
-                    f"{plan.gh_fork}:{p['branch']}",
-                    "--title",
-                    p["title"],
-                    "--body",
-                    p["body"],
-                    "--label",
-                    "automated-release",
+                    "gh", "pr", "create", "--repo", gh_repo,
+                    "--base", "master",
+                    "--head", f"{plan.gh_fork}:{p['branch']}",
+                    "--title", p["title"], "--body", p["body"],
+                    "--label", AUTOMATED_RELEASE_LABEL,
                     capture=True,
-                )
+                )  # fmt: skip
                 step.result["pr_url"] = r.stdout.strip()
                 console.print(f"PR created: {step.result['pr_url']}")
 
@@ -838,50 +971,17 @@ def execute_step(step: Step, plan: Plan, ctx: Ctx):
                 return
             pr_url = _find_pr_url(step.package, plan)
             # Idempotent: if already merged, just capture the SHA
-            st = pr_state(pr_url, gh_repo)
-            if st == "MERGED":
-                r = sh(
-                    "gh",
-                    "pr",
-                    "view",
-                    pr_url,
-                    "--repo",
-                    gh_repo,
-                    "--json",
-                    "mergeCommit",
-                    "--jq",
-                    ".mergeCommit.oid",
-                    capture=True,
-                )
-                step.result["merge_sha"] = r.stdout.strip()
+            if pr_state(pr_url, gh_repo) == "MERGED":
+                step.result["merge_sha"] = _gh_merge_commit(pr_url, gh_repo)
                 console.print(f"[dim]Already merged ({step.result['merge_sha'][:12]})[/]")
+            elif wait_for_checks(pr_url, gh_repo, ctx) == "merged":
+                step.result["merge_sha"] = _gh_merge_commit(pr_url, gh_repo)
             else:
-                check_result = wait_for_checks(pr_url, gh_repo, ctx)
-                if check_result == "merged":
-                    r = sh(
-                        "gh",
-                        "pr",
-                        "view",
-                        pr_url,
-                        "--repo",
-                        gh_repo,
-                        "--json",
-                        "mergeCommit",
-                        "--jq",
-                        ".mergeCommit.oid",
-                        capture=True,
-                    )
-                    step.result["merge_sha"] = r.stdout.strip()
-                else:
-                    step.result["merge_sha"] = squash_merge(pr_url, gh_repo)
+                step.result["merge_sha"] = squash_merge(pr_url, gh_repo)
 
         case StepKind.TAG:
             sh("git", "fetch", "upstream", cwd=repo_dir)
-            merge_sha = None
-            for s in plan.steps:
-                if s.package == step.package and s.kind == StepKind.PR_MERGE:
-                    merge_sha = s.result.get("merge_sha")
-            target = merge_sha or "upstream/master"
+            target = _merge_sha_for(step.package, plan) or "upstream/master"
             # Idempotent: skip if tag already exists on the expected target
             r = sh(
                 "git", "rev-parse", f"refs/tags/{p['tag']}", cwd=repo_dir, capture=True, check=False
@@ -929,7 +1029,7 @@ def execute_step(step: Step, plan: Plan, ctx: Ctx):
 
 
 def simulate_step(step: Step, plan: Plan, ctx: Ctx):
-    """Simulate a step — log what would happen, verify preconditions."""
+    """Dry-run one step: verify preconditions, log the intent, no side effects."""
     p = step.params
     match step.kind:
         case StepKind.CLONE_SYNC:
@@ -962,22 +1062,36 @@ def simulate_step(step: Step, plan: Plan, ctx: Ctx):
 
 
 def save_plan(plan: Plan, path: Path):
-    """Persist plan to disk for crash recovery."""
+    """Snapshot the plan to disk so a crashed run can resume from where it failed."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(plan.model_dump_json(indent=2))
 
 
-def execute_plan(plan: Plan, *, mode: str, ctx: Ctx) -> Plan:
-    """Walk plan steps. mode = 'simulate' | 'execute' | 'resume'."""
+class ExecMode(StrEnum):
+    SIMULATE = "simulate"
+    """Log intent + validate preconditions, no side effects."""
+    EXECUTE = "execute"
+    """Run every step from scratch."""
+    RESUME = "resume"
+    """Skip already-completed steps; run the rest (after a crash)."""
+
+
+def execute_plan(plan: Plan, *, mode: ExecMode, ctx: Ctx) -> Plan:
+    """Walk the plan step by step, persisting status between steps.
+
+    On failure the step is marked ``failed``, the plan is saved, and
+    the exception propagates — the operator fixes the root cause and
+    re-runs ``execute`` on the same plan file to resume.
+    """
     for step in plan.steps:
-        if mode == "resume" and step.status == "completed":
+        if mode == ExecMode.RESUME and step.status == "completed":
             console.print(f"[dim]Skipping completed: {step.id}[/]")
             continue
 
         pkg_label = f"[bold cyan]{step.package}[/]"
         console.print(f"\n{pkg_label} {step.kind.value}")
 
-        if mode == "simulate":
+        if mode == ExecMode.SIMULATE:
             simulate_step(step, plan, ctx)
             step.status = "completed"
         else:
@@ -1050,6 +1164,27 @@ def _parse_pr_specs(specs: str) -> dict[str, int]:
     return result
 
 
+def _render_plan_preview(plan: Plan) -> None:
+    """Print the plan as a table — the operator's last look before we commit."""
+    kind_hint = "[yellow]prerelease[/]" if plan.prerelease else "[green]release[/]"
+    console.print(f"\n[bold]Release plan ({kind_hint}):[/]\n")
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("#", width=3)
+    table.add_column("Package", style="cyan")
+    table.add_column("Action")
+    table.add_column("Version")
+    table.add_column("Deps")
+    for i, pkg in enumerate(plan.packages, 1):
+        ver = (
+            f"{pkg.current_version} -> [green]{pkg.new_version}[/]"
+            if pkg.new_version
+            else pkg.current_version
+        )
+        dep_str = ", ".join(f"{d} v{v}" for d, v in pkg.sibling_deps.items())
+        table.add_row(str(i), pkg.repo, pkg.action.value, ver, dep_str)
+    console.print(table)
+
+
 def _resolve_chain(
     repos: tuple[str, ...],
     from_prs: str | None,
@@ -1109,7 +1244,7 @@ def cli():
 @click.option("-y", "--yes", is_flag=True, help="Auto-approve normal confirmations")
 @click.option("-p", "--pretend", is_flag=True, help="Dry run")
 @click.option("--skip-checks", is_flag=True)
-@click.option("--check-timeout", default=1800, type=int)
+@click.option("--check-timeout", default=DEFAULT_CHECK_TIMEOUT, type=int)
 @click.option("--upgrade-pinned", is_flag=True)
 @click.option("--from-prs", default=None, help="repo:PR pairs (e.g. sandbox:42,executor:55)")
 @click.option("--open-top", is_flag=True, help="Top package: update deps only, no release")
@@ -1180,24 +1315,7 @@ def quick(
         prerelease=prerelease,
     )
 
-    # Preview
-    kind_hint = "[yellow]prerelease[/]" if prerelease else "[green]release[/]"
-    console.print(f"\n[bold]Release plan ({kind_hint}):[/]\n")
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("#", width=3)
-    table.add_column("Package", style="cyan")
-    table.add_column("Action")
-    table.add_column("Version")
-    table.add_column("Deps")
-    for i, pkg in enumerate(plan.packages, 1):
-        ver = (
-            f"{pkg.current_version} -> [green]{pkg.new_version}[/]"
-            if pkg.new_version
-            else pkg.current_version
-        )
-        dep_str = ", ".join(f"{d} v{v}" for d, v in pkg.sibling_deps.items())
-        table.add_row(str(i), pkg.repo, pkg.action.value, ver, dep_str)
-    console.print(table)
+    _render_plan_preview(plan)
 
     if not pretend and not yes:
         alert_confirm("Proceed?", default=True, abort=True)
@@ -1211,7 +1329,7 @@ def quick(
     console.print(f"\nPlan saved: {plan_path}")
 
     # Execute
-    mode = "simulate" if pretend else "execute"
+    mode = ExecMode.SIMULATE if pretend else ExecMode.EXECUTE
     start_ts = time.monotonic()
     execute_plan(plan, mode=mode, ctx=ctx)
     elapsed = time.monotonic() - start_ts
@@ -1412,7 +1530,7 @@ def simulate(plan_file, org, fork, cache_dir):
     # Fall back to plan-embedded values when CLI/env didn't provide them
     plan.gh_org = org or plan.gh_org
     plan.gh_fork = fork or plan.gh_fork
-    execute_plan(plan, mode="simulate", ctx=ctx)
+    execute_plan(plan, mode=ExecMode.SIMULATE, ctx=ctx)
     console.print("\n[green]Simulation complete — no issues found.[/]")
 
 
@@ -1420,7 +1538,7 @@ def simulate(plan_file, org, fork, cache_dir):
 @click.argument("plan_file", type=click.Path(exists=True))
 @click.option("-y", "--yes", is_flag=True)
 @click.option("--skip-checks", is_flag=True)
-@click.option("--check-timeout", default=1800, type=int)
+@click.option("--check-timeout", default=DEFAULT_CHECK_TIMEOUT, type=int)
 @click.option("--org", default=_env("TEROK_GH_ORG", "terok-ai"))
 @click.option("--fork", default=_env("TEROK_GH_FORK"))
 @click.option(
@@ -1438,7 +1556,7 @@ def execute(plan_file, yes, skip_checks, check_timeout, org, fork, cache_dir):
     ctx.plan_path = plan_path
 
     has_completed = any(s.status == "completed" for s in plan.steps)
-    mode = "resume" if has_completed else "execute"
+    mode = ExecMode.RESUME if has_completed else ExecMode.EXECUTE
     if has_completed:
         console.print("[yellow]Resuming partially-executed plan...[/]")
 
