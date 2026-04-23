@@ -25,6 +25,7 @@ textual-serve cannot support.
 from __future__ import annotations
 
 import contextlib
+import enum
 import io
 from pathlib import Path
 from typing import Any
@@ -65,8 +66,7 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
 
     #wizard-form-dialog {
         width: 80;
-        height: auto;
-        max-height: 90%;
+        height: 90%;
         border: heavy $primary;
         border-title-align: right;
         background: $surface;
@@ -74,8 +74,7 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
     }
 
     #wizard-form-scroll {
-        height: auto;
-        max-height: 32;
+        height: 1fr;
     }
 
     .wizard-field {
@@ -92,7 +91,7 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
     }
 
     #wizard-form-buttons {
-        height: auto;
+        height: 3;
         align-horizontal: right;
         margin-top: 1;
     }
@@ -124,16 +123,21 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
         self._initial: dict[str, str] = dict(initial) if initial else {}
 
     def compose(self) -> ComposeResult:
-        """Lay out one widget per question, plus footer buttons."""
+        """Lay out one widget per question, plus footer buttons.
+
+        Form fields live in a scrollable pane; the button row is pinned
+        below them but still inside the dialog border so both scroll
+        area and buttons render inside the modal, not alongside it.
+        """
         dialog = Vertical(id="wizard-form-dialog")
         dialog.border_title = "New project"
-        with dialog, VerticalScroll(id="wizard-form-scroll"):
-            for q in QUESTIONS:
-                yield from self._field(q)
-
-        with Horizontal(id="wizard-form-buttons"):
-            yield Button("Cancel", id="wizard-form-cancel", variant="default")
-            yield Button("Create", id="wizard-form-create", variant="primary")
+        with dialog:
+            with VerticalScroll(id="wizard-form-scroll"):
+                for q in QUESTIONS:
+                    yield from self._field(q)
+            with Horizontal(id="wizard-form-buttons"):
+                yield Button("Cancel", id="wizard-form-cancel", variant="default")
+                yield Button("Create", id="wizard-form-create", variant="primary")
 
     def _field(self, q: Question) -> ComposeResult:
         """Render the label, help, input widget, and error slot for *q*."""
@@ -312,11 +316,26 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
 # ── Step 3: initialize project (ssh-init → generate → build → gate) ──
 
 
-class InitProgressScreen(ModalScreen[bool]):
+class InitOutcome(enum.Enum):
+    """Result of :class:`InitProgressScreen` — three distinct states.
+
+    ``SUCCESS`` and ``FAILED`` are the obvious outcomes; ``DECLINED``
+    covers the case where the user deliberately chose not to overwrite
+    an existing ``project.yml``.  The caller needs all three to render
+    the right follow-up notification: a decline is a benign no-op, not
+    an error.
+    """
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    DECLINED = "declined"
+
+
+class InitProgressScreen(ModalScreen[InitOutcome]):
     """Run ``cmd_project_init``'s four steps as a background worker.
 
-    Dismisses ``True`` on success, ``False`` on failure or cancellation.
-    The SSH-key registration pause in :func:`maybe_pause_for_ssh_key_registration`
+    Dismisses with one of the :class:`InitOutcome` values.  The SSH-key
+    registration pause in :func:`maybe_pause_for_ssh_key_registration`
     is replaced by a mid-wizard continue button that gates the next
     step — no blocking ``input()`` in a Textual worker.
     """
@@ -388,7 +407,10 @@ class InitProgressScreen(ModalScreen[bool]):
         self._project_id = project_id
         self._rendered_yaml = rendered_yaml
         self._ssh_continue: Any = None  # an asyncio.Event, set when user clicks continue
-        self._ok = False
+        # Default pessimistic — the worker flips this to SUCCESS on a clean
+        # finish, DECLINED when the user opts out of overwriting, and leaves
+        # it on FAILED when a step raises.
+        self._outcome: InitOutcome = InitOutcome.FAILED
 
     def compose(self) -> ComposeResult:
         """Build the per-step status list, log pane, and buttons."""
@@ -440,6 +462,10 @@ class InitProgressScreen(ModalScreen[bool]):
                     "[yellow]Keeping existing project.yml — nothing written, "
                     "nothing initialised.[/]"
                 )
+                # A declined overwrite is the user's deliberate choice —
+                # not a failure — so the screen dismisses with a distinct
+                # outcome the caller can branch on.
+                self._outcome = InitOutcome.DECLINED
                 self._finish_with_close_button()
                 return
 
@@ -479,15 +505,25 @@ class InitProgressScreen(ModalScreen[bool]):
     def _finish_with_close_button(self) -> None:
         """Enable the Close button after the screen reaches a terminal state.
 
-        Used both from ``on_mount`` when the write fails and from the
-        worker's ``finally`` block on success / error — the single path
-        keeps the button's enable/label/variant in sync no matter which
-        branch reached the end.
+        Called from ``on_mount`` when the write fails, from the decline
+        branch in ``_run_init_with_confirm``, and from the worker's
+        ``finally`` block.  Button label/variant mirror the outcome so
+        a declined overwrite doesn't masquerade as a failed init.
         """
+        variant_for = {
+            InitOutcome.SUCCESS: "success",
+            InitOutcome.FAILED: "warning",
+            InitOutcome.DECLINED: "default",
+        }
+        label_for = {
+            InitOutcome.SUCCESS: "Done",
+            InitOutcome.FAILED: "Close",
+            InitOutcome.DECLINED: "Close",
+        }
         button = self.query_one("#wizard-init-close", Button)
         button.disabled = False
-        button.variant = "success" if self._ok else "warning"
-        button.label = "Done" if self._ok else "Close"
+        button.variant = variant_for[self._outcome]
+        button.label = label_for[self._outcome]
 
     # ── Step status helpers ───────────────────────────────────────────
 
@@ -593,9 +629,14 @@ class InitProgressScreen(ModalScreen[bool]):
                     self._mark("gate", "failed", errors)
                     raise RuntimeError(f"Gate sync failed: {errors}")
 
-            self._ok = True
+            self._outcome = InitOutcome.SUCCESS
             log.write(f"[green]Project '{self._project_id}' is ready.[/]")
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
+            # Many facade calls (``load_project``, etc.) signal user-
+            # friendly errors with ``SystemExit`` which does *not*
+            # inherit from ``Exception``; widening the catch keeps
+            # those messages inside the log pane instead of bubbling
+            # out of the worker and vanishing silently.
             log.write(f"[red]Error: {exc}[/]")
             # Mark the currently-running step failed (whichever one raised).
             for key in self._STEP_KEYS:
@@ -615,12 +656,12 @@ class InitProgressScreen(ModalScreen[bool]):
 
     @on(Button.Pressed, "#wizard-init-close")
     def _on_close(self) -> None:
-        self.dismiss(self._ok)
+        self.dismiss(self._outcome)
 
     def action_maybe_cancel(self) -> None:
         """Escape only dismisses once the worker has finished."""
         if not self.query_one("#wizard-init-close", Button).disabled:
-            self.dismiss(self._ok)
+            self.dismiss(self._outcome)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────

@@ -516,16 +516,24 @@ class ProjectActionsMixin:
             final_yaml = review_result
             break
 
-        ok = await self.push_screen_wait(InitProgressScreen(values["project_id"], final_yaml))
-        if ok:
-            self.notify(f"Project '{values['project_id']}' is ready.")
-        else:
-            self.notify(
-                f"Project '{values['project_id']}' created but init did not complete. "
-                "Fix any issues and run `terok project init` from the CLI.",
-                severity="warning",
-                timeout=10,
-            )
+        outcome = await self.push_screen_wait(InitProgressScreen(values["project_id"], final_yaml))
+        from .wizard_screens import InitOutcome
+
+        match outcome:
+            case InitOutcome.SUCCESS:
+                self.notify(f"Project '{values['project_id']}' is ready.")
+            case InitOutcome.DECLINED:
+                # User chose to keep the existing project.yml — benign
+                # no-op, not an error.  No notification needed; the log
+                # pane already told them what happened.
+                pass
+            case InitOutcome.FAILED:
+                self.notify(
+                    f"Project '{values['project_id']}' created but init did not complete. "
+                    "Fix any issues and run `terok project init` from the CLI.",
+                    severity="warning",
+                    timeout=10,
+                )
         await self.refresh_projects()
 
     # --- Project delete ---

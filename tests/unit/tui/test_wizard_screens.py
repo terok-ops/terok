@@ -235,7 +235,7 @@ async def test_init_screen_write_failure_surfaces_in_log() -> None:
     is a stale project.yml waiting to happen, and downstream steps
     would just fail secondarily on a confusing error.
     """
-    from terok.tui.wizard_screens import InitProgressScreen
+    from terok.tui.wizard_screens import InitOutcome, InitProgressScreen
 
     def _boom(*_args, **_kwargs):
         raise OSError("read-only filesystem")
@@ -254,6 +254,45 @@ async def test_init_screen_write_failure_surfaces_in_log() -> None:
             assert close_button.disabled is False
             # The worker was never invoked on the failed-write path.
             mock_run_init.assert_not_called()
+            # The outcome is FAILED — a write error is a real failure.
+            assert screen._outcome is InitOutcome.FAILED
+
+
+@pytest.mark.asyncio
+async def test_init_screen_decline_overwrite_distinguishes_from_failure() -> None:
+    """User-declined overwrite sets ``DECLINED`` — not FAILED — so the caller doesn't warn.
+
+    The InitProgressScreen only pushes the confirm modal when the
+    project.yml already exists, so we fabricate that via a patched
+    ``_existing_project_yaml_path`` and a patched overwrite confirmer
+    that returns False.  No filesystem write happens on this path.
+    """
+    from terok.tui.wizard_screens import InitOutcome, InitProgressScreen
+
+    app = _WizardHost(InitProgressScreen("demo", "project:\n  id: demo\n"))
+    with (
+        patch.object(
+            InitProgressScreen,
+            "_existing_project_yaml_path",
+            return_value=Path("/tmp/terok-testing/demo/project.yml"),
+        ),
+        patch.object(InitProgressScreen, "_confirm_overwrite", return_value=False),
+        patch("terok.tui.wizard_screens.write_project_yaml") as mock_write,
+        patch.object(InitProgressScreen, "_run_init") as mock_run_init,
+    ):
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, InitProgressScreen)
+            # Neither the write nor the worker ran.
+            mock_write.assert_not_called()
+            mock_run_init.assert_not_called()
+            # Outcome distinguishes decline from failure.
+            assert screen._outcome is InitOutcome.DECLINED
+            # Close button is enabled with the neutral variant.
+            close_button = screen.query_one("#wizard-init-close")
+            assert close_button.disabled is False
+            assert close_button.variant == "default"
 
 
 # ── Form prefill (Back round-trip preservation) ──────────────────────
