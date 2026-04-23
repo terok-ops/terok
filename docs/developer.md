@@ -157,10 +157,13 @@ See [shared-dirs.md](shared-dirs.md) for detailed documentation.
 
 | Variable | When Set | Purpose |
 |----------|----------|---------|
-| `CODE_REPO` | Always | Git URL (upstream or gate depending on mode) |
-| `GIT_BRANCH` | Always | Target branch name |
-| `CLONE_FROM` | Online mode with gate | Alternate clone source for faster init |
+| `CODE_REPO` | When the project has an upstream or an active gate | Git URL (upstream in online mode, gate in gatekeeping mode) |
+| `GIT_BRANCH` | Alongside `CODE_REPO` when a default branch is configured | Target branch name |
+| `CLONE_FROM` | Online mode with `gate.enabled: true` and a reachable gate server | Alternate clone source for faster init |
 | `EXTERNAL_REMOTE_URL` | Relaxed gatekeeping | Upstream URL for "external" remote |
+
+When the project has no `upstream_url` and `gate.enabled: false`,
+`CODE_REPO` is unset and the container starts with an empty workspace.
 
 ---
 

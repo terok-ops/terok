@@ -1,11 +1,17 @@
 # Git Gate and Security Modes
 
-The **git gate** is a host-side bare mirror of the upstream repository,
-managed by [terok-sandbox](https://github.com/terok-ai/terok-sandbox).
-It serves two purposes depending on the project's security mode:
+The **git gate** is a host-side bare git repository managed by
+[terok-sandbox](https://github.com/terok-ai/terok-sandbox).  When a
+project has an upstream configured, the gate mirrors it; without one,
+it initialises as a remoteless bare repo the container can still push
+to.  The gate serves two purposes depending on the project's security
+mode:
 
 - **Online mode** — performance accelerator for cloning (the gate is not used for security; containers talk to upstream directly)
 - **Gatekeeping mode** — the default git origin for containers, directing agent pushes to the gate instead of upstream
+
+Both modes can be paired with the `gate.enabled` knob; see
+[Disabling the gate](#disabling-the-gate-gateenabled) below.
 
 ## Three Layers: Upstream → Gate → Tasks
 
@@ -140,3 +146,51 @@ gatekeeping:
     The gate works best as one layer in a defence-in-depth strategy:
     gate (push destination control) + shield (egress firewall).
     No single layer is sufficient on its own.
+
+---
+
+## Disabling the gate (`gate.enabled`)
+
+The gate is an independent knob from `security_class`.  Set
+`gate.enabled: false` in project.yml to stop terok from running a
+host-side mirror at all — the container then fetches directly from
+upstream via its own network path.  Useful when the host has no path
+to the remote (firewall blocking SSH, corporate proxy) but the
+container does, or when you simply don't want the host keeping a
+local mirror.
+
+```yaml
+project:
+  id: cp2k
+  security_class: online
+git:
+  upstream_url: git@github.com:user/cp2k.git
+gate:
+  enabled: false        # host never touches the remote
+```
+
+### Four combinations
+
+`gate.enabled` and `upstream_url` are orthogonal:
+
+| `gate.enabled` | `upstream_url` | Behaviour |
+|---|---|---|
+| `true` (default) | set | Host mirrors upstream; container clones from the mirror.  Default, matches the table above. |
+| `true` | absent | Host initialises a remoteless bare gate; the container still gets a remote to push to.  Local-only scratch projects. |
+| `false` | set | Host never touches the remote; the container fetches directly from upstream.  Escape hatch for host-side network restrictions. |
+| `false` | absent | No git plumbing at all; container workspace starts empty. |
+
+### Collapse when upstream is absent
+
+When `upstream_url` is absent, `online` and `gatekeeping` describe the
+same act — there is nothing to push beyond the gate.  Both values are
+accepted and behave identically in that sub-case.  The table above
+describes them distinctly only because they diverge once an upstream
+exists.
+
+### Incoherent combination (rejected)
+
+`security_class: gatekeeping` with `gate.enabled: false` is rejected
+at project-load time.  Gatekeeping *is* the gate-enforced mode — so
+disabling the gate in that mode is self-contradictory.  Either set
+`security_class: online` to drop the gate, or keep `gate.enabled: true`.

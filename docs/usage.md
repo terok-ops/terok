@@ -217,10 +217,18 @@ image:
   user_snippet_file: user.dockerinclude  # optional
 
 git:
-  upstream_url: git@github.com:yourorg/yourrepo.git  # or https://...
+  upstream_url: git@github.com:yourorg/yourrepo.git  # optional; omit for local-only
   default_branch: main
   # authorship: human-agent  # optional: author = human, committer = agent
+
+# gate:
+#   enabled: false          # optional; skip the host-side gate mirror
+                            #           (container fetches upstream directly)
 ```
+
+See [Gate and upstream combinations](#gate-and-upstream-combinations)
+for the four cells of the (`gate.enabled`, `upstream_url`) matrix —
+scratch projects, firewalled hosts, and the defaults for each.
 
 ### Step 3: (Optional) Image Snippet
 

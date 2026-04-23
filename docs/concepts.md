@@ -105,18 +105,21 @@ graph TD
 
 ### Projects
 
-A **project** is a configuration that maps to a single upstream git
-repository. It defines:
+A **project** is a configuration that optionally maps to an upstream
+git repository. It defines:
 
-- The upstream URL and default branch
+- The upstream URL and default branch (both optional — a project
+  without an upstream is a valid, local-only workspace)
 - The security mode (online or gatekeeping)
+- Whether the host-side git gate runs (`gate.enabled`, default `true`)
 - SSH key configuration
 - Agent settings (provider, model, instructions)
 - Shield allowlists
 
 Projects are stored as YAML files under
 `~/.config/terok/projects/<id>/project.yml`. A project can have many tasks
-running simultaneously, all against the same upstream repo.
+running simultaneously, all against the same upstream repo (or the same
+local-only gate when no upstream is configured).
 
 ### Tasks
 
@@ -154,9 +157,14 @@ other tasks' workspaces.
 
 ## The Git Gate
 
-The **git gate** is a host-side bare mirror of the upstream repository. It
-sits between the containers and the real remote, acting as either a
-performance accelerator or a security checkpoint depending on the mode.
+The **git gate** is a host-side bare git repository managed by terok.
+When a project has an upstream configured, the gate mirrors it and
+sits between the containers and the real remote — acting as either a
+performance accelerator (online mode) or a security checkpoint
+(gatekeeping mode).  Without an upstream, the gate is a remoteless
+local repo the container can still push to.  The gate can also be
+turned off entirely via `gate.enabled: false` in project.yml; see
+[Git Gate and Security Modes](git-gate-and-security-modes.md#disabling-the-gate-gateenabled).
 
 ### How code flows through the gate
 
