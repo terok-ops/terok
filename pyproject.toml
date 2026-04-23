@@ -48,7 +48,7 @@ textual-serve = ">=1.1.0"
 # the two siblings that ship the feature (sandbox + executor).  Shield
 # and dbus track upstream's latest release wheels.  The release script
 # replaces the git pins with release-URL pins before cutting.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.107/terok_executor-0.0.107-py3-none-any.whl"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.108/terok_executor-0.0.108-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.89/terok_sandbox-0.0.89-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.27/terok_shield-0.6.27-py3-none-any.whl"}
 terok-dbus = {url = "https://github.com/terok-ai/terok-dbus/releases/download/v0.5.13/terok_dbus-0.5.13-py3-none-any.whl"}
