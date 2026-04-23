@@ -7,8 +7,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from terok_clearance import ContainerIdentity
-from terok_sandbox import ContainerInfo
+from terok_clearance import ContainerIdentity, ContainerInfo
 
 from terok.clearance.identity import (
     ANNOTATION_PROJECT,
