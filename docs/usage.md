@@ -8,6 +8,7 @@ Complete guide to installing, configuring, and using terok.
 - [Runtime Locations](#runtime-locations)
 - [Global Configuration](#global-configuration)
 - [From Zero to First Run](#from-zero-to-first-run)
+- [Authentication](#authentication)
 - [Headless Agent Runs (Autopilot)](#headless-agent-runs-autopilot)
 - [Presets](#presets)
 - [Task Lifecycle Hooks](#task-lifecycle-hooks)
@@ -316,6 +317,10 @@ Supported tokens: `{{IDENTITY_FILE}}`, `{{KEY_NAME}}`, `{{PROJECT_ID}}`
 
 ### Step 7: Create and Run a Task
 
+Authenticate each provider the task will use *before* starting the task —
+see [Authentication](#authentication) for commands and for why late auth
+does not reach already-running containers.
+
 ```bash
 # Create a new task and attach into its shell (default on a TTY).
 # Equivalent to: task run + waiting for ready + terok login — one command.
@@ -410,6 +415,54 @@ keyboard shortcuts. Login sessions open as additional tmux windows — press
 
 The container's tmux prefix (`^a`) is different from the host's (`^b`) to avoid
 conflicts. The container status bar shows `host: ^b` as a reminder.
+
+---
+
+## Authentication
+
+Before running tasks, authenticate each agent or tool you plan to use.
+Credentials are stored host-wide in the vault and shared across every
+project and task by default.
+
+```bash
+# Host-wide auth — one login per provider, usable by every project
+terok auth claude
+terok auth gh
+terok auth codex
+
+# Project-scoped escape hatch — uses the project's L2 image for the auth
+# container; the credential still lands provider-scoped in the vault
+terok auth claude --project myproj
+
+# Interactive menu — pick one or more providers in sequence
+terok auth
+```
+
+Each provider offers the modes its vendor supports — OAuth / interactive
+login (launches an auth container), API key (paste, no container needed),
+or both with a chooser prompt.
+
+### Container snapshot: auth must exist before `task run`
+
+Agent env vars (and the phantom tokens that route each container's
+requests through the vault) are **baked at container creation time**.
+Two consequences follow from this:
+
+- **Missing auth is permanent for that container.**  If you start a
+  task without having authenticated provider X, the container has no
+  env var for X — and it never will, even if you `terok auth X` later.
+  The credential exists in the vault, but the running container has no
+  phantom token pointing at it.  To pick up the new credential, start
+  a fresh task; existing ones stay blind.
+- **Refreshing an existing auth works transparently.**  If provider X
+  *was* authenticated when the task started, replacing the credential
+  (new OAuth token, rotated API key) needs no restart — the container's
+  phantom token resolves through the vault to whatever the current
+  credential is at request time.
+
+Run `terok sickbay <project> <task>` to see a per-task auth report.
+Missing phantom env vars show up as warnings ("not set") and flag exactly
+which providers were unauthenticated when the container was created.
 
 ---
 
