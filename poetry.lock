@@ -3072,13 +3072,13 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-clearance"
-version = "0.6.0"
+version = "0.6.1"
 description = "Shield clearance and desktop notifications for terok"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_clearance-0.6.0-py3-none-any.whl", hash = "sha256:b8ee49cc613886c1b0d9847a1709888b0c590443a90aad1b75118caa54b1c0ce"},
+    {file = "terok_clearance-0.6.1-py3-none-any.whl", hash = "sha256:c629a1def80297b7eaae04bd62d3a5bec4e3851914e1434ccc2c4cd8538f7dd5"},
 ]
 
 [package.dependencies]
@@ -3087,60 +3087,60 @@ dbus-fast = ">=2.0,<5.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.0/terok_clearance-0.6.0-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.1/terok_clearance-0.6.1-py3-none-any.whl"
 
 [[package]]
 name = "terok-executor"
-version = "0.0.109"
+version = "0.0.110"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_executor-0.0.109-py3-none-any.whl", hash = "sha256:067e94e6aa6d48dd150c2f8fe4098c44fa682616d84320b18f8f6dbbbe655e00"},
+    {file = "terok_executor-0.0.110-py3-none-any.whl", hash = "sha256:f07d9490a6bfddd8a89eedf1eed21e3244d36439545170ce979301d934c298c5"},
 ]
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 pwinput = ">=1.0.3"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.90/terok_sandbox-0.0.90-py3-none-any.whl"}
+terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.91/terok_sandbox-0.0.91-py3-none-any.whl"}
 tomli-w = ">=1.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.109/terok_executor-0.0.109-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.110/terok_executor-0.0.110-py3-none-any.whl"
 
 [[package]]
 name = "terok-sandbox"
-version = "0.0.90"
+version = "0.0.91"
 description = "Hardened Podman container runner with gate server and shield integration"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_sandbox-0.0.90-py3-none-any.whl", hash = "sha256:1ffd91dd08ce1cd0eddb2b0c0022ecc131b17ed6333c58fb09960fad660fac9d"},
+    {file = "terok_sandbox-0.0.91-py3-none-any.whl", hash = "sha256:50df0c773779239cba9049128c69a875838c0dd2b914e28c7289a878d710ea32"},
 ]
 
 [package.dependencies]
 aiohttp = ">=3.9"
 cryptography = ">=46.0.7"
 platformdirs = ">=4.9.6"
-terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.28/terok_shield-0.6.28-py3-none-any.whl"}
+terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.29/terok_shield-0.6.29-py3-none-any.whl"}
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.90/terok_sandbox-0.0.90-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.91/terok_sandbox-0.0.91-py3-none-any.whl"
 
 [[package]]
 name = "terok-shield"
-version = "0.6.28"
+version = "0.6.29"
 description = "nftables-based egress firewalling for Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
 files = [
-    {file = "terok_shield-0.6.28-py3-none-any.whl", hash = "sha256:823ca2e51b10c2f241bdaa06f8d9afa551c4e0aa57d7ec73812e31d6bf8e3af5"},
+    {file = "terok_shield-0.6.29-py3-none-any.whl", hash = "sha256:8e1cb62ba0d49649d5f37c8923bb8d61801da50a0c555cb19d85bac87d19eaa0"},
 ]
 
 [package.dependencies]
@@ -3149,7 +3149,7 @@ PyYAML = ">=6.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.28/terok_shield-0.6.28-py3-none-any.whl"
+url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.29/terok_shield-0.6.29-py3-none-any.whl"
 
 [[package]]
 name = "textual"
@@ -3638,4 +3638,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "08d3a097229771823e77db11865df4615ffa89c2b07d36b98390185fce3f27f9"
+content-hash = "c5fc193968ef6f04f25b714466d2d8509ec572d67374e739cce282ba712af902"

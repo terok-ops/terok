@@ -48,10 +48,10 @@ textual-serve = ">=1.1.0"
 # the two siblings that ship the feature (sandbox + executor).  Shield
 # and dbus track upstream's latest release wheels.  The release script
 # replaces the git pins with release-URL pins before cutting.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.109/terok_executor-0.0.109-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.90/terok_sandbox-0.0.90-py3-none-any.whl"}
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.28/terok_shield-0.6.28-py3-none-any.whl"}
-terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.0/terok_clearance-0.6.0-py3-none-any.whl"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.110/terok_executor-0.0.110-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.91/terok_sandbox-0.0.91-py3-none-any.whl"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.29/terok_shield-0.6.29-py3-none-any.whl"}
+terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.1/terok_clearance-0.6.1-py3-none-any.whl"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"
