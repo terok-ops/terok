@@ -44,11 +44,6 @@ from terok_sandbox import (
     resolve_container_state_dir,
 )
 
-from ...clearance._install import (
-    UNIT_NAME as _NOTIFIER_UNIT_NAME,
-    check_units_outdated as _notifier_check_units_outdated,
-    read_installed_unit_version as _notifier_read_unit_version,
-)
 from ...lib.core import runtime as _rt
 from ...lib.core.config import get_services_mode, global_config_path, make_sandbox_config
 from ...lib.core.project_model import ProjectConfig, is_valid_project_id
@@ -151,15 +146,15 @@ def _check_shield() -> _CheckResult:
     return ("ok", label, f"active ({ec.hooks}, {dns} DNS)")
 
 
-def _check_clearance_hub() -> _CheckResult:
-    """Detect drift between the installed hub unit and the shipped template.
+def _check_clearance_stack() -> _CheckResult:
+    """Detect drift across the clearance hub/verdict/notifier triple.
 
-    ``check_units_outdated`` covers both the hub and the verdict
-    helper in one probe: a pre-split monolithic ``terok-dbus.service``
-    on disk, a half-installed pair (one file missing), and a stale
-    version marker all surface as a single ``warn`` here.
+    ``terok_clearance.check_units_outdated`` covers all three units in
+    one probe: a pre-split monolithic ``terok-dbus.service`` on disk,
+    a half-installed hub/verdict pair, and a stale version marker on
+    any of the three surface as a single ``warn`` here.
     """
-    label = "Clearance hub"
+    label = "Clearance stack"
     outdated = _clearance_check_units_outdated()
     if outdated:
         return ("warn", label, outdated)
@@ -167,18 +162,6 @@ def _check_clearance_hub() -> _CheckResult:
     if installed is None:
         return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} not installed")
     return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} v{installed}")
-
-
-def _check_clearance_notifier() -> _CheckResult:
-    """Same drift check for the clearance-notifier user unit."""
-    label = "Clearance notifier"
-    outdated = _notifier_check_units_outdated()
-    if outdated:
-        return ("warn", label, outdated)
-    installed = _notifier_read_unit_version()
-    if installed is None:
-        return ("ok", label, f"{_NOTIFIER_UNIT_NAME} not installed")
-    return ("ok", label, f"{_NOTIFIER_UNIT_NAME} v{installed}")
 
 
 def _check_vault() -> _CheckResult:
@@ -613,8 +596,7 @@ _GLOBAL_CHECKS = [
     ("SSH signer", _check_ssh_signer),
     ("Keyring", _check_keyring),
     ("SELinux policy", _check_selinux_policy),
-    ("Clearance hub", _check_clearance_hub),
-    ("Clearance notifier", _check_clearance_notifier),
+    ("Clearance stack", _check_clearance_stack),
 ]
 """Global checks paired with the label shown while they run.
 

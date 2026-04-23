@@ -40,8 +40,8 @@ allowed_importers =
     terok.cli.commands.setup
     terok.cli.commands.shield
     terok.cli.commands.sickbay
-    terok.clearance.identity
     terok.cli.commands.uninstall
+    terok.tui.clearance_screen
     terok.cli.commands.vault_local
     terok.cli.main
     terok.cli.wiring
