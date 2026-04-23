@@ -158,7 +158,7 @@ class TestSummarizeSshInit:
             {
                 "key_id": 3,
                 "key_type": "rsa",
-                "fingerprint": "abc123",
+                "fingerprint": "SHA256:abc123",
                 "comment": "tk-main:proj",
                 "public_line": "ssh-rsa AAAA… tk-main:proj",
             }

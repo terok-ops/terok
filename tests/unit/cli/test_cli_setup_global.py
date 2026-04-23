@@ -733,19 +733,31 @@ class TestEnsureBridgeReader:
 
 
 class TestEnsureDbusHub:
-    """``_ensure_dbus_hub`` installs the systemd user unit that owns org.terok.Shield1."""
+    """``_ensure_dbus_hub`` installs the hub + verdict-helper systemd user units."""
 
     def test_check_only_present(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
-        """check_only reports ok when the unit file exists."""
+        """check_only reports ok only when both unit files exist."""
         unit_dir = tmp_path / "systemd/user"
         unit_dir.mkdir(parents=True)
-        (unit_dir / "terok-dbus.service").write_text("[Service]\n")
+        (unit_dir / "terok-clearance-hub.service").write_text("[Service]\n")
+        (unit_dir / "terok-clearance-verdict.service").write_text("[Service]\n")
         with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
             assert _ensure_dbus_hub(check_only=True) is True
         assert "installed" in capsys.readouterr().out
 
+    def test_check_only_half_installed_reports_missing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Hub present but verdict absent → not installed (operator must rerun setup)."""
+        unit_dir = tmp_path / "systemd/user"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "terok-clearance-hub.service").write_text("[Service]\n")
+        with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
+            assert _ensure_dbus_hub(check_only=True) is False
+        assert "not installed" in capsys.readouterr().out
+
     def test_check_only_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
-        """check_only reports false when the unit file is absent."""
+        """check_only reports false when both unit files are absent."""
         with patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}):
             assert _ensure_dbus_hub(check_only=True) is False
         assert "not installed" in capsys.readouterr().out
@@ -757,20 +769,24 @@ class TestEnsureDbusHub:
         import sys as _sys
 
         with (
-            patch("terok_clearance._install.install_service") as mock_install,
+            patch("terok_clearance.runtime.installer.install_service") as mock_install,
             patch("terok.cli.commands.setup._enable_user_service") as mock_enable,
         ):
             assert _ensure_dbus_hub(check_only=False) is True
         (argv,) = mock_install.call_args[0]
-        assert argv == [_sys.executable, "-m", "terok_clearance._cli"]
-        mock_enable.assert_called_once_with("terok-dbus")
+        assert argv == [_sys.executable, "-m", "terok_clearance.cli.main"]
+        # Both units get enabled in the same pass; order is stable (hub first).
+        assert [c.args[0] for c in mock_enable.call_args_list] == [
+            "terok-clearance-hub",
+            "terok-clearance-verdict",
+        ]
         assert "installed" in capsys.readouterr().out
 
     def test_import_failure_soft_fails(self, capsys: pytest.CaptureFixture) -> None:
-        """An ImportError out of terok_clearance._install must not crash setup."""
+        """An ImportError out of terok_clearance.runtime.installer must not crash setup."""
         with patch.dict(
             "sys.modules",
-            {"terok_clearance._install": None},
+            {"terok_clearance.runtime.installer": None},
         ):
             assert _ensure_dbus_hub(check_only=False) is False
         assert "import failed" in capsys.readouterr().out
@@ -779,7 +795,7 @@ class TestEnsureDbusHub:
         """install_service exceptions are caught, reported, return False."""
         with (
             patch(
-                "terok_clearance._install.install_service",
+                "terok_clearance.runtime.installer.install_service",
                 side_effect=RuntimeError("template missing"),
             ),
             patch("terok.cli.commands.setup._enable_user_service"),
@@ -807,22 +823,17 @@ class TestDisableDbusBridge:
         mock_uninstall.assert_called_once()
         assert "disabled" in capsys.readouterr().out
 
-    def test_teardown_with_unit_removes_and_disables(
+    def test_teardown_delegates_to_uninstall_service(
         self, tmp_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
-        """Present unit → unlinked + systemctl disable invoked."""
-        unit_dir = tmp_path / "systemd/user"
-        unit_dir.mkdir(parents=True)
-        unit = unit_dir / "terok-dbus.service"
-        unit.write_text("[Service]\n")
+        """Teardown is a thin wrapper around ``terok_clearance.uninstall_service``."""
         with (
             patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge"),
-            patch("terok.cli.commands.setup._disable_user_service") as mock_disable,
+            patch("terok_clearance.uninstall_service") as mock_uninstall,
         ):
             assert _disable_dbus_bridge(check_only=False) is True
-        assert not unit.exists()
-        mock_disable.assert_called_once_with("terok-dbus")
+        mock_uninstall.assert_called_once()
 
     def test_uninstall_exception_returns_false(
         self, tmp_path: Path, capsys: pytest.CaptureFixture
@@ -840,22 +851,22 @@ class TestDisableDbusBridge:
         assert "reader uninstall" in out
         assert "permission denied" in out
 
-    def test_unit_removal_oserror_returns_false(
+    def test_hub_teardown_exception_returns_false(
         self, tmp_path: Path, capsys: pytest.CaptureFixture
     ) -> None:
-        """Unit file present but unlink raises OSError → WARN line + False."""
-        unit_dir = tmp_path / "systemd/user"
-        unit_dir.mkdir(parents=True)
-        unit = unit_dir / "terok-dbus.service"
-        unit.write_text("[Service]\n")
+        """``uninstall_service`` raising → WARN line + False, same shape as the reader path."""
         with (
             patch.dict("os.environ", {"XDG_CONFIG_HOME": str(tmp_path), "HOME": str(tmp_path)}),
             patch("terok_sandbox.uninstall_shield_bridge"),
-            patch("pathlib.Path.unlink", side_effect=OSError("read-only fs")),
+            patch(
+                "terok_clearance.uninstall_service",
+                side_effect=RuntimeError("read-only fs"),
+            ),
         ):
             assert _disable_dbus_bridge(check_only=False) is False
         out = capsys.readouterr().out
-        assert "unit removal" in out
+        assert "hub/verdict teardown" in out
+        assert "read-only fs" in out
 
 
 class TestEnsureDesktopEntry:
@@ -1067,12 +1078,12 @@ class TestUserServiceHelpers:
             patch("terok.cli.commands.setup.shutil.which", return_value="/bin/systemctl"),
             patch.object(sp, "run", return_value=fake),
         ):
-            _enable_user_service("terok-dbus")
+            _enable_user_service("terok-clearance-hub")
 
         log = (tmp_path / "terok" / "log" / "setup.log").read_text()
         assert "systemctl --user daemon-reload (rc=1)" in log
-        assert "systemctl --user enable terok-dbus (rc=1)" in log
-        assert "systemctl --user restart terok-dbus (rc=1)" in log
+        assert "systemctl --user enable terok-clearance-hub (rc=1)" in log
+        assert "systemctl --user restart terok-clearance-hub (rc=1)" in log
         assert "Unit not found" in log
 
     def test_disable_noop_when_systemctl_missing(self) -> None:

@@ -9,7 +9,7 @@ import argparse
 from unittest.mock import patch
 
 import pytest
-from terok_clearance._registry import CommandDef
+from terok_clearance.cli.registry import CommandDef
 
 from terok.cli.commands.dbus import dispatch, register
 
@@ -70,7 +70,7 @@ def test_dispatch_returns_false_for_non_dbus_commands() -> None:
 
 def _real_args(name: str) -> tuple:
     """Return the ArgDef tuple for a real COMMANDS entry by name."""
-    from terok_clearance._registry import COMMANDS as REAL_COMMANDS
+    from terok_clearance.cli.registry import COMMANDS as REAL_COMMANDS
 
     return next(c.args for c in REAL_COMMANDS if c.name == name)
 

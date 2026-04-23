@@ -155,7 +155,7 @@ def summarize_ssh_init(result: SSHInitResult) -> None:
     """Render an ``ssh-init`` result for the terminal."""
     print(f"  id:          {result['key_id']}")
     print(f"  type:        {result['key_type']}")
-    print(f"  fingerprint: SHA256:{result['fingerprint']}")
+    print(f"  fingerprint: {result['fingerprint']}")
     print(f"  comment:     {result['comment']}")
     print("Public key (register as a deploy key on the remote):")
     print(f"  {result['public_line']}")

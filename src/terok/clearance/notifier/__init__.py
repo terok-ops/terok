@@ -4,7 +4,8 @@
 """``terok-clearance-notifier`` — bridges hub events to desktop popups.
 
 Separate systemd user service (``terok-clearance-notifier.service``)
-from the hub (``terok-dbus.service``) so the hub stays UI-agnostic —
+from the hub (``terok-clearance-hub.service``) so the hub stays
+UI-agnostic —
 headless hosts (CI, servers) run the hub without pulling in a
 desktop-notifier dependency, and desktops get richer rendering with
 terok's task-aware identity resolution.

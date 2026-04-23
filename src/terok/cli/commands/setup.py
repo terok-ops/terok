@@ -62,9 +62,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--no-dbus-bridge",
         action="store_true",
         help=(
-            "Skip the optional D-Bus clearance bridge (NFLOG reader resource + "
-            "terok-clearance hub unit).  Use on hosts with no session D-Bus or when "
-            "auditability of the hook surface is the priority."
+            "Skip the optional clearance bridge (NFLOG reader resource + "
+            "terok-clearance hub/verdict unit pair).  Use on hosts with no "
+            "session bus or when auditability of the hook surface is the priority."
         ),
     )
     p_setup.add_argument(
@@ -500,19 +500,32 @@ def _ensure_bridge_reader(*, check_only: bool) -> bool:
 
 
 def _ensure_dbus_hub(*, check_only: bool) -> bool:
-    """Install the terok-clearance systemd user unit that owns org.terok.Shield1."""
-    _stage_begin("D-Bus hub")
-    unit_path = _user_systemd_dir() / "terok-dbus.service"
-    if check_only:
-        present = unit_path.is_file()
-        print(f"{_status_label(present)}{_presence_suffix(present)}")
-        return present
+    """Install the terok-clearance hub + verdict-helper systemd user units.
 
+    The clearance hub splits across two units — ``terok-clearance-hub`` is
+    the hardened varlink server, ``terok-clearance-verdict`` is the
+    unhardened helper that execs ``terok-shield``.  Both are enabled in
+    the same pass; the helper is ``Wants=`` of the hub so either
+    ordering at boot works.
+    """
+    _stage_begin("Clearance hub")
     try:
-        from terok_clearance._install import install_service
-    except ImportError as exc:  # noqa: BLE001
+        from terok_clearance.runtime.installer import (
+            HUB_UNIT_NAME,
+            VERDICT_UNIT_NAME,
+            install_service,
+        )
+    except ImportError as exc:
         print(f"{_status_label(False)} (import failed: {exc})")
         return False
+
+    systemd_dir = _user_systemd_dir()
+    if check_only:
+        present = (systemd_dir / HUB_UNIT_NAME).is_file() and (
+            systemd_dir / VERDICT_UNIT_NAME
+        ).is_file()
+        print(f"{_status_label(present)}{_presence_suffix(present)}")
+        return present
 
     # Avoid ``shutil.which("terok-clearance-hub")`` here: a hostile PATH
     # (shell rc, unexpected cwd) could otherwise poison the ExecStart=
@@ -521,11 +534,12 @@ def _ensure_dbus_hub(*, check_only: bool) -> bool:
     # pipx venv's own Python — or whatever is actually executing this
     # process — is the one the unit ends up invoking.
     try:
-        install_service([sys.executable, "-m", "terok_clearance._cli"])
+        install_service([sys.executable, "-m", "terok_clearance.cli.main"])
     except Exception as exc:  # noqa: BLE001
         print(f"{_status_label(False)} ({exc})")
         return False
-    _enable_user_service("terok-dbus")
+    _enable_user_service("terok-clearance-hub")
+    _enable_user_service("terok-clearance-verdict")
     print(f"{_status_label(True)} (installed + enabled)")
     return True
 
@@ -536,8 +550,8 @@ def _ensure_clearance_notifier(*, check_only: bool) -> bool:
     Separate from the hub unit: the hub is headless-friendly, the
     notifier needs a desktop session (reaches for
     ``org.freedesktop.Notifications``).  Paired with ``Wants=
-    terok-dbus.service`` in the unit file so systemd starts the hub
-    first.
+    terok-clearance-hub.service`` in the unit file so systemd starts
+    the hub first.
     """
     _stage_begin("Clearance notifier")
     from terok.clearance._install import default_unit_path
@@ -572,11 +586,12 @@ def _disable_dbus_bridge(*, check_only: bool) -> bool:
     permissions denied on the systemd unit path).  ``True`` on a clean
     teardown or an already-absent install.
     """
-    _stage_begin("D-Bus bridge")
+    _stage_begin("Clearance bridge")
     if check_only:
         print(f"{_warn_label()} (opted out via --no-dbus-bridge)")
         return True
 
+    from terok_clearance import uninstall_service
     from terok_sandbox import uninstall_shield_bridge
 
     try:
@@ -585,18 +600,11 @@ def _disable_dbus_bridge(*, check_only: bool) -> bool:
         print(f"{_warn_label()} (reader uninstall: {exc})")
         return False
 
-    unit_path = _user_systemd_dir() / "terok-dbus.service"
-    if unit_path.is_file():
-        # Disable before unlinking — ``systemctl --user disable --now`` needs
-        # the unit file on disk to resolve the service name.  Removing the
-        # file first leaves the unit running and enabled with no canonical
-        # path for systemctl to operate on.
-        _disable_user_service("terok-dbus")
-        try:
-            unit_path.unlink(missing_ok=True)
-        except OSError as exc:
-            print(f"{_warn_label()} (unit removal: {exc})")
-            return False
+    try:
+        uninstall_service()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{_warn_label()} (hub/verdict teardown: {exc})")
+        return False
     print(f"{_warn_label()} (disabled — audit-minimal mode)")
     return True
 

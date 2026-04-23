@@ -16,7 +16,7 @@ import argparse
 import asyncio
 import sys
 
-from terok_clearance._registry import COMMANDS, ArgDef
+from terok_clearance.cli.registry import COMMANDS, ArgDef
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:

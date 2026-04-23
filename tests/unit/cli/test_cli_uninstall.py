@@ -42,28 +42,15 @@ def test_desktop_entry_failure_reported(
     assert "FAIL" in capsys.readouterr().out
 
 
-@patch("terok.cli.commands.setup._run_systemctl")
+@patch("terok_clearance.uninstall_service")
 @patch("terok_sandbox.uninstall_shield_bridge")
 def test_dbus_bridge_removed(
-    mock_reader: MagicMock, mock_systemctl: MagicMock, capsys: pytest.CaptureFixture[str], tmp_path
+    mock_reader: MagicMock, mock_uninstall: MagicMock, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Happy path: reader removed, unit disabled, file unlinked, daemon reloaded."""
-    unit = tmp_path / "terok-dbus.service"
-    unit.write_text("[Unit]\n")
-
-    with patch("terok.cli.commands.setup._user_systemd_dir", return_value=tmp_path):
-        assert _uninstall_dbus_bridge() is True
-
+    """Happy path: reader removed, clearance teardown delegated, ok reported."""
+    assert _uninstall_dbus_bridge() is True
     mock_reader.assert_called_once()
-    # disable --now must run before unlink; daemon-reload after.
-    assert mock_systemctl.call_args_list[0].args[:4] == (
-        "--user",
-        "disable",
-        "--now",
-        "terok-dbus",
-    )
-    assert mock_systemctl.call_args_list[1].args == ("--user", "daemon-reload")
-    assert not unit.exists()
+    mock_uninstall.assert_called_once()
     assert "ok" in capsys.readouterr().out
 
 

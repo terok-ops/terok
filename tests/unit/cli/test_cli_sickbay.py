@@ -119,7 +119,11 @@ def test_cmd_sickbay_reports_health(
     # fixture narrowly about the gate-server assertions above.
     _stubs = {
         "_check_vault_migration": ("ok", "Vault migration", "no legacy directory"),
-        "_check_clearance_hub": ("ok", "Clearance hub", "terok-dbus.service not installed"),
+        "_check_clearance_hub": (
+            "ok",
+            "Clearance hub",
+            "terok-clearance-hub.service not installed",
+        ),
         "_check_clearance_notifier": (
             "ok",
             "Clearance notifier",

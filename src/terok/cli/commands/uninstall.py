@@ -133,32 +133,28 @@ def _uninstall_desktop_entry() -> bool:
 
 
 def _uninstall_dbus_bridge() -> bool:
-    """Remove the NFLOG reader resource + terok-clearance hub unit.
+    """Remove the NFLOG reader resource + clearance hub/verdict pair.
 
-    Order matters: ``disable --now`` stops and deactivates the service
-    while the unit file is still on disk (otherwise systemd has no unit
-    to resolve); then unlink the file; then ``daemon-reload`` so
-    systemd purges the now-dangling in-memory entry.
+    ``terok_clearance.uninstall_service`` owns the systemctl teardown
+    + unlink + daemon-reload sequence for both units — including
+    migration of a legacy pre-split ``terok-dbus.service`` — so this
+    stage is thin on top of it.
     """
+    from terok_clearance import uninstall_service
     from terok_sandbox import uninstall_shield_bridge
 
-    from .setup import _run_systemctl, _user_systemd_dir
-
-    _stage_begin("D-Bus bridge")
+    _stage_begin("Clearance bridge")
     try:
         uninstall_shield_bridge()
     except Exception as exc:  # noqa: BLE001
         print(f"{_status_label(False)} (reader: {exc})")
         return False
 
-    unit = _user_systemd_dir() / "terok-dbus.service"
-    _run_systemctl("--user", "disable", "--now", "terok-dbus")
     try:
-        unit.unlink(missing_ok=True)
-    except OSError as exc:
-        print(f"{_status_label(False)} (unit unlink: {exc})")
+        uninstall_service()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{_status_label(False)} (hub/verdict teardown: {exc})")
         return False
-    _run_systemctl("--user", "daemon-reload")
 
     print(f"{_status_label(True)} (removed)")
     return True

@@ -26,10 +26,12 @@ import tomllib
 from pathlib import Path
 
 from terok_clearance import (
-    check_units_outdated as _dbus_check_units_outdated,
-    read_installed_unit_version as _dbus_read_unit_version,
+    check_units_outdated as _clearance_check_units_outdated,
+    read_installed_unit_version as _clearance_hub_unit_version,
 )
-from terok_clearance._install import UNIT_NAME as _DBUS_UNIT_NAME
+from terok_clearance.runtime.installer import (
+    HUB_UNIT_NAME as _CLEARANCE_HUB_UNIT_NAME,
+)
 from terok_sandbox import (
     check_environment,
     check_units_outdated,
@@ -143,20 +145,19 @@ def _check_shield() -> _CheckResult:
 def _check_clearance_hub() -> _CheckResult:
     """Detect drift between the installed hub unit and the shipped template.
 
-    A pre-varlink Shield1 D-Bus hub wrote the same file name and the
-    same ``ExecStart={{BIN}} serve`` line — the version marker is how
-    we tell the two generations apart.  ``None`` version with file
-    present = legacy unit; bumped ``_UNIT_VERSION`` in terok-clearance =
-    rerun-setup prompt.
+    ``check_units_outdated`` covers both the hub and the verdict
+    helper in one probe: a pre-split monolithic ``terok-dbus.service``
+    on disk, a half-installed pair (one file missing), and a stale
+    version marker all surface as a single ``warn`` here.
     """
     label = "Clearance hub"
-    outdated = _dbus_check_units_outdated()
+    outdated = _clearance_check_units_outdated()
     if outdated:
         return ("warn", label, outdated)
-    installed = _dbus_read_unit_version()
+    installed = _clearance_hub_unit_version()
     if installed is None:
-        return ("ok", label, f"{_DBUS_UNIT_NAME} not installed")
-    return ("ok", label, f"{_DBUS_UNIT_NAME} v{installed}")
+        return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} not installed")
+    return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} v{installed}")
 
 
 def _check_clearance_notifier() -> _CheckResult:

@@ -714,30 +714,30 @@ class TestCheckShieldAnnotations:
 
 
 class TestCheckClearanceHub:
-    """Drift probe on the ``terok-dbus.service`` unit."""
+    """Drift probe on the ``terok-clearance-hub.service`` unit."""
 
     def test_current_version_is_ok(self) -> None:
         from terok.cli.commands.sickbay import _check_clearance_hub
 
         with (
             unittest.mock.patch(
-                "terok.cli.commands.sickbay._dbus_check_units_outdated", return_value=None
+                "terok.cli.commands.sickbay._clearance_check_units_outdated", return_value=None
             ),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay._dbus_read_unit_version", return_value=1
+                "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=1
             ),
         ):
             sev, label, detail = _check_clearance_hub()
         assert sev == "ok"
         assert label == "Clearance hub"
-        assert "terok-dbus.service v1" in detail
+        assert "terok-clearance-hub.service v1" in detail
 
     def test_outdated_is_warn(self) -> None:
         from terok.cli.commands.sickbay import _check_clearance_hub
 
         with (
             unittest.mock.patch(
-                "terok.cli.commands.sickbay._dbus_check_units_outdated",
+                "terok.cli.commands.sickbay._clearance_check_units_outdated",
                 return_value="is outdated (installed unversioned, expected v1) — rerun `terok setup`.",
             ),
         ):
@@ -752,10 +752,10 @@ class TestCheckClearanceHub:
 
         with (
             unittest.mock.patch(
-                "terok.cli.commands.sickbay._dbus_check_units_outdated", return_value=None
+                "terok.cli.commands.sickbay._clearance_check_units_outdated", return_value=None
             ),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay._dbus_read_unit_version", return_value=None
+                "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=None
             ),
         ):
             sev, _, detail = _check_clearance_hub()
