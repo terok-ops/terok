@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 from textual.app import App
-from textual.widgets import Input, Label, RadioButton, RadioSet, TextArea
+from textual.widgets import Input, Label, RadioButton, RadioSet, Static, TextArea
 
 from terok.lib.domain.wizards.new_project import QUESTIONS, Question
 from terok.tui.wizard_screens import ProjectReviewScreen, WizardFormScreen
@@ -325,3 +325,105 @@ async def test_form_prefill_populates_widgets() -> None:
         pressed = sec_rs.pressed_button
         assert pressed is not None
         assert pressed.name == initial["security_class"]
+
+
+# ── Subprocess isolation helpers ──────────────────────────────────────
+
+
+def test_run_isolated_propagates_nonzero_as_runtime_error() -> None:
+    """A crashing child surfaces its stderr tail in the raised message."""
+    from terok.tui.wizard_screens import _run_isolated
+
+    with pytest.raises(RuntimeError) as excinfo:
+        _run_isolated(
+            "import sys; sys.stderr.write('kaboom\\n'); sys.exit(3)",
+            label="toy step",
+        )
+    msg = str(excinfo.value)
+    assert "toy step exited with code 3" in msg
+    assert "kaboom" in msg
+
+
+def test_gate_sync_in_subprocess_returns_result_dict() -> None:
+    """The helper shuttles the child's result dict back to the parent verbatim.
+
+    We patch the facade's ``make_git_gate`` inside the *child* process by
+    pre-seeding a ``conftest``-style sitecustomize — not worth the
+    trouble.  Instead, we verify the helper's tempfile-roundtrip path
+    with a trivial child body that writes a known dict to the result
+    file directly.
+    """
+    from unittest.mock import patch as upatch
+
+    from terok.tui.wizard_screens import _gate_sync_in_subprocess
+
+    sentinel = {"success": True, "upstream_url": "https://example.com/r.git", "errors": []}
+
+    def _fake_run_isolated(body: str, *, label: str) -> None:  # noqa: ARG001
+        # Extract the result path from the body — it's the last argument
+        # passed to ``open(...)``.
+        import json
+        import re
+
+        match = re.search(r"open\((['\"])(?P<p>[^'\"]+)\1, 'w'\)", body)
+        assert match, f"body missing result path: {body!r}"
+        Path(match.group("p")).write_text(json.dumps(sentinel), encoding="utf-8")
+
+    with upatch("terok.tui.wizard_screens._run_isolated", side_effect=_fake_run_isolated):
+        assert _gate_sync_in_subprocess("demo") == sentinel
+
+
+# ── SSH fingerprint display ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ssh_panel_shows_fingerprint_alongside_pubkey() -> None:
+    """When the ssh panel pops up, fingerprint + comment render beside the pubkey.
+
+    GitHub and friends only show the SHA256 fingerprint on the deploy
+    key settings page once the key is pasted — by then the raw pubkey
+    is hidden.  Displaying the fingerprint at mint time is what lets
+    the user verify they registered the right key.
+    """
+    import asyncio as _asyncio
+
+    from terok.tui.wizard_screens import InitProgressScreen
+
+    # Stub every downstream step so ``_run_init`` gets as far as
+    # populating the SSH panel, then parks on ``_ssh_continue``.
+    minted = {
+        "key_id": 42,
+        "key_type": "ed25519",
+        "fingerprint": "SHA256:abcdefGHIJKLmnop1234567890",
+        "comment": "terok@demo",
+        "public_line": "ssh-ed25519 AAAAFAKE terok@demo",
+    }
+    app = _WizardHost(InitProgressScreen("demo", "project:\n  id: demo\n"))
+    with (
+        patch.object(InitProgressScreen, "_existing_project_yaml_path", return_value=None),
+        patch("terok.tui.wizard_screens.write_project_yaml"),
+        patch("terok.tui.wizard_screens.project_needs_key_registration", return_value=True),
+        patch("terok.lib.domain.facade.provision_ssh_key", return_value=minted),
+        patch("terok.lib.domain.facade.summarize_ssh_init"),
+    ):
+        async with app.run_test() as pilot:
+            # Give the worker a chance to reach the ssh_continue wait.
+            for _ in range(20):
+                await pilot.pause()
+                await _asyncio.sleep(0)
+                screen = app.screen
+                if not isinstance(screen, InitProgressScreen):
+                    break
+                panel = screen.query_one("#wizard-init-ssh-key")
+                if panel.styles.display == "block":
+                    break
+            screen = app.screen
+            assert isinstance(screen, InitProgressScreen)
+            pubkey = screen.query_one("#wizard-init-ssh-pubkey", Static)
+            fingerprint = screen.query_one("#wizard-init-ssh-fingerprint", Static)
+            assert minted["public_line"] in str(pubkey.render())
+            assert "SHA256:abcdefGHIJKLmnop1234567890" in str(fingerprint.render())
+            assert "terok@demo" in str(fingerprint.render())
+            # Unblock the worker so the test exits cleanly.
+            screen._ssh_continue.set()
+            await pilot.pause()

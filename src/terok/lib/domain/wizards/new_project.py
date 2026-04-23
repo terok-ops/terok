@@ -21,6 +21,7 @@ the TUI presenter lives in :mod:`terok.tui.wizard_screens`.
 
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 from collections.abc import Callable
@@ -115,6 +116,29 @@ def _validate_project_id(project_id: str) -> str | None:
     return None
 
 
+_SLUG_ALLOWED = re.compile(r"[a-z0-9_-]+")
+_SLUG_RUNS = re.compile(r"-{2,}")
+
+
+def _slugify_project_id(raw: str) -> str:
+    """Best-effort-normalise *raw* into a valid project ID.
+
+    Meets users halfway: ``"terok pages"`` → ``"terok-pages"`` rather than
+    bouncing them back with a regex error.  Drops characters outside the
+    project-ID alphabet (``[a-z0-9_-]``), collapses runs of hyphens, and
+    strips leading/trailing punctuation.  When the input is already
+    hopeless (e.g. ``"!!!"``) the result is empty and validation gives
+    the user the usual "must start with a lowercase letter…" message.
+    """
+    lowered = raw.casefold()
+    # Whitespace → single hyphen before dropping out-of-alphabet chars so
+    # word boundaries survive ("terok pages" shouldn't glue into "terokpages").
+    hyphenated = re.sub(r"\s+", "-", lowered)
+    kept = "".join(_SLUG_ALLOWED.findall(hyphenated))
+    collapsed = _SLUG_RUNS.sub("-", kept)
+    return collapsed.strip("-_")
+
+
 QUESTIONS: tuple[Question, ...] = (
     Question(
         key="security_class",
@@ -135,7 +159,7 @@ QUESTIONS: tuple[Question, ...] = (
         kind="text",
         prompt="Project ID",
         required=True,
-        transform=str.lower,
+        transform=_slugify_project_id,
         validate=_validate_project_id,
         placeholder="lowercase; letters, digits, hyphens, underscores",
     ),
@@ -316,10 +340,10 @@ def collect_wizard_inputs() -> dict | None:
                     return None
                 value, error = validate_answer(question, raw)
                 if error is None:
-                    if question.transform and value != raw:
+                    if question.transform and value != raw.strip():
                         # Surface the normalisation so the user sees *what*
-                        # their answer became (e.g. uppercase → lowercase).
-                        print(f"Note: {question.prompt.lower()} lowercased to '{value}'")
+                        # their answer became (e.g. ``"My Proj"`` → ``"my-proj"``).
+                        print(f"Note: {question.prompt.lower()} normalised to '{value}'")
                     values[question.key] = value
                     break
                 print(error, file=sys.stderr)

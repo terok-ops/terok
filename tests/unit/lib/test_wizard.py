@@ -16,6 +16,7 @@ from terok.lib.domain.wizards.new_project import (
     QUESTIONS,
     SECURITY_CLASSES,
     Question,
+    _slugify_project_id,
     _validate_project_id,
     collect_wizard_inputs,
     generate_config,
@@ -108,7 +109,7 @@ def test_validate_project_id(project_id: str, valid: bool) -> None:
             id="custom-branch",
         ),
         pytest.param(
-            ["1", "1", "bad project", "good-id", "https://example.com/r.git", "main", "n"],
+            ["1", "1", "!!!", "good-id", "https://example.com/r.git", "main", "n"],
             wizard_values(project_id="good-id", upstream_url="https://example.com/r.git"),
             id="retry-invalid-project-id",
         ),
@@ -149,7 +150,7 @@ def test_collect_wizard_inputs_cancellation_paths(
 
 
 def test_collect_wizard_inputs_lowercases_project_id() -> None:
-    """Uppercase project IDs are lowercased with a friendly note."""
+    """Uppercase project IDs are normalised with a friendly note."""
     with (
         patch(
             "builtins.input",
@@ -161,7 +162,26 @@ def test_collect_wizard_inputs_lowercases_project_id() -> None:
 
     assert result == wizard_values(project_id="myproject", upstream_url="https://example.com/r.git")
     printed = [" ".join(str(arg) for arg in call.args) for call in mock_print.call_args_list]
-    assert any("lowercased to 'myproject'" in line for line in printed)
+    assert any("normalised to 'myproject'" in line for line in printed)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param("terok", "terok", id="already-valid-passthrough"),
+        pytest.param("My Project", "my-project", id="spaces-to-hyphens"),
+        pytest.param("MyProject", "myproject", id="camelcase-lowercased"),
+        pytest.param("proj!!@#", "proj", id="special-chars-dropped"),
+        pytest.param("foo   ---   bar", "foo-bar", id="runs-collapsed"),
+        pytest.param("   edgy   ", "edgy", id="surrounding-whitespace-stripped"),
+        pytest.param("-_proj_-", "proj", id="leading-and-trailing-punctuation-trimmed"),
+        pytest.param("!!!", "", id="nothing-salvageable"),
+        pytest.param("terok pages", "terok-pages", id="the-field-report-case"),
+    ],
+)
+def test_slugify_project_id(raw: str, expected: str) -> None:
+    """``_slugify_project_id`` meets users halfway without silently mangling intent."""
+    assert _slugify_project_id(raw) == expected
 
 
 def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
@@ -396,15 +416,29 @@ class TestValidateAnswer:
         assert err is None
 
     def test_transform_runs_before_validation(self) -> None:
-        """str.lower on project_id normalises before the regex check fires."""
+        """Slugify + lowercase on project_id normalises before the regex check fires."""
         value, err = validate_answer(_q("project_id"), "MyProject")
         assert value == "myproject"
         assert err is None
 
+    def test_transform_slugifies_spaces_and_specials(self) -> None:
+        """Whitespace turns into hyphens and stray punctuation is dropped."""
+        value, err = validate_answer(_q("project_id"), "My Fancy Project!!")
+        assert value == "my-fancy-project"
+        assert err is None
+
+    def test_transform_collapses_hyphen_runs(self) -> None:
+        """Consecutive delimiters collapse into one hyphen."""
+        value, err = validate_answer(_q("project_id"), "foo   ---   bar")
+        assert value == "foo-bar"
+        assert err is None
+
     def test_validator_surfaces_error(self) -> None:
-        """The project-id validator rejects malformed slugs verbatim."""
-        value, err = validate_answer(_q("project_id"), "has spaces")
+        """A slug that can't be salvaged by slugification surfaces the regex error."""
+        # Only punctuation — nothing in the allowed alphabet survives.
+        value, err = validate_answer(_q("project_id"), "!!!")
         assert err is not None
+        assert "Invalid project ID" in err or "required" in err
 
     def test_editor_kind_accepts_arbitrary_text(self) -> None:
         """Editor-style questions have no validator; any string goes through."""

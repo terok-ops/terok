@@ -84,10 +84,12 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
 
     .wizard-help {
         color: $text-muted;
+        height: auto;
     }
 
     .wizard-error {
         color: $error;
+        height: auto;
     }
 
     #wizard-form-buttons {
@@ -382,6 +384,20 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
         display: none;
     }
 
+    .wizard-init-ssh-spacer {
+        height: 1;
+    }
+
+    #wizard-init-ssh-pubkey {
+        color: $accent;
+        height: auto;
+    }
+
+    #wizard-init-ssh-fingerprint {
+        color: $text-muted;
+        height: auto;
+    }
+
     #wizard-init-buttons {
         height: auto;
         align-horizontal: right;
@@ -429,10 +445,16 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             # plain text without the editor's line-number gutter or
             # cursor — copying from the terminal's mouse works cleanly,
             # and the "Copy" button bypasses that path entirely via the
-            # shared clipboard helper.
+            # shared clipboard helper.  The fingerprint is shown
+            # alongside the key so the user can verify what GitHub etc.
+            # will display *after* they paste the key — the comparison
+            # has to be possible with both halves on screen at once.
             with Vertical(id="wizard-init-ssh-key"):
                 yield Label("SSH public key — register this on your git remote:")
+                yield Static("", classes="wizard-init-ssh-spacer")
                 yield Static("", id="wizard-init-ssh-pubkey")
+                yield Static("", classes="wizard-init-ssh-spacer")
+                yield Static("", id="wizard-init-ssh-fingerprint")
                 with Horizontal(id="wizard-init-ssh-buttons"):
                     yield Button(
                         "Copy",
@@ -588,7 +610,6 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
         from terok.lib.core.projects import load_project
         from terok.lib.domain.facade import (
             generate_dockerfiles,
-            make_git_gate,
             provision_ssh_key,
             summarize_ssh_init,
         )
@@ -605,6 +626,13 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
 
             if project_needs_key_registration(self._project_id):
                 self.query_one("#wizard-init-ssh-pubkey", Static).update(result["public_line"])
+                # Show the fingerprint beside the key so the user can
+                # check it matches what their remote (e.g. GitHub) shows
+                # *after* pasting — by then the pubkey is already gone
+                # from that page and only the SHA256 digest remains.
+                self.query_one("#wizard-init-ssh-fingerprint", Static).update(
+                    f"Fingerprint: {result['fingerprint']}  ·  Comment: {result['comment']}"
+                )
                 # Stash for the Copy button handler — Static doesn't keep
                 # the raw text the way TextArea.text does.
                 self._ssh_pub_line = result["public_line"]
@@ -646,14 +674,17 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             await asyncio.to_thread(_build_in_subprocess, self._project_id)
             self._mark("build", "done")
 
-            # Step 4: Gate sync — load_project to read gate_enabled
+            # Step 4: Gate sync — load_project to read gate_enabled.
+            # Sync itself runs in a subprocess for the same reason as
+            # the build: ``git clone --mirror`` and friends inherit
+            # stdout/stderr and would otherwise overwrite the TUI frame.
             project = load_project(self._project_id)
             if not project.gate_enabled:
                 self._mark("gate", "skipped", "gate.enabled: false")
                 log.write("[dim]Gate disabled in project.yml — skipping gate-sync.[/]")
             else:
                 self._mark("gate", "running")
-                res = await asyncio.to_thread(lambda: make_git_gate(project).sync())
+                res = await asyncio.to_thread(_gate_sync_in_subprocess, self._project_id)
                 if res["success"]:
                     upstream_hint = (
                         f"upstream {res['upstream_url']}"
@@ -745,26 +776,31 @@ def _log_capture(log: RichLog):
                 log.write(text)
 
 
-def _build_in_subprocess(project_id: str) -> None:
-    """Run :func:`build_images` in a child Python process.
+def _run_isolated(child_body: str, *, label: str) -> None:
+    """Run *child_body* as a ``python -c`` subprocess with captured fds.
 
-    Isolating the build in a subprocess is the robust way to keep
-    ``podman build``'s inherited stdout/stderr from scrambling the
-    Textual frame: the child gets its own fds, ``capture_output``
-    swallows them, and the parent's terminal is untouched regardless
-    of what the build prints (or crashes with).
+    Several init steps shell out to long-running commands (``podman
+    build``, ``git clone --mirror``) that inherit the caller's
+    stdout/stderr file descriptors.  Left alone, their raw output
+    *corrupts the TUI frame* — colour codes, cursor moves, and progress
+    bars land directly on the terminal underneath Textual.  Running the
+    whole step in a child Python process moves those fds one layer
+    away: ``capture_output=True`` swallows them, and the parent's
+    terminal stays pristine regardless of what the step prints or
+    crashes with.
 
-    Any non-zero exit propagates as ``RuntimeError`` carrying the last
-    few KiB of the child's stderr, which the wizard's worker already
-    logs as the failed-step's detail.  Proper streaming (subprocess
-    stdout → RichLog via a reader thread) is tracked in issue #473 —
-    this is the minimum-viable isolation, not the final UX.
+    *label* is the human-friendly step name used in the error message.
+    Any non-zero exit propagates as :class:`RuntimeError` carrying the
+    last few KiB of the child's combined output, which the wizard's
+    worker already logs as the failed step's detail.
+
+    Proper streaming (subprocess output → ``RichLog`` via a reader
+    thread) is tracked in issue #473 — this is the minimum-viable
+    isolation, not the final UX.
     """
     import subprocess  # noqa: S404 — launching a known python interpreter with fixed argv
     import sys
 
-    # Literal repr keeps project_id safely escaped into the -c body.
-    child_body = f"from terok.lib.domain.facade import build_images; build_images({project_id!r})"
     result = subprocess.run(  # noqa: S603 — argv is sys.executable + -c + terok code we control
         [sys.executable, "-c", child_body],
         capture_output=True,
@@ -774,4 +810,39 @@ def _build_in_subprocess(project_id: str) -> None:
     if result.returncode != 0:
         tail = (result.stderr or result.stdout or "").strip().splitlines()
         snippet = "\n".join(tail[-20:]) if tail else "(no output)"
-        raise RuntimeError(f"build_images exited with code {result.returncode}:\n{snippet}")
+        raise RuntimeError(f"{label} exited with code {result.returncode}:\n{snippet}")
+
+
+def _build_in_subprocess(project_id: str) -> None:
+    """Run :func:`build_images` in a child Python process."""
+    # Literal repr keeps project_id safely escaped into the -c body.
+    child_body = f"from terok.lib.domain.facade import build_images; build_images({project_id!r})"
+    _run_isolated(child_body, label="build_images")
+
+
+def _gate_sync_in_subprocess(project_id: str) -> dict[str, Any]:
+    """Run the gate sync in a child Python process and return its result dict.
+
+    The result dict is serialised to a tempfile (rather than captured
+    stdout) so any ``git`` progress noise can't be mistaken for the
+    payload.  The tempfile is cleaned up regardless of subprocess
+    outcome.
+    """
+    import json
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".json", prefix="terok-gate-sync-", delete=False) as f:
+        result_path = Path(f.name)
+    try:
+        child_body = (
+            "import json\n"
+            "from terok.lib.core.projects import load_project\n"
+            "from terok.lib.domain.facade import make_git_gate\n"
+            f"_project = load_project({project_id!r})\n"
+            "_result = make_git_gate(_project).sync()\n"
+            f"json.dump(_result, open({str(result_path)!r}, 'w'))\n"
+        )
+        _run_isolated(child_body, label="gate sync")
+        return json.loads(result_path.read_text(encoding="utf-8"))
+    finally:
+        result_path.unlink(missing_ok=True)
