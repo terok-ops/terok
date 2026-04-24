@@ -438,13 +438,19 @@ def _run_container(
     command: list[str] | None = None,
     hooks: LifecycleHooks | None = None,
 ) -> None:
-    """Launch a detached task container via the executor's public API.
+    """Launch a detached task container, annotated for clearance enrichment.
 
-    Delegates all podman command assembly (userns, shield/bypass, GPU,
-    env redaction, CDI detection) to :meth:`AgentRunner.launch_prepared`,
-    which in turn drives the sandbox.  In sealed isolation mode
-    (``project.is_sealed``), the sandbox splits into create → copy → start
-    instead of a single ``podman run -d``.
+    Three ``ai.terok.*`` OCI annotations bind the container to its task
+    identity so clearance popups can render "Task: project/task_id ·
+    name" instead of raw short IDs: project, task_id, and
+    task_meta_path.  The meta-path annotation carries the YAML path
+    (not a snapshot of the name) so a rename mid-run surfaces the
+    fresh label in the next popup.
+
+    Podman command assembly (userns, shield/bypass, GPU, env redaction,
+    CDI detection) is delegated to :meth:`AgentRunner.launch_prepared`.
+    In sealed isolation mode (``project.is_sealed``) the sandbox splits
+    into create → copy → start instead of a single ``podman run -d``.
 
     Args:
         cname: Container name (``--name``).
@@ -452,9 +458,8 @@ def _run_container(
         env: Environment variables to pass via ``-e``.
         volumes: Typed volume specs (sandbox decides mount vs inject).
         project: The resolved :class:`ProjectConfig` (used for GPU flag).
-        task_id: Task identifier, used for the ``ai.terok.task`` OCI
-            annotation so clearance clients can render popups as
-            "Task: project/task_id" instead of raw container IDs.
+        task_id: Task identifier — the second component of the clearance
+            annotation triple.
         task_dir: Per-task directory (used for per-task shield state).
         extra_args: Additional ``podman run`` flags inserted after the GPU
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).

@@ -147,12 +147,11 @@ def _check_shield() -> _CheckResult:
 
 
 def _check_clearance_stack() -> _CheckResult:
-    """Detect drift across the clearance hub/verdict/notifier triple.
+    """Surface stale or half-installed clearance units — pipx upgrade hygiene.
 
-    ``terok_clearance.check_units_outdated`` covers all three units in
-    one probe: a pre-split monolithic ``terok-dbus.service`` on disk,
-    a half-installed hub/verdict pair, and a stale version marker on
-    any of the three surface as a single ``warn`` here.
+    Delegates drift detection to the clearance package so sickbay
+    tracks whatever new units terok-clearance ships next without
+    knowing the triple's shape itself.
     """
     label = "Clearance stack"
     outdated = _clearance_check_units_outdated()

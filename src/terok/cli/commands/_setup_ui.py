@@ -73,5 +73,8 @@ def _stage_begin(label: str) -> None:
     a network round-trip.  The matching terminator is the regular
     ``print(...)`` that writes the status suffix and newline.
     """
-    # 21 chars wide = longest label ("Clearance notifier" = 18) + 3 space gutter.
+    # Column width is load-bearing: setup and uninstall both align
+    # their status markers at this offset, so the two commands read
+    # as one continuous log when run back-to-back.  Recompute when a
+    # new phase ships with a label longer than the current widest.
     print(f"  {label:<21}", end="", flush=True)
