@@ -427,3 +427,70 @@ async def test_ssh_panel_shows_fingerprint_alongside_pubkey() -> None:
             # Unblock the worker so the test exits cleanly.
             screen._ssh_continue.set()
             await pilot.pause()
+
+
+# ── Esc-cancels-wizard ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_init_screen_esc_cancels_mid_run() -> None:
+    """Esc during an in-flight init sets CANCELLED and tears down cleanly.
+
+    Drives the worker to the SSH-key ``continue`` gate — where it
+    parks on ``await self._ssh_continue.wait()`` — then presses Esc
+    to trigger :meth:`InitProgressScreen.action_cancel`.  Two things
+    must hold:
+
+    * The outcome is :attr:`InitOutcome.CANCELLED`, not FAILED — a
+      deliberate cancel is not a failure.
+    * No teardown exception is raised.  The worker's ``finally``
+      runs after the screen has been dismissed; the cleanup path
+      early-returns on ``CANCELLED`` and tolerates a missing Close
+      button via ``NoMatches``.  Either defence regressing would
+      surface here as an uncaught worker error.
+    """
+    import asyncio as _asyncio
+
+    from terok.tui.wizard_screens import InitOutcome, InitProgressScreen
+
+    minted = {
+        "key_id": 7,
+        "key_type": "ed25519",
+        "fingerprint": "SHA256:cancelme",
+        "comment": "terok@cancel",
+        "public_line": "ssh-ed25519 AAAAFAKE terok@cancel",
+    }
+    app = _WizardHost(InitProgressScreen("demo", "project:\n  id: demo\n"))
+    with (
+        patch.object(InitProgressScreen, "_existing_project_yaml_path", return_value=None),
+        patch("terok.tui.wizard_screens.write_project_yaml"),
+        patch("terok.tui.wizard_screens.project_needs_key_registration", return_value=True),
+        patch("terok.lib.domain.facade.provision_ssh_key", return_value=minted),
+        patch("terok.lib.domain.facade.summarize_ssh_init"),
+    ):
+        async with app.run_test() as pilot:
+            # Let the worker reach the ssh_continue.wait() park state —
+            # same readiness probe as the fingerprint test above.
+            for _ in range(20):
+                await pilot.pause()
+                await _asyncio.sleep(0)
+                screen = app.screen
+                if not isinstance(screen, InitProgressScreen):
+                    break
+                panel = screen.query_one("#wizard-init-ssh-key")
+                if panel.styles.display == "block":
+                    break
+            screen = app.screen
+            assert isinstance(screen, InitProgressScreen)
+
+            await pilot.press("escape")
+            # Give the worker-cancel + dismiss + finally unwind time
+            # to fully settle before we assert.
+            for _ in range(10):
+                await pilot.pause()
+                await _asyncio.sleep(0)
+
+            assert screen._outcome is InitOutcome.CANCELLED
+            # The host's capture callback receives the dismissed outcome —
+            # confirms dismiss() actually fired (not just the outcome set).
+            assert app.result is InitOutcome.CANCELLED

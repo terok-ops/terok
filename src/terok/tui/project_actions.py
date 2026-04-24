@@ -545,6 +545,16 @@ class ProjectActionsMixin:
                 # no-op, not an error.  No notification needed; the log
                 # pane already told them what happened.
                 pass
+            case InitOutcome.CANCELLED:
+                # User hit Esc mid-init.  project.yml may have been
+                # written and early steps may have partially run; point
+                # them at the CLI to resume rather than guessing.
+                self.notify(
+                    f"Wizard cancelled. If '{values['project_id']}' was partially "
+                    "initialized, finish it with `terok project init` from the CLI.",
+                    severity="warning",
+                    timeout=10,
+                )
             case InitOutcome.FAILED:
                 self.notify(
                     f"Project '{values['project_id']}' created but init did not complete. "

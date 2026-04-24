@@ -9,6 +9,14 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+#: Hard cap on a single clipboard-helper invocation.  wl-copy in
+#: particular forks a daemon that holds the X/Wayland selection alive
+#: after the foreground process exits; if we ever ended up waiting for
+#: that daemon to close its pipes we'd block the UI loop forever.  Three
+#: seconds is comfortably more than any real clipboard write needs and
+#: small enough that a stuck helper surfaces as an error, not a hang.
+_CLIPBOARD_TIMEOUT_SEC = 3.0
+
 
 @dataclass(frozen=True)
 class ClipboardHelperStatus:
@@ -122,9 +130,11 @@ def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
               message when all helpers fail.
             * ``hint``: An optional hint string with guidance on how to enable
               clipboard support on the current platform (for example, a command
-              to install a missing helper). This is typically populated when no
-              helper is available or when all helpers fail, and is ``None`` on
-              successful copies.
+              to install a missing helper). Populated only when **no** helper
+              was found on the system; ``None`` on success and also ``None``
+              when helpers were available but all of them failed at runtime —
+              in that case the user already has a helper installed, so
+              ``error`` describes what actually went wrong.
 
     Examples:
         Basic usage with boolean check::
@@ -164,15 +174,37 @@ def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
     errors: list[str] = []
     for name, cmd in available:
         try:
-            subprocess.run(cmd, input=text, check=True, text=True, capture_output=True)
+            # Why ``stdout=DEVNULL`` instead of ``capture_output=True``:
+            # wl-copy forks a long-lived daemon that inherits the parent's
+            # stdout/stderr to keep the Wayland selection alive.  When
+            # Python captures stdout via a pipe, ``subprocess.run`` waits
+            # for EOF on that pipe — which the daemon never closes — and
+            # the call hangs forever, freezing the caller's event loop.
+            # Giving the helper ``/dev/null`` as stdout breaks the pipe
+            # dependency entirely; stderr stays on a pipe so we can still
+            # surface a real error message on failure.  The timeout is
+            # defence-in-depth for helpers we haven't anticipated.
+            subprocess.run(
+                cmd,
+                input=text,
+                check=True,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=_CLIPBOARD_TIMEOUT_SEC,
+            )
             return ClipboardCopyResult(ok=True, method=name)
         except subprocess.CalledProcessError as e:
-            detail = (e.stderr or e.stdout or "").strip()
+            detail = (e.stderr or "").strip()
             errors.append(f"{name} failed" + (f": {detail}" if detail else ""))
+        except subprocess.TimeoutExpired:
+            errors.append(f"{name} timed out after {_CLIPBOARD_TIMEOUT_SEC:g}s")
         except Exception as e:
             errors.append(f"{name} error: {e}")
 
-    hint = _clipboard_install_hint()
-    return ClipboardCopyResult(
-        ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None
-    )
+    # Helpers *were* available but all of them failed at runtime — a
+    # broken Wayland socket, a misconfigured compositor, an xclip
+    # segfault, etc.  Suggesting ``apt install wl-clipboard`` here would
+    # be actively misleading; the user already has the helper.  Leave
+    # hint None so the caller surfaces the actual per-helper error.
+    return ClipboardCopyResult(ok=False, error=errors[-1] if errors else "Clipboard copy failed.")
