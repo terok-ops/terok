@@ -50,8 +50,8 @@ textual-serve = ">=1.1.0"
 # dep so Poetry can resolve a consistent sandbox revision across the
 # chain during review.  Release script flips both to wheel URLs at
 # merge.
-terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "feat/progressive-stage-lines"}
-terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/progressive-stage-lines"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.120/terok_executor-0.0.120-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.101/terok_sandbox-0.0.101-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.32/terok_shield-0.6.32-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.4/terok_clearance-0.6.4-py3-none-any.whl"}
 
