@@ -7,9 +7,12 @@ Thin wrapper over :func:`terok_executor.ensure_sandbox_ready` — the
 executor-level composer that generates vault routes from the agent
 roster and then runs the sandbox aggregator (shield hooks + reader +
 vault + gate + clearance hub/verdict/notifier with a full
-stop → uninstall → install → verify cycle per service).  On top,
-terok adds its own desktop-entry install for ``terok-tui``.  Safe to
-re-run; every phase is idempotent.
+stop → uninstall → install → verify cycle per service).  After the
+service stack we build the L0/L1 base images via
+:func:`terok_executor.build_base_images` so a fresh ``terok setup``
+leaves the host ready to run tasks without a separate image-build
+step.  On top, terok adds its own desktop-entry install for
+``terok-tui``.  Safe to re-run; every phase is idempotent.
 
 Per-project operations live under the ``project`` group in
 :mod:`project.py`; :func:`cmd_project_init` stays here because
@@ -58,27 +61,59 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "headless / server hosts with no application launcher."
         ),
     )
+    p_setup.add_argument(
+        "--no-images",
+        action="store_true",
+        help=(
+            "Skip the L0/L1 base-image build.  Use on hosts that will "
+            "never run tasks locally (e.g. management-only installs)."
+        ),
+    )
+    p_setup.add_argument(
+        "--base",
+        default="ubuntu:24.04",
+        help="Base image for the L0/L1 build (default: ubuntu:24.04).",
+    )
+    p_setup.add_argument(
+        "--family",
+        default=None,
+        help="Override auto-detected package family (``deb`` or ``rpm``).",
+    )
 
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle ``setup``.  Returns True if handled."""
     if args.cmd != "setup":
         return False
-    cmd_setup(no_desktop_entry=getattr(args, "no_desktop_entry", False))
+    cmd_setup(
+        no_desktop_entry=getattr(args, "no_desktop_entry", False),
+        no_images=getattr(args, "no_images", False),
+        base=getattr(args, "base", "ubuntu:24.04"),
+        family=getattr(args, "family", None),
+    )
     return True
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────
 
 
-def cmd_setup(*, no_desktop_entry: bool = False) -> None:
-    """Install the sandbox stack via the executor composer, then the desktop entry.
+def cmd_setup(
+    *,
+    no_desktop_entry: bool = False,
+    no_images: bool = False,
+    base: str = "ubuntu:24.04",
+    family: str | None = None,
+) -> None:
+    """Install the sandbox stack via the executor composer, build base images, then desktop entry.
 
     Exits non-zero if the sandbox aggregator fails (one or more service
-    phases unreachable) or if the desktop entry install raises.  The
-    desktop entry step is non-fatal when xdg-utils is missing — the
-    built-in fallback covers spec-compliant hosts and the warning is
-    a WARN, not a FAIL.
+    phases unreachable) or if the image build fails.  The desktop entry
+    step is non-fatal when xdg-utils is missing — the built-in fallback
+    covers spec-compliant hosts and the warning is a WARN, not a FAIL.
+
+    ``no_images`` skips the L0/L1 build for management-only hosts that
+    never run tasks locally; ``base`` + ``family`` are forwarded to the
+    image factory when the build does run.
     """
     from terok_executor import ensure_sandbox_ready
 
@@ -92,14 +127,23 @@ def cmd_setup(*, no_desktop_entry: bool = False) -> None:
         if exc.code:
             print(_bold(_red(f"Sandbox aggregator reported failures (exit {exc.code}).")))
 
+    images_failed = False
+    if not no_images and not sandbox_failed:
+        # Skip the (slow) image build when the service stack is already
+        # broken — the user needs to fix setup before anything that
+        # depends on images will be useful anyway.
+        images_failed = not _run_image_build(base=base, family=family)
+
     print()
     desktop_ok = no_desktop_entry or _ensure_desktop_entry()
 
     print()
-    if not sandbox_failed and desktop_ok:
+    if not sandbox_failed and not images_failed and desktop_ok:
         print(_bold("Setup complete."))
     elif sandbox_failed:
         print(_bold(_red("Setup failed — see service stage lines above.")))
+    elif images_failed:
+        print(_bold(_red("Image build failed — see above.")))
     else:
         print(_bold(_yellow("Desktop entry install reported errors (see above).")))
 
@@ -111,8 +155,35 @@ def cmd_setup(*, no_desktop_entry: bool = False) -> None:
         f"  terok task run <project>                   Start a CLI task (attaches on TTY)\n"
     )
 
-    if sandbox_failed:
+    if sandbox_failed or images_failed:
         sys.exit(1)
+
+
+# ── Image factory phase (delegates to terok-executor) ─────────────────
+
+
+def _run_image_build(*, base: str, family: str | None) -> bool:
+    """Build L0 + L1 base images via the executor's public factory.
+
+    Returns ``False`` on :class:`BuildError` so ``cmd_setup`` can
+    surface a single aggregate "setup failed" line instead of the
+    factory crashing the whole command halfway through.  Non-build
+    ``SystemExit`` from deeper code paths (e.g. a missing Dockerfile
+    resource) is also absorbed for the same reason.
+    """
+    from terok_executor import BuildError, build_base_images
+
+    _stage_begin("Base images (L0/L1)")
+    try:
+        build_base_images(base_image=base, family=family)
+    except BuildError as exc:
+        print(f"{_status_label(False)} ({exc})")
+        return False
+    except SystemExit:
+        print(f"{_status_label(False)} (factory exited unexpectedly)")
+        return False
+    print(f"{_status_label(True)} (built)")
+    return True
 
 
 # ── Desktop entry phase (terok-specific, not in sandbox aggregator) ───
