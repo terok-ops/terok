@@ -344,6 +344,31 @@ def test_run_isolated_propagates_nonzero_as_runtime_error() -> None:
     assert "kaboom" in msg
 
 
+def test_run_isolated_detaches_child_from_controlling_tty() -> None:
+    """The child is its own session leader and has an empty stdin.
+
+    Without this isolation, a misbehaving grandchild (e.g. OpenSSH asking
+    for a passphrase) can open ``/dev/tty`` and write prompts onto the
+    Textual frame that the TUI can't catch via ``capture_output``.  The
+    invariants below prove the belt-and-braces:
+
+    * ``os.getsid(0) == os.getpid()`` — child was ``setsid()``-ed, so it
+      has no controlling tty at all.
+    * reading stdin returns empty — ``DEVNULL`` severed the last input
+      channel, so any tool that falls back to stdin also fails cleanly.
+    """
+    from terok.tui.wizard_screens import _run_isolated
+
+    probe = (
+        "import os, sys;"
+        " is_leader = os.getsid(0) == os.getpid();"
+        " stdin_empty = sys.stdin.read() == '';"
+        " sys.exit(0 if (is_leader and stdin_empty) else 1)"
+    )
+    # Raises if either invariant fails.
+    _run_isolated(probe, label="tty-isolation probe")
+
+
 def test_gate_sync_in_subprocess_returns_result_dict() -> None:
     """The helper shuttles the child's result dict back to the parent verbatim.
 
