@@ -809,16 +809,10 @@ def test_is_codex_oauth_not_exposed_without_experimental(
     assert cfg.is_codex_oauth_exposed() is False
 
 
-def test_is_codex_oauth_proxied_is_phase3_skeleton(
+def test_is_codex_oauth_proxied_when_allowed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """``is_codex_oauth_proxied()`` honours the same flag combo as Claude.
-
-    Phase 1 ships the gate but no refresh route, so a ``True`` here
-    currently has no broker on the other side — the shield deny rule
-    wired in task_runners.py still fires, which is intentional: the
-    moment Phase 3 adds the route, nothing else needs to change.
-    """
+    """``is_codex_oauth_proxied()`` returns True when experimental + allow_oauth."""
     monkeypatch.setenv(
         "TEROK_CONFIG_FILE",
         str(
@@ -826,6 +820,24 @@ def test_is_codex_oauth_proxied_is_phase3_skeleton(
         ),
     )
     assert cfg.is_codex_oauth_proxied() is True
+
+
+def test_is_codex_oauth_not_proxied_when_exposed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_codex_oauth_proxied()`` returns False when token is exposed (exposed wins)."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(
+                tmp_path,
+                "experimental: true\nagent:\n  codex:\n    allow_oauth: true\n"
+                "    expose_oauth_token: true\n",
+            )
+        ),
+    )
+    assert cfg.is_codex_oauth_proxied() is False
+    assert cfg.is_codex_oauth_exposed() is True
 
 
 # ---------- Layered config merging ----------

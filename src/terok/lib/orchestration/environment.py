@@ -271,12 +271,12 @@ def _apply_codex_oauth_overrides(env: dict[str, str]) -> None:
     gate on the phantom marker value to only strip executor-injected
     vault plumbing:
 
-    - **Proxied** (``is_codex_oauth_proxied``, Phase 3): keep
-      ``OPENAI_BASE_URL`` for vault routing; remove the phantom token so
-      the proxy picks auth from the mounted ``auth.json`` marker.  Unused
-      in Phase 1 — no Codex refresh route exists yet.
-    - **Skipped / Exposed**: clear both env vars so the in-container Codex
-      CLI reaches ``api.openai.com`` directly via ``auth.json``.
+    - **Proxied** (``is_codex_oauth_proxied``): keep ``OPENAI_BASE_URL``
+      for vault routing; remove the phantom token env so the CLI falls
+      back to its phantom ``auth.json`` bearer (which the vault then
+      swaps for the real one at inference time).
+    - **Skipped / Exposed**: clear both env vars so the in-container
+      Codex CLI reaches ``api.openai.com`` directly via ``auth.json``.
     """
     from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
 
