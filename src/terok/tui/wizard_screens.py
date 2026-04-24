@@ -47,7 +47,7 @@ from ..lib.domain.wizards.new_project import (
     validate_answer,
     write_project_yaml,
 )
-from .askpass_service import build_askpass_env
+from .askpass_service import build_askpass_env, gui_askpass_usable
 
 # ── Step 1: the form ──────────────────────────────────────────────────
 
@@ -693,16 +693,29 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
     async def _askpass_subprocess_env(self, project: Any) -> dict[str, str] | None:
         """Return env for ``_run_isolated`` — ``None`` for projects that don't opt into personal SSH.
 
-        When the project sets ``ssh.use_personal: true`` we start the
-        app's :class:`AskpassService` (lazily; first call binds the
-        unix socket) and build the env vars OpenSSH needs to route
-        passphrase prompts through :class:`AskpassModal`.  When the
-        project sits on vault-only SSH (the default), we return
-        ``None`` so the subprocess inherits the ambient env and no
-        askpass plumbing is touched — no socket, no env var, no cost.
+        Three branches:
+
+        - **Vault-only project (default).**  Return ``None`` so the
+          subprocess inherits the ambient env — no socket, no helper,
+          no cost for users who haven't opted in.
+        - **Personal SSH + usable GUI askpass.**  When the user has a
+          desktop helper wired up (``SSH_ASKPASS`` set and
+          ``DISPLAY``/``WAYLAND_DISPLAY`` reachable), their GUI dialog
+          is a better UX than our modal — skip starting our socket
+          server entirely and just propagate env with
+          ``SSH_ASKPASS_REQUIRE=force`` so OpenSSH uses their helper
+          even with a tty attached.
+        - **Personal SSH, no GUI askpass.**  Start the app's
+          :class:`AskpassService` (lazily; first call binds the unix
+          socket) and build the env vars OpenSSH needs to route
+          passphrase prompts through :class:`AskpassModal`.
         """
         if not project.ssh_use_personal:
             return None
+        if gui_askpass_usable(os.environ):
+            # User's GUI helper wins — still enforce REQUIRE=force so
+            # ssh doesn't fall back to /dev/tty on tty-bearing sessions.
+            return {**os.environ, "SSH_ASKPASS_REQUIRE": "force"}
         service = await self.app.ensure_askpass_service()
         return build_askpass_env(
             os.environ,

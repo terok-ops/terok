@@ -20,6 +20,7 @@ import asyncio
 import os
 import stat
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from textual.app import App
@@ -30,6 +31,7 @@ from terok.tui.askpass_service import (
     AskpassService,
     build_askpass_env,
     default_socket_path,
+    gui_askpass_usable,
 )
 
 # ── build_askpass_env ─────────────────────────────────────────────────
@@ -109,21 +111,61 @@ class TestBuildEnv:
 
 
 class TestSocketPath:
-    """Per-process socket path under ``$XDG_RUNTIME_DIR`` (with fallback)."""
+    """Per-process socket path under terok's namespace runtime dir.
 
-    def test_uses_xdg_runtime_dir_when_set(
+    We delegate to :func:`terok_sandbox.paths.namespace_runtime_dir`
+    for the XDG resolution order — patching it out lets us pin the
+    path regardless of the host's env and ensures no ``/tmp`` fallback
+    leaks back in.
+    """
+
+    def test_uses_namespace_runtime_dir(self, tmp_path: Path) -> None:
+        """Socket sits inside whatever ``namespace_runtime_dir`` returns — always.
+
+        This is the anti-regression for bandit B108: the resolver is
+        the single source of truth for where ephemeral terok state
+        lives, and it has no ``/tmp`` leaf in its fallback chain
+        (``$XDG_RUNTIME_DIR/terok`` → ``$XDG_STATE_HOME/terok`` →
+        ``~/.local/state/terok``).  Delegating here means any future
+        change to that chain lands transparently.
+        """
+        with patch("terok.tui.askpass_service.namespace_runtime_dir", return_value=tmp_path):
+            path = default_socket_path(pid=12345)
+        assert path == tmp_path / "askpass-12345.sock"
+
+    def test_does_not_read_xdg_runtime_dir_directly(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """When the env var points somewhere, the socket lives there."""
-        monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
-        path = default_socket_path(pid=12345)
-        assert path == tmp_path / "terok-askpass-12345.sock"
+        """``default_socket_path`` goes through the resolver, not the raw env var.
 
-    def test_falls_back_to_tmp(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without ``XDG_RUNTIME_DIR``, ``/tmp`` is the last resort."""
-        monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
-        path = default_socket_path(pid=999)
-        assert path == Path("/tmp/terok-askpass-999.sock")
+        Proves we're not reimplementing the XDG chain locally.
+        """
+        monkeypatch.setenv("XDG_RUNTIME_DIR", "/tmp/unused-should-be-ignored")
+        with patch("terok.tui.askpass_service.namespace_runtime_dir", return_value=tmp_path):
+            assert default_socket_path(pid=1).parent == tmp_path
+
+
+# ── gui_askpass_usable ────────────────────────────────────────────────
+
+
+class TestGuiAskpassUsable:
+    """Predicate that decides whether to bother spinning up our socket."""
+
+    def test_needs_both_askpass_and_gui(self) -> None:
+        """A GUI helper without a display can't actually render — skip it."""
+        assert not gui_askpass_usable({"SSH_ASKPASS": "/usr/libexec/seahorse-askpass"})
+        assert not gui_askpass_usable({"DISPLAY": ":0"})
+        assert not gui_askpass_usable({})
+
+    def test_x11_session_is_usable(self) -> None:
+        """``DISPLAY`` + ``SSH_ASKPASS`` is the classic desktop path."""
+        assert gui_askpass_usable({"SSH_ASKPASS": "/usr/libexec/seahorse-askpass", "DISPLAY": ":0"})
+
+    def test_wayland_session_is_usable(self) -> None:
+        """Wayland's ``WAYLAND_DISPLAY`` is accepted alongside X's ``DISPLAY``."""
+        assert gui_askpass_usable(
+            {"SSH_ASKPASS": "/usr/libexec/seahorse-askpass", "WAYLAND_DISPLAY": "wayland-0"}
+        )
 
 
 # ── AskpassService lifecycle ──────────────────────────────────────────

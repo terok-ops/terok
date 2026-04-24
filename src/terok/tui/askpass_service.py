@@ -3,7 +3,7 @@
 
 """TUI-side askpass listener, passphrase modal, and env-injection helper.
 
-Three pieces that together let ``use_personal_ssh: true`` projects
+Four pieces that together let ``use_personal_ssh: true`` projects
 prompt for passphrases through the TUI instead of corrupting the
 terminal frame or silently failing:
 
@@ -13,15 +13,18 @@ terminal frame or silently failing:
 - :class:`AskpassModal` — one-line passphrase prompt as a Textual
   :class:`ModalScreen`.  Dismisses with the passphrase, or ``None`` on
   cancel.
-- :func:`build_askpass_env` — pure function that decides whether to
-  inject our helper into a subprocess env or respect a pre-existing
-  GUI askpass (seahorse, gnome-keyring) when one would work.
+- :func:`gui_askpass_usable` — predicate used by callers to decide
+  whether to start the service at all.  When a user's desktop askpass
+  is reachable, we'd rather use it than our modal.
+- :func:`build_askpass_env` — pure function that injects the helper
+  env vars when we *do* want our own askpass to run.
 
-The service is reachable only via a unix socket under
-``$XDG_RUNTIME_DIR`` (or ``/tmp`` as a fallback) with mode ``0600`` —
-the filesystem is the auth boundary.  No socket is ever bound until
-a project with ``use_personal_ssh=true`` actually spawns a subprocess,
-so users who don't opt in pay nothing for this feature.
+The service is reachable only via a unix socket under terok's runtime
+namespace (:func:`terok_sandbox.paths.namespace_runtime_dir`) with
+mode ``0600`` — the filesystem is the auth boundary.  No socket is
+ever bound until a project with ``use_personal_ssh=true`` actually
+spawns a subprocess *and* lacks a usable GUI askpass, so users who
+don't opt in pay nothing for this feature.
 """
 
 from __future__ import annotations
@@ -31,10 +34,12 @@ import contextlib
 import logging
 import os
 import shutil
+import socket as _socket
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from terok_sandbox.paths import namespace_runtime_dir
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -50,6 +55,21 @@ logger = logging.getLogger(__name__)
 
 
 # ── env builder ───────────────────────────────────────────────────────
+
+
+def gui_askpass_usable(env: Mapping[str, str]) -> bool:
+    """Return ``True`` when *env* advertises a GUI askpass that can actually render.
+
+    A ``SSH_ASKPASS`` without a reachable display (``DISPLAY`` /
+    ``WAYLAND_DISPLAY``) is almost certainly a dud inherited from a
+    desktop login env — a container or headless SSH session would
+    never see the prompt.  In that case we want our Textual modal to
+    take over instead.
+
+    Callers use this to short-circuit before spinning up an
+    :class:`AskpassService` whose socket would never be consulted.
+    """
+    return bool(env.get("SSH_ASKPASS") and (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")))
 
 
 def build_askpass_env(
@@ -75,9 +95,7 @@ def build_askpass_env(
       inherit one and we don't want OpenSSH falling back to it.
     """
     env = dict(base_env)
-    has_existing_askpass = bool(env.get("SSH_ASKPASS"))
-    has_gui = bool(env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"))
-    if not (has_existing_askpass and has_gui):
+    if not gui_askpass_usable(env):
         env["SSH_ASKPASS"] = str(helper_bin)
         env["TEROK_ASKPASS_SOCKET"] = str(socket_path)
     env["SSH_ASKPASS_REQUIRE"] = "force"
@@ -88,12 +106,15 @@ def build_askpass_env(
 
 
 def default_socket_path(*, pid: int | None = None) -> Path:
-    """Return a per-process socket path under ``$XDG_RUNTIME_DIR`` (or ``/tmp``).
+    """Return a per-process socket path under terok's runtime namespace.
 
-    Separate from :class:`AskpassService` so tests can spot-check it.
+    Delegates to :func:`terok_sandbox.paths.namespace_runtime_dir`
+    which owns the XDG resolution order (``$XDG_RUNTIME_DIR/terok/``
+    → ``$XDG_STATE_HOME/terok/`` → ``~/.local/state/terok/``) and
+    creates the directory with safe permissions.  No ``/tmp``
+    fallback means no predictable-temp-path surface.
     """
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    return Path(runtime_dir) / f"terok-askpass-{pid or os.getpid()}.sock"
+    return namespace_runtime_dir() / f"askpass-{pid or os.getpid()}.sock"
 
 
 def locate_helper_bin() -> Path:
@@ -163,7 +184,11 @@ class AskpassModal(ModalScreen["str | None"]):
         dialog = Vertical(id="askpass-dialog")
         dialog.border_title = "SSH passphrase"
         with dialog:
-            yield Static(self._prompt, id="askpass-prompt")
+            # markup=False — OpenSSH prompts contain paths like
+            # "Enter passphrase for '/home/.../id_ed25519':" and Rich would
+            # otherwise interpret any "[...]" inside the path as its markup
+            # syntax.  We want to show the prompt verbatim.
+            yield Static(self._prompt, id="askpass-prompt", markup=False)
             yield Input(password=True, id="askpass-input")
             with Horizontal(id="askpass-buttons"):
                 yield Button("Cancel", id="askpass-cancel", variant="default")
@@ -255,20 +280,35 @@ class AskpassService:
         a no-op.  Any stale socket file at the target path is removed
         first; we assume the old owner is gone because the path embeds
         our pid.
+
+        The bind happens synchronously under a local umask so the
+        socket inode is created ``0600`` atomically.  We deliberately
+        do *not* wrap the whole ``asyncio.start_unix_server`` call in
+        ``os.umask(…); await …; os.umask(old)`` because ``os.umask``
+        is process-global — any other coroutine that runs during the
+        ``await`` would see our tightened umask and create files with
+        unexpectedly restrictive permissions.
         """
         if self._server is not None:
             return
         self._socket_path.parent.mkdir(parents=True, exist_ok=True)
         self._socket_path.unlink(missing_ok=True)
-        # Umask ensures the socket is created 0600 atomically — chmod
-        # afterwards would leave a brief window at default perms.
+        sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
         old_umask = os.umask(0o077)
         try:
-            self._server = await asyncio.start_unix_server(
-                self._handle_client, path=str(self._socket_path)
-            )
+            sock.bind(str(self._socket_path))
+        except BaseException:
+            sock.close()
+            raise
         finally:
             os.umask(old_umask)
+        sock.listen(16)
+        try:
+            self._server = await asyncio.start_unix_server(self._handle_client, sock=sock)
+        except BaseException:
+            sock.close()
+            self._socket_path.unlink(missing_ok=True)
+            raise
         logger.debug("askpass service listening on %s", self._socket_path)
 
     async def stop(self) -> None:
