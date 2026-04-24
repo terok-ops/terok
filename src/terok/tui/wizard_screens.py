@@ -68,6 +68,7 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
 
     #wizard-form-dialog {
         width: 80;
+        max-width: 100%;
         height: 90%;
         border: heavy $primary;
         border-title-align: right;
@@ -260,6 +261,7 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
 
     #wizard-review-dialog {
         width: 90;
+        max-width: 100%;
         height: 80%;
         border: heavy $primary;
         border-title-align: right;
@@ -427,6 +429,7 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
 
     #wizard-init-dialog {
         width: 90;
+        max-width: 100%;
         height: 80%;
         border: heavy $primary;
         border-title-align: right;
