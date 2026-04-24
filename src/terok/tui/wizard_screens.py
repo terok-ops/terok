@@ -947,6 +947,15 @@ def _run_isolated(child_body: str, *, label: str) -> None:
     terminal stays pristine regardless of what the step prints or
     crashes with.
 
+    ``capture_output=True`` only intercepts stdout/stderr, not
+    ``/dev/tty``.  Tools like OpenSSH open ``/dev/tty`` directly to
+    read passphrases, which would land on the Textual frame despite
+    the captured fds.  ``start_new_session=True`` detaches the child
+    from its controlling terminal so ``/dev/tty`` has nothing to
+    resolve to, and ``stdin=DEVNULL`` closes the last input channel.
+    Combined, no subprocess below this call — however badly behaved —
+    can prompt the user over the TUI.
+
     *label* is the human-friendly step name used in the error message.
     Any non-zero exit propagates as :class:`RuntimeError` carrying the
     last few KiB of the child's combined output, which the wizard's
@@ -964,6 +973,8 @@ def _run_isolated(child_body: str, *, label: str) -> None:
         capture_output=True,
         text=True,
         check=False,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
     )
     if result.returncode != 0:
         tail = (result.stderr or result.stdout or "").strip().splitlines()
