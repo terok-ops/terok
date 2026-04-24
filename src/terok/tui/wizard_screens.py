@@ -319,6 +319,78 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
 # ── Step 3: initialize project (ssh-init → generate → build → gate) ──
 
 
+class ShowSshKeyScreen(ModalScreen[None]):
+    """Borderless full-screen view of the SSH public key for terminal copy.
+
+    Textual's ``copy_to_clipboard`` path (used by the "Copy" button) relies
+    on OSC-52 or a host-side helper; neither works when the user runs terok
+    over an SSH tunnel on a locked-down box — a very common setup.  As a
+    last resort they fall back to the host terminal's own mouse selection
+    (iTerm2, GNOME Terminal, xterm, …), which requires Shift-drag to
+    bypass Textual's mouse handling.
+
+    That fallback breaks the moment a ``│`` border character or padding
+    space lands inside the selected rectangle, so this screen is
+    deliberately naked: solid background, a one-line hint, then the key
+    rendered with ``overflow="fold"`` so the base64 blob wraps at the
+    current terminal width — even mid-"word", which the base64 alphabet
+    tolerates because SSH services strip embedded whitespace before
+    validating the key.
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "Close"),
+        Binding("q", "close", "Close"),
+        Binding("enter", "close", "Close"),
+    ]
+
+    # Horizontal padding is deliberately zero: Textual paints the
+    # padded cells with the Screen background, so a character-flow
+    # Shift-drag across wrapped rows would capture the left padding
+    # as literal spaces on every continuation line, defeating the
+    # whole point of this screen.  Vertical padding is harmless —
+    # it sits above the first and below the last row of the key,
+    # outside any drag that starts/ends on the key itself.
+    CSS = """
+    ShowSshKeyScreen {
+        background: $surface;
+        padding: 1 0;
+    }
+
+    #wizard-ssh-show-hint {
+        color: $text-muted;
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    #wizard-ssh-show-pubkey {
+        height: auto;
+    }
+    """
+
+    def __init__(self, public_line: str) -> None:
+        """Store the SSH public key line to render."""
+        super().__init__()
+        self._public_line = public_line
+
+    def compose(self) -> ComposeResult:
+        """Build the hint + bare public key."""
+        from rich.text import Text
+
+        yield Static(
+            "Shift-drag to select the key below  ·  Esc, Enter or q to return",
+            id="wizard-ssh-show-hint",
+        )
+        yield Static(
+            Text(self._public_line, overflow="fold", no_wrap=False),
+            id="wizard-ssh-show-pubkey",
+        )
+
+    def action_close(self) -> None:
+        """Dismiss back to the wizard."""
+        self.dismiss(None)
+
+
 class InitOutcome(enum.Enum):
     """Result of :class:`InitProgressScreen` — four distinct states.
 
@@ -462,6 +534,11 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
                     yield Button(
                         "Copy",
                         id="wizard-init-ssh-copy",
+                        variant="default",
+                    )
+                    yield Button(
+                        "Show full key",
+                        id="wizard-init-ssh-show",
                         variant="default",
                     )
                     yield Button(
@@ -764,6 +841,14 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
                 severity="warning",
                 timeout=10,
             )
+
+    @on(Button.Pressed, "#wizard-init-ssh-show")
+    def _on_ssh_show(self) -> None:
+        """Open the borderless key view for host-terminal mouse-copy."""
+        key = getattr(self, "_ssh_pub_line", "")
+        if not key:
+            return
+        self.app.push_screen(ShowSshKeyScreen(key))
 
     @on(Button.Pressed, "#wizard-init-close")
     def _on_close(self) -> None:
