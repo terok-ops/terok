@@ -196,11 +196,7 @@ def _resolve_path(
     config_key: tuple[str, str] | None,
     default: Callable[[], Path],
 ) -> Path:
-    """Resolve a path: env var → global config → computed default.
-
-    This replaces the repeated try/except + load_global_config() pattern
-    that was duplicated across ``state_dir``, ``build_dir``, etc.
-    """
+    """Resolve a path: env var → global config → computed default."""
     if env_var:
         env = os.environ.get(env_var)
         if env:
@@ -221,19 +217,6 @@ def _resolve_path(
             )
 
     return default().resolve()
-
-
-def state_dir() -> Path:
-    """Terok core state directory (host-only: build artifacts, task metadata).
-
-    Precedence:
-    - ``TEROK_STATE_DIR`` environment variable (per-package escape hatch).
-    - Namespace root (``TEROK_ROOT`` / ``config.yml`` ``paths.root``) + ``core/``.
-    - Platform default (``~/.local/share/terok/core``).
-    """
-    from terok_sandbox.paths import namespace_state_dir
-
-    return namespace_state_dir("core", "TEROK_STATE_DIR").resolve()
 
 
 def sandbox_live_dir() -> Path:
@@ -327,9 +310,11 @@ def build_dir() -> Path:
 
     Resolution order:
     - Global config: paths.build_dir
-    - Otherwise: state_dir()/build
+    - Otherwise: core_state_dir()/build
     """
-    return _resolve_path(None, ("paths", "build_dir"), lambda: state_dir() / "build")
+    from .paths import core_state_dir
+
+    return _resolve_path(None, ("paths", "build_dir"), lambda: core_state_dir() / "build")
 
 
 def archive_dir() -> Path:

@@ -40,7 +40,7 @@ class TestWarnUser:
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
         """Redirect log writes so tests never touch the real state dir."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_prints_structured_warning_to_stderr(self, capsys: pytest.CaptureFixture[str]) -> None:
@@ -85,8 +85,8 @@ class TestLogFunctions:
     """Tests for file-based logging utilities."""
 
     def test_log_warning_writes_warning_level(self, tmp_path: Path) -> None:
-        """log_warning() writes a WARNING-level line to state_root()/terok.log."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        """log_warning() writes a WARNING-level line to core_state_dir()/terok.log."""
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             log_warning("disk almost full")
         log_file = tmp_path / LOG_FILENAME
         assert log_file.exists()
@@ -95,14 +95,14 @@ class TestLogFunctions:
 
     def test_log_debug_writes_debug_level(self, tmp_path: Path) -> None:
         """_log_debug() writes a DEBUG-level line."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             _log_debug("resolved path /foo")
         content = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8")
         assert "[DEBUG] resolved path /foo" in content
 
     def test_log_appends_multiple_lines(self, tmp_path: Path) -> None:
         """Successive calls append; they do not overwrite."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             log_warning("first")
             log_warning("second")
         lines = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8").strip().splitlines()
@@ -113,14 +113,14 @@ class TestLogFunctions:
     def test_log_creates_parent_dirs(self, tmp_path: Path) -> None:
         """_log creates parent directories if they do not exist."""
         nested = tmp_path / "deep" / "nested"
-        with patch("terok.lib.core.paths.state_root", return_value=nested):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=nested):
             _log("hello", level="INFO")
         assert (nested / LOG_FILENAME).exists()
 
     def test_log_never_raises_on_io_error(self) -> None:
-        """Exception safety: if state_root() raises, _log swallows it."""
+        """Exception safety: if core_state_dir() raises, _log swallows it."""
         with patch(
-            "terok.lib.core.paths.state_root",
+            "terok.lib.core.paths.core_state_dir",
             side_effect=OSError("permission denied"),
         ):
             # Must not raise
@@ -129,7 +129,7 @@ class TestLogFunctions:
     def test_log_warning_never_raises_on_io_error(self) -> None:
         """Exception safety for the convenience wrapper."""
         with patch(
-            "terok.lib.core.paths.state_root",
+            "terok.lib.core.paths.core_state_dir",
             side_effect=RuntimeError("boom"),
         ):
             log_warning("should not crash")
@@ -137,14 +137,14 @@ class TestLogFunctions:
     def test_log_debug_never_raises_on_io_error(self) -> None:
         """Exception safety for the debug convenience wrapper."""
         with patch(
-            "terok.lib.core.paths.state_root",
+            "terok.lib.core.paths.core_state_dir",
             side_effect=RuntimeError("boom"),
         ):
             _log_debug("should not crash")
 
     def test_log_line_contains_timestamp(self, tmp_path: Path) -> None:
         """Each log line starts with a bracketed timestamp."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             log_warning("ts check")
         line = (tmp_path / LOG_FILENAME).read_text(encoding="utf-8").strip()
         # Format: [YYYY-MM-DD HH:MM:SS] [WARNING] ts check
@@ -163,7 +163,7 @@ class TestLoadValidatedErrorPaths:
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
         """Redirect log writes to tmp_path so tests never touch the real state dir."""
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_malformed_yaml_warns_and_returns_defaults(
@@ -273,7 +273,7 @@ class TestResolvePathFallback:
 
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_value_error_falls_back_to_default(
@@ -284,7 +284,7 @@ class TestResolvePathFallback:
         bad_file = write_config(tmp_path, "paths:\n  build_dir: null\n")
         monkeypatch.setenv("TEROK_CONFIG_FILE", str(bad_file))
         # _resolve_path should fall back to default without raising
-        result = cfg.state_dir()
+        result = cfg.build_dir()
         assert result.is_absolute()
 
     def test_yaml_error_falls_back_to_default(
@@ -293,7 +293,7 @@ class TestResolvePathFallback:
         """YAMLError during config key lookup falls back to default path."""
         bad_file = write_config(tmp_path, ": [broken")
         monkeypatch.setenv("TEROK_CONFIG_FILE", str(bad_file))
-        result = cfg.state_dir()
+        result = cfg.build_dir()
         assert result.is_absolute()
 
 
@@ -307,7 +307,7 @@ class TestProjectStateWarnings:
 
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_template_comparison_failure_logged(self, tmp_path: Path) -> None:
@@ -378,7 +378,7 @@ class TestImageCleanupWarning:
 
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_project_discovery_failure_logged(self) -> None:
@@ -409,7 +409,7 @@ class TestEnvironmentWarnings:
 
     @pytest.fixture(autouse=True)
     def _isolate_log(self, tmp_path: Path) -> None:
-        with patch("terok.lib.core.paths.state_root", return_value=tmp_path):
+        with patch("terok.lib.core.paths.core_state_dir", return_value=tmp_path):
             yield
 
     def test_gate_fallback_warns(self, capsys: pytest.CaptureFixture[str]) -> None:

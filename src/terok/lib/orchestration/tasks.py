@@ -25,7 +25,8 @@ from pathlib import Path
 from terok_executor import AgentRunner
 
 from ..core import runtime as _rt
-from ..core.config import archive_dir, state_dir
+from ..core.config import archive_dir
+from ..core.paths import core_state_dir
 from ..core.projects import ProjectConfig, load_project
 from ..core.task_display import (
     CONTAINER_MODES,
@@ -429,7 +430,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
-    return state_dir() / "projects" / project_id / "tasks"
+    return core_state_dir() / "projects" / project_id / "tasks"
 
 
 def tasks_archive_dir(project_id: str) -> Path:

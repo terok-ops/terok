@@ -93,7 +93,7 @@ def patch_config_command(layout: SimpleNamespace) -> Iterator[None]:
             patch("terok.cli.commands.info._projects_dir", return_value=layout.system_root)
         )
         stack.enter_context(
-            patch("terok.cli.commands.info._state_dir", return_value=layout.state_root)
+            patch("terok.cli.commands.info._core_state_dir", return_value=layout.state_root)
         )
         stack.enter_context(
             patch("terok.cli.commands.info._build_dir", return_value=layout.build_root)

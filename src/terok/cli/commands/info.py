@@ -19,11 +19,11 @@ from ...lib.core.config import (
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
     projects_dir as _projects_dir,
-    state_dir as _state_dir,
     user_presets_dir as _user_presets_dir,
     user_projects_dir as _user_projects_dir,
     vault_dir as _vault_dir,
 )
+from ...lib.core.paths import core_state_dir as _core_state_dir
 from ...lib.core.projects import list_projects
 from ...ui_utils.terminal import (
     gray as _gray,
@@ -236,7 +236,7 @@ def _print_config() -> None:
 
     # WRITE PATHS
     print("Writable locations (write):")
-    sdir = _state_dir()
+    sdir = _core_state_dir()
     sdir_exists = Path(sdir).is_dir()
     print(
         f"- State dir: {_gray(str(sdir), color_enabled)} "

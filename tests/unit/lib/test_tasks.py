@@ -1186,9 +1186,9 @@ class TestTaskLogs:
         """Create a task and set its mode in metadata."""
         task_id = task_new(project_id)
         # Manually update metadata to set mode (normally done by task runners)
-        from terok.lib.core.config import state_dir
+        from terok.lib.core.paths import core_state_dir
 
-        meta_dir = state_dir() / "projects" / project_id / "tasks"
+        meta_dir = core_state_dir() / "projects" / project_id / "tasks"
         meta_path = meta_dir / f"{task_id}.yml"
         meta = yaml_load(meta_path.read_text()) or {}
         meta["mode"] = mode

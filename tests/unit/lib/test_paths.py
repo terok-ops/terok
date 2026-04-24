@@ -148,34 +148,48 @@ class TestConfigRoot:
 
 
 class TestStateRoot:
-    """Verify ``state_root()`` resolution."""
+    """Verify ``state_root()`` delegates to the sandbox namespace resolver."""
+
+    def test_terok_root_env_override(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """TEROK_ROOT pins the namespace root."""
+        monkeypatch.setenv("TEROK_ROOT", str(tmp_path))
+        monkeypatch.delenv("TEROK_CONFIG_FILE", raising=False)
+        assert paths.state_root() == tmp_path.resolve()
+
+    def test_paths_root_from_config(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """config.yml ``paths.root`` is honored when TEROK_ROOT is unset."""
+        from terok_sandbox import paths as sandbox_paths
+
+        sandbox_paths._config_section_cache.clear()
+        monkeypatch.delenv("TEROK_ROOT", raising=False)
+        custom_root = tmp_path / "custom-root"
+        cfg = tmp_path / "config.yml"
+        cfg.write_text(f"paths:\n  root: {custom_root}\n")
+        monkeypatch.setenv("TEROK_CONFIG_FILE", str(cfg))
+        try:
+            assert paths.state_root() == custom_root.resolve()
+        finally:
+            sandbox_paths._config_section_cache.clear()
+
+
+class TestCoreStateDir:
+    """Verify ``core_state_dir()`` derives from ``state_root()``."""
+
+    def test_defaults_under_state_root(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Without TEROK_STATE_DIR, core state lives at ``$state_root/core``."""
+        monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
+        monkeypatch.setenv("TEROK_ROOT", str(tmp_path))
+        monkeypatch.delenv("TEROK_CONFIG_FILE", raising=False)
+        assert paths.core_state_dir() == (tmp_path / "core").resolve()
 
     def test_env_override(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """TEROK_STATE_DIR takes first priority."""
-        monkeypatch.setenv("TEROK_STATE_DIR", str(tmp_path))
-        assert paths.state_root() == tmp_path
-
-    def test_root_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Root user gets /var/lib/terok."""
-        monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
-        monkeypatch.setattr(paths, "_is_root", lambda: True)
-        assert paths.state_root() == Path("/var/lib/terok")
-
-    def test_xdg_data_home_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without platformdirs, XDG_DATA_HOME is honored."""
-        monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
-        monkeypatch.setattr(paths, "_is_root", lambda: False)
-        monkeypatch.setattr(paths, "_user_data_dir", None)
-        monkeypatch.setenv("XDG_DATA_HOME", str(MOCK_BASE / "xdg-data"))
-        assert paths.state_root() == MOCK_BASE / "xdg-data" / "terok"
-
-    def test_bare_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Last resort: ~/.local/share/terok."""
-        monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
-        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-        monkeypatch.setattr(paths, "_is_root", lambda: False)
-        monkeypatch.setattr(paths, "_user_data_dir", None)
-        assert paths.state_root() == Path.home() / ".local" / "share" / "terok"
+        """TEROK_STATE_DIR is the per-package escape hatch."""
+        override = tmp_path / "override"
+        monkeypatch.setenv("TEROK_STATE_DIR", str(override))
+        monkeypatch.setenv("TEROK_ROOT", str(tmp_path / "ignored"))
+        assert paths.core_state_dir() == override.resolve()
 
 
 class TestRuntimeRoot:

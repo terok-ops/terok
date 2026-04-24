@@ -51,29 +51,29 @@ def config_root() -> Path:
 
 
 def state_root() -> Path:
-    """
-    Writable state (tasks, pods, caches).
+    """Namespace state root shared by every terok ecosystem package.
 
-    Priority:
-      1. TEROK_STATE_DIR
-      2. if root   → /var/lib/terok
-         else      → ${XDG_DATA_HOME:-~/.local/share}/terok
+    Single source of truth — delegates to :func:`terok_sandbox.paths.namespace_state_dir`,
+    which resolves ``TEROK_ROOT`` → ``config.yml`` ``paths.root`` (via the
+    layered config stack) → platform default (``/var/lib/terok`` or
+    ``${XDG_DATA_HOME:-~/.local/share}/terok``).
+    """
+    from terok_sandbox.paths import namespace_state_dir
+
+    return namespace_state_dir("").resolve()
+
+
+def core_state_dir() -> Path:
+    """Terok core state (build artifacts, task metadata, panic lock, log).
+
+    Resolves to ``$state_root/core`` unless ``TEROK_STATE_DIR`` overrides it
+    (per-package escape hatch, same convention as ``TEROK_SANDBOX_STATE_DIR``
+    etc.).
     """
     env = os.getenv("TEROK_STATE_DIR")
     if env:
-        return Path(env).expanduser()
-
-    if _is_root():
-        return Path("/var/lib") / APP_NAME
-
-    if _user_data_dir is not None:
-        return Path(_user_data_dir(APP_NAME))
-
-    # Fallback without platformdirs: honor XDG_DATA_HOME if set
-    xdg = os.getenv("XDG_DATA_HOME")
-    if xdg:
-        return Path(xdg) / APP_NAME
-    return Path.home() / ".local" / "share" / APP_NAME
+        return Path(env).expanduser().resolve()
+    return (state_root() / "core").resolve()
 
 
 def runtime_root() -> Path:

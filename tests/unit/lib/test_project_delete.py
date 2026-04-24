@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from terok.lib.core.config import build_dir as cfg_build_dir, state_dir as cfg_state_dir
+from terok.lib.core.config import build_dir as cfg_build_dir
+from terok.lib.core.paths import core_state_dir as cfg_state_dir
 from terok.lib.core.projects import load_project
 from terok.lib.domain.facade import delete_project
 from tests.test_utils import project_env, write_project

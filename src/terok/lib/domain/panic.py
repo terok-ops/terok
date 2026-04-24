@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from ..core.config import get_shield_bypass_firewall_no_protection
-from ..core.paths import state_root
+from ..core.paths import core_state_dir
 from ..core.projects import list_projects
 from ..orchestration.tasks import (
     CONTAINER_MODES,
@@ -96,12 +96,12 @@ def panic_stop_containers() -> tuple[list[str], list[tuple[str, str]]]:
 
 def is_panicked() -> bool:
     """Return whether the panic lock file exists."""
-    return (state_root() / _LOCK_FILENAME).is_file()
+    return (core_state_dir() / _LOCK_FILENAME).is_file()
 
 
 def clear_panic_lock() -> None:
     """Remove the panic lock file if it exists."""
-    (state_root() / _LOCK_FILENAME).unlink(missing_ok=True)
+    (core_state_dir() / _LOCK_FILENAME).unlink(missing_ok=True)
 
 
 def format_panic_report(result: PanicResult) -> str:
@@ -260,6 +260,6 @@ def _stop_containers(targets: list[_Target]) -> tuple[list[str], list[tuple[str,
 
 def _write_panic_lock() -> None:
     """Write the panic lock file with current timestamp."""
-    path = state_root() / _LOCK_FILENAME
+    path = core_state_dir() / _LOCK_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(datetime.now(UTC).isoformat() + "\n")

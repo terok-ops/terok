@@ -324,7 +324,7 @@ class TestStopGate:
 class TestPanicLock:
     """Tests for panic lock file lifecycle."""
 
-    @patch("terok.lib.domain.panic.state_root")
+    @patch("terok.lib.domain.panic.core_state_dir")
     def test_lock_lifecycle(self, mock_state, tmp_path):
         """Lock can be written, checked, and cleared."""
         mock_state.return_value = tmp_path
@@ -336,7 +336,7 @@ class TestPanicLock:
         clear_panic_lock()
         assert not is_panicked()
 
-    @patch("terok.lib.domain.panic.state_root")
+    @patch("terok.lib.domain.panic.core_state_dir")
     def test_clear_idempotent(self, mock_state, tmp_path):
         """Clearing when no lock exists is a no-op."""
         mock_state.return_value = tmp_path

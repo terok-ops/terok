@@ -15,7 +15,8 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.core.config import archive_dir, build_dir, state_dir
+from terok.lib.core.config import archive_dir, build_dir
+from terok.lib.core.paths import core_state_dir
 from terok.lib.core.projects import load_project
 from terok.lib.domain.facade import delete_project
 from terok.lib.domain.project import _archive_project
@@ -41,7 +42,7 @@ def archive_member_names(path: str) -> list[str]:
 
 def create_task_state(project_id: str) -> None:
     """Create a sample task metadata file for an archived project."""
-    meta_dir = state_dir() / "projects" / project_id / "tasks"
+    meta_dir = core_state_dir() / "projects" / project_id / "tasks"
     meta_dir.mkdir(parents=True, exist_ok=True)
     (meta_dir / "1.yml").write_text("task_id: '1'\nname: test\n")
 

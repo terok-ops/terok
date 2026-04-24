@@ -13,6 +13,7 @@ import pytest
 from terok_sandbox import port_registry as reg
 
 from terok.lib.core import config as cfg
+from terok.lib.core import paths as _paths
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +55,7 @@ def test_global_config_path_prefers_xdg(
 @pytest.mark.parametrize(
     ("env_var", "config_text", "resolver", "expected_name"),
     [
-        ("TEROK_STATE_DIR", None, cfg.state_dir, "state"),
+        ("TEROK_STATE_DIR", None, _paths.core_state_dir, "state"),
         (
             "TEROK_CONFIG_FILE",
             "paths:\n  user_projects_dir: {path}\n",
@@ -179,22 +180,29 @@ def test_projects_dir_appends_subdir(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert cfg.projects_dir() == (tmp_path / "projects").resolve()
 
 
-def test_state_dir_via_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``state_dir()`` reads TEROK_STATE_DIR."""
+def test_core_state_dir_via_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``core_state_dir()`` reads TEROK_STATE_DIR."""
     target = tmp_path / "my-state"
     monkeypatch.setenv("TEROK_STATE_DIR", str(target))
-    assert cfg.state_dir() == target.resolve()
+    assert _paths.core_state_dir() == target.resolve()
 
 
-def test_state_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``state_dir()`` honors ``paths.root`` from config as namespace root."""
+def test_core_state_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``core_state_dir()`` honors ``paths.root`` from config as namespace root."""
+    from terok_sandbox import paths as sandbox_paths
+
+    sandbox_paths._config_section_cache.clear()
     target = tmp_path / "custom-root"
     monkeypatch.delenv("TEROK_STATE_DIR", raising=False)
+    monkeypatch.delenv("TEROK_ROOT", raising=False)
     monkeypatch.setenv(
         "TEROK_CONFIG_FILE",
         str(write_config(tmp_path, f"paths:\n  root: {target}\n")),
     )
-    assert cfg.state_dir() == (target / "core").resolve()
+    try:
+        assert _paths.core_state_dir() == (target / "core").resolve()
+    finally:
+        sandbox_paths._config_section_cache.clear()
 
 
 def test_build_dir_via_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

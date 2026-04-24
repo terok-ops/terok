@@ -837,7 +837,7 @@ expose = ["assign_web_port", "release_web_port"]
 from = ["terok.lib.orchestration.ports"]
 
 [[interfaces]]
-expose = ["config_root", "vault_root", "state_root", "runtime_root"]
+expose = ["config_root", "vault_root", "state_root", "core_state_dir", "runtime_root"]
 from = ["terok.lib.core.paths"]
 
 [[interfaces]]

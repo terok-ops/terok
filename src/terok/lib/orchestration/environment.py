@@ -65,7 +65,7 @@ def _gate_url(
             f"  Gate repo: {gate_repo}\n"
             f"  Gate base: {gate_base}\n"
             "Move the repo under the gate base directory, or adjust\n"
-            "gate_server.repos_dir / paths.state_dir in global config."
+            "gate_server.repos_dir / paths.root in global config."
         )
     host = f"localhost:{port}" if use_socket else f"host.containers.internal:{port}"
     return f"http://{token}@{host}/{gate_repo.name}"

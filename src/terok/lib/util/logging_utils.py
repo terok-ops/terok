@@ -10,7 +10,7 @@ All functions are exception-safe — they never raise or affect callers.
 import sys
 
 LOG_FILENAME = "terok.log"
-"""Filename for the best-effort terok library log (written under ``state_root()``)."""
+"""Filename for the best-effort terok library log (written under ``core_state_dir()``)."""
 
 
 def _log(message: str, *, level: str = "DEBUG") -> None:
@@ -19,14 +19,14 @@ def _log(message: str, *, level: str = "DEBUG") -> None:
     Best-effort, exception-safe: any IO error is silently ignored so this
     function never raises or affects callers.
 
-    Writes to ``state_root()/terok.log``.
+    Writes to ``core_state_dir()/terok.log``.
     """
     try:
         import time
 
-        from ..core.paths import state_root
+        from ..core.paths import core_state_dir
 
-        log_path = state_root() / LOG_FILENAME
+        log_path = core_state_dir() / LOG_FILENAME
         log_path.parent.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         with open(log_path, "a", encoding="utf-8") as f:

@@ -57,10 +57,10 @@ from ..core.config import (
     make_sandbox_config,
     projects_dir,
     sandbox_live_dir,
-    state_dir,
     user_projects_dir,
     vault_dir,
 )
+from ..core.paths import core_state_dir
 from ..core.project_model import ProjectConfig
 from ..core.projects import list_presets, load_project
 from ..orchestration.agent_config import resolve_agent_config
@@ -97,7 +97,7 @@ def _is_under_terok_root(path: Path) -> bool:
     managed_roots = [
         projects_dir(),
         user_projects_dir(),
-        state_dir(),
+        core_state_dir(),
         sandbox_live_dir(),
         make_sandbox_config().state_dir,
         vault_dir(),
@@ -247,7 +247,7 @@ def _archive_project(project_id: str) -> str | None:
             sources.append(("config", project.root))
 
         # Task metadata (core state)
-        project_state = state_dir() / "projects" / pid
+        project_state = core_state_dir() / "projects" / pid
         if project_state.is_dir():
             sources.append(("state", project_state))
 
@@ -346,7 +346,7 @@ def delete_project(project_id: str) -> DeleteProjectResult:
     _rmtree_managed(project.tasks_root, "Tasks root", deleted, skipped)
 
     # 3-4. Remove state dir, build artifacts, and any remaining task archives
-    for d in (state_dir() / "projects" / pid, build_dir() / pid, archive_dir() / pid):
+    for d in (core_state_dir() / "projects" / pid, build_dir() / pid, archive_dir() / pid):
         if d.is_dir():
             shutil.rmtree(d)
             deleted.append(str(d))
