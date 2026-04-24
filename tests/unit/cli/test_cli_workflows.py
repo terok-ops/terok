@@ -13,6 +13,18 @@ import pytest
 from tests.testfs import FAKE_GATE_DIR
 
 
+@pytest.fixture(autouse=True)
+def _bypass_setup_verdict_gate():
+    """Skip the stamp-based gate — covered separately in ``test_cli_task_verdict_gate.py``.
+
+    Workflow tests assert the command-dispatch shape downstream of the
+    gate; they run in a stamp-free tmp env where the real gate would
+    always raise exit 3 before dispatch ever happens.
+    """
+    with unittest.mock.patch("terok.cli.commands.task._setup_verdict_or_exit"):
+        yield
+
+
 def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     """Apply project-init step mocks to a test method.
 
