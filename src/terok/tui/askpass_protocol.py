@@ -17,9 +17,12 @@ Shape:
 TUI pops one modal at a time and a second request waits for the first
 to resolve.
 
-The module has no I/O.  :class:`Frame` encodes/decodes; callers adapt
-the bytes to whatever transport they have (blocking socket in the
-helper, ``asyncio.StreamReader/Writer`` in the service).
+The module has no I/O.  :func:`encode` turns a dict into the wire
+bytes, :func:`decode` turns a line of wire bytes back into a dict,
+and :func:`parse_request` / :func:`parse_reply` validate the decoded
+dicts on the receiving side.  Callers adapt the bytes to whatever
+transport they have — a blocking ``socket.recv`` loop in the helper,
+an ``asyncio.StreamReader.readline`` in the service.
 """
 
 from __future__ import annotations
