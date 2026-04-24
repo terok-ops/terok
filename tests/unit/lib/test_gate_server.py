@@ -21,12 +21,10 @@ from terok_sandbox import (
     check_units_outdated,
     ensure_server_reachable,
     get_server_status,
-    install_systemd_units,
     is_daemon_running,
     is_systemd_available,
     start_daemon,
     stop_daemon,
-    uninstall_systemd_units,
 )
 from terok_sandbox.gate.lifecycle import _UNIT_VERSION, GateServerManager
 
@@ -93,6 +91,7 @@ def _test_config(
         gate_port=GATE_PORT,
         token_broker_port=GATE_PORT + 1,
         ssh_signer_port=GATE_PORT + 2,
+        services_mode="tcp",
     )
 
 
@@ -232,7 +231,7 @@ class TestInstallUninstall:
         with tempfile.TemporaryDirectory() as td:
             unit_dir = Path(td) / "systemd" / "user"
             with patched_install_env(unit_dir):
-                install_systemd_units()
+                GateServerManager().install_systemd_units()
 
             socket_content = (unit_dir / SYSTEMD_SOCKET).read_text()
             service_content = (unit_dir / SYSTEMD_SERVICE).read_text()
@@ -257,13 +256,13 @@ class TestInstallUninstall:
         _mock_run: unittest.mock.Mock,
     ) -> None:
         with pytest.raises(SystemExit, match="terok-gate"):
-            install_systemd_units()
+            GateServerManager().install_systemd_units()
 
     @unittest.mock.patch("subprocess.run")
     def test_uninstall_removes_files(self, mock_run: unittest.mock.Mock) -> None:
         mock_run.return_value = make_run_result(returncode=0)
         with patched_unit_dir(unit_file_contents()):
-            uninstall_systemd_units()
+            GateServerManager().uninstall_systemd_units()
             assert not GateServerManager().is_socket_installed()
 
 

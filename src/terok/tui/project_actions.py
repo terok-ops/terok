@@ -14,14 +14,12 @@ import subprocess
 from collections.abc import Callable
 
 from terok_sandbox import (
-    install_systemd_units,
-    install_vault_systemd,
+    GateServerManager,
+    VaultManager,
     start_daemon,
     start_vault,
     stop_daemon,
     stop_vault,
-    uninstall_systemd_units,
-    uninstall_vault_systemd,
 )
 from textual import work
 
@@ -636,15 +634,19 @@ class ProjectActionsMixin:
 
     async def _action_gate_install(self) -> None:
         """Install systemd socket units for the gate server."""
+        from ..lib.core.config import make_sandbox_config
+
         await self._run_suspended(
-            install_systemd_units,
+            lambda: GateServerManager(make_sandbox_config()).install_systemd_units(),
             success_msg="Gate server systemd units installed",
         )
 
     async def _action_gate_uninstall(self) -> None:
         """Uninstall systemd units for the gate server."""
+        from ..lib.core.config import make_sandbox_config
+
         await self._run_suspended(
-            uninstall_systemd_units,
+            lambda: GateServerManager(make_sandbox_config()).uninstall_systemd_units(),
             success_msg="Gate server systemd units uninstalled",
         )
 
@@ -690,8 +692,9 @@ class ProjectActionsMixin:
         from ..lib.core.config import make_sandbox_config
 
         def _install() -> None:
-            ensure_vault_routes(cfg=make_sandbox_config())
-            install_vault_systemd(cfg=make_sandbox_config())
+            cfg = make_sandbox_config()
+            ensure_vault_routes(cfg=cfg)
+            VaultManager(cfg).install_systemd_units()
 
         await self._run_suspended(
             _install,
@@ -703,7 +706,7 @@ class ProjectActionsMixin:
         from ..lib.core.config import make_sandbox_config
 
         await self._run_suspended(
-            lambda: uninstall_vault_systemd(cfg=make_sandbox_config()),
+            lambda: VaultManager(make_sandbox_config()).uninstall_systemd_units(),
             success_msg="Vault systemd units removed",
         )
 

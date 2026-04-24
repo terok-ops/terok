@@ -8,16 +8,20 @@ import sys
 from collections.abc import Callable
 from importlib import resources as _pkg_resources
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import ValidationError
+from terok_sandbox import ServicesMode
 
 from ..util.yaml import YAMLError, load as _yaml_load
 from .paths import config_root as _config_root_base
 from .yaml_schema import RawGlobalConfig
 
-ServicesMode = Literal["tcp", "socket"]
-"""Mirror of the pydantic schema's ``services.mode`` literal (see ``yaml_schema.py``)."""
+__all_public_reexports__ = ("ServicesMode",)
+"""Re-exported from :mod:`terok_sandbox.config_schema` — one SSOT for
+the ``services.mode`` Literal; sandbox owns the schema, terok just
+forwards the type so downstream callers can stay inside the terok
+namespace if they prefer."""
 
 # ---------- Prefix & roots ----------
 
@@ -397,6 +401,7 @@ def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
         ssh_signer_port=get_vault_ssh_signer_port(),
         shield_bypass=get_shield_bypass_firewall_no_protection(),
         shield_audit=get_shield_audit(),
+        services_mode=get_services_mode(),
     )
 
 

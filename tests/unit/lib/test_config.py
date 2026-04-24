@@ -547,8 +547,13 @@ def test_make_sandbox_config_ssh_signer_port(
 def test_make_sandbox_config_auto_allocates_ports(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Factory auto-allocates distinct ports and reuses them on second call."""
-    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    """Factory auto-allocates distinct ports and reuses them on second call.
+
+    Port auto-allocation runs in tcp mode only; opt in explicitly so
+    this regression stays about port registry behaviour, not the mode
+    default.
+    """
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "services:\n  mode: tcp\n")))
     sc = cfg.make_sandbox_config()
     ports = {sc.gate_port, sc.token_broker_port, sc.ssh_signer_port}
     assert len(ports) == 3, "Auto-allocated ports must be distinct"
