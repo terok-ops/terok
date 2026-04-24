@@ -3138,7 +3138,7 @@ terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/downloa
 type = "git"
 url = "https://github.com/sliwowitz/terok-sandbox.git"
 reference = "refactor/public-stage-helpers"
-resolved_reference = "5c0faeaeb3bb33b8984702202ddaf94655f05970"
+resolved_reference = "49afa928f9d46fc11437e0af570fe11a193d61f4"
 
 [[package]]
 name = "terok-shield"

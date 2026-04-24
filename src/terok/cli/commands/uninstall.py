@@ -18,20 +18,7 @@ from __future__ import annotations
 
 import argparse
 
-from terok_sandbox import Marker, bold, stage_begin, stage_end, supports_color
-
-from ...lib.util.ansi import yellow as _ansi_yellow
-
-# Cache once for the warning banner — see the equivalent note in
-# ``setup.py`` for why the colour verdict takes a local cache rather
-# than threading ``supports_color()`` through each call site.
-_COLOUR_ON = supports_color()
-
-
-def _yellow(text: str) -> str:
-    """Colour a warning banner when the terminal supports it."""
-    return _ansi_yellow(text, _COLOUR_ON)
-
+from terok_sandbox import Marker, bold, stage_begin, stage_end, yellow
 
 # ── CLI wiring ─────────────────────────────────────────────────────────
 
@@ -116,7 +103,7 @@ def cmd_uninstall(
     if all_ok:
         print(bold("Uninstall complete."))
     else:
-        print(bold(_yellow("Some uninstall phases reported errors (see above).")))
+        print(bold(yellow("Some uninstall phases reported errors (see above).")))
         raise SystemExit(1)
 
 

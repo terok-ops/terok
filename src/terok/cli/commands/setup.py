@@ -32,7 +32,7 @@ import shutil
 import sys
 
 from terok_executor import AUTH_PROVIDERS
-from terok_sandbox import Marker, bold, stage_begin, stage_end, supports_color
+from terok_sandbox import Marker, bold, red, stage_begin, stage_end, yellow
 
 from ...lib.core.projects import load_project
 from ...lib.domain.facade import (
@@ -43,26 +43,6 @@ from ...lib.domain.facade import (
     summarize_ssh_init,
 )
 from ...lib.domain.project import make_git_gate
-from ...lib.util.ansi import red as _ansi_red, yellow as _ansi_yellow
-
-# Cache the colour verdict once for the banner helpers below.  The
-# stage renderer in ``terok_sandbox`` already does the same internally,
-# so banner colour and stage-marker colour agree on a single TTY-probe
-# result.  ``ansi.red`` / ``ansi.yellow`` take an explicit flag by
-# design — other sites in terok need per-call colour policies — so we
-# wrap them once here rather than threading the flag through each call.
-_COLOUR_ON = supports_color()
-
-
-def _red(text: str) -> str:
-    """Colour a failure banner when the terminal supports it."""
-    return _ansi_red(text, _COLOUR_ON)
-
-
-def _yellow(text: str) -> str:
-    """Colour a warning banner when the terminal supports it."""
-    return _ansi_yellow(text, _COLOUR_ON)
-
 
 # ── CLI wiring ─────────────────────────────────────────────────────────
 
@@ -157,7 +137,7 @@ def cmd_setup(
     except SystemExit as exc:
         sandbox_failed = True
         if exc.code:
-            print(bold(_red(f"Sandbox aggregator reported failures (exit {exc.code}).")))
+            print(bold(red(f"Sandbox aggregator reported failures (exit {exc.code}).")))
 
     images_failed = False
     if with_images and not sandbox_failed:
@@ -173,11 +153,11 @@ def cmd_setup(
     if not sandbox_failed and not images_failed and desktop_ok:
         print(bold("Setup complete."))
     elif sandbox_failed:
-        print(bold(_red("Setup failed — see service stage lines above.")))
+        print(bold(red("Setup failed — see service stage lines above.")))
     elif images_failed:
-        print(bold(_red("Image build failed — see above.")))
+        print(bold(red("Image build failed — see above.")))
     else:
-        print(bold(_yellow("Desktop entry install reported errors (see above).")))
+        print(bold(yellow("Desktop entry install reported errors (see above).")))
 
     providers = ", ".join(AUTH_PROVIDERS)
     print(
