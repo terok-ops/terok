@@ -660,7 +660,13 @@ class TaskActionsMixin:
             self.notify("No changes to copy (working tree clean).")
             return
 
-        result = copy_to_clipboard_detailed(diff)
+        import asyncio
+
+        # Clipboard helpers (wl-copy in particular) can block briefly or
+        # misbehave in niche scenarios; the helper has its own timeout
+        # but we hop off the UI thread so even that timeout can't stall
+        # the event loop.
+        result = await asyncio.to_thread(copy_to_clipboard_detailed, diff)
         if result.ok:
             self.notify(f"Git diff vs {label} copied to clipboard ({len(diff)} characters)")
         else:

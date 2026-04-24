@@ -34,6 +34,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, RadioButton, RadioSet, RichLog, Static, TextArea
 
@@ -319,18 +320,20 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
 
 
 class InitOutcome(enum.Enum):
-    """Result of :class:`InitProgressScreen` — three distinct states.
+    """Result of :class:`InitProgressScreen` — four distinct states.
 
     ``SUCCESS`` and ``FAILED`` are the obvious outcomes; ``DECLINED``
     covers the case where the user deliberately chose not to overwrite
-    an existing ``project.yml``.  The caller needs all three to render
-    the right follow-up notification: a decline is a benign no-op, not
+    an existing ``project.yml``, and ``CANCELLED`` covers Esc-out
+    mid-run.  The caller needs all four to render the right follow-up
+    notification: a decline or a cancellation is a benign no-op, not
     an error.
     """
 
     SUCCESS = "success"
     FAILED = "failed"
     DECLINED = "declined"
+    CANCELLED = "cancelled"
 
 
 class InitProgressScreen(ModalScreen[InitOutcome]):
@@ -343,7 +346,7 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
     """
 
     BINDINGS = [
-        Binding("escape", "maybe_cancel", "Close"),
+        Binding("escape", "cancel", "Cancel"),
     ]
 
     CSS = """
@@ -557,7 +560,14 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
         branch in ``_run_init_with_confirm``, and from the worker's
         ``finally`` block.  Button label/variant mirror the outcome so
         a declined overwrite doesn't masquerade as a failed init.
+
+        When the user cancels via Esc the worker's ``finally`` still
+        runs after the screen has been dismissed — the Close button
+        has already been torn down, so a failed ``query_one`` is
+        expected and ignored rather than surfaced as a worker error.
         """
+        if self._outcome is InitOutcome.CANCELLED:
+            return
         variant_for = {
             InitOutcome.SUCCESS: "success",
             InitOutcome.FAILED: "warning",
@@ -568,7 +578,10 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             InitOutcome.FAILED: "Close",
             InitOutcome.DECLINED: "Close",
         }
-        button = self.query_one("#wizard-init-close", Button)
+        try:
+            button = self.query_one("#wizard-init-close", Button)
+        except NoMatches:
+            return
         button.disabled = False
         button.variant = variant_for[self._outcome]
         button.label = label_for[self._outcome]
@@ -725,14 +738,23 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             self._ssh_continue.set()
 
     @on(Button.Pressed, "#wizard-init-ssh-copy")
-    def _on_ssh_copy(self) -> None:
-        """Copy the SSH public key to the system clipboard via the shared helper."""
+    async def _on_ssh_copy(self) -> None:
+        """Copy the SSH public key to the system clipboard via the shared helper.
+
+        Runs the helper off the UI thread via :func:`asyncio.to_thread`:
+        the clipboard call has its own internal timeout, but the whole
+        point of the async hop is that a slow helper (think a laggy
+        Wayland compositor, or a misbehaving clipboard daemon) can't
+        freeze the event loop even for those few seconds.
+        """
+        import asyncio
+
         from .clipboard import copy_to_clipboard_detailed
 
         key = getattr(self, "_ssh_pub_line", "")
         if not key:
             return
-        result = copy_to_clipboard_detailed(key)
+        result = await asyncio.to_thread(copy_to_clipboard_detailed, key)
         if result.ok:
             self.notify("SSH public key copied to clipboard.")
         else:
@@ -747,10 +769,37 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
     def _on_close(self) -> None:
         self.dismiss(self._outcome)
 
-    def action_maybe_cancel(self) -> None:
-        """Escape only dismisses once the worker has finished."""
-        if not self.query_one("#wizard-init-close", Button).disabled:
+    def action_cancel(self) -> None:
+        """Esc aborts the wizard at any point in its lifecycle.
+
+        Three distinct cases to handle:
+
+        * **Worker already finished** (Close button enabled) — the
+          stored outcome is SUCCESS/FAILED/DECLINED; dismiss with it
+          so the caller's match arms render the correct notification.
+        * **Worker paused on the SSH-key "continue" gate** — the
+          worker is awaiting an :class:`asyncio.Event`; cancelling
+          raises ``CancelledError`` out of that ``await`` and the
+          worker unwinds cleanly.
+        * **Worker actively running a step** (provision, build,
+          gate-sync) — those steps are ``asyncio.to_thread`` calls;
+          cancelling the Task drops the awaiter but the OS thread
+          keeps running to completion.  That's unavoidable on CPython
+          (threads aren't forcibly cancellable), and the work ends up
+          in a transient state the caller may need to clean up later —
+          but the UI is freed immediately, which is the point.
+        """
+        if self._outcome in (InitOutcome.SUCCESS, InitOutcome.FAILED, InitOutcome.DECLINED):
             self.dismiss(self._outcome)
+            return
+
+        # Cancel the in-flight worker explicitly rather than relying on
+        # dismiss() to tear it down; the worker's ``finally`` touches
+        # widgets (``_finish_with_close_button``) and a concurrent
+        # dismiss would race those queries against screen teardown.
+        self.workers.cancel_group(self, "wizard-init")
+        self._outcome = InitOutcome.CANCELLED
+        self.dismiss(self._outcome)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────

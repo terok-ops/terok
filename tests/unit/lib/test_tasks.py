@@ -755,7 +755,12 @@ class TestTask:
                     assert kwargs["input"] == "test content"
                     assert kwargs["check"]
                     assert kwargs["text"]
-                    assert kwargs["capture_output"]
+                    # wl-copy's daemon inherits stdout; piping it would
+                    # hang the caller forever, so we send it to /dev/null
+                    # and only keep stderr for error reporting.
+                    assert kwargs["stdout"] == subprocess.DEVNULL
+                    assert kwargs["stderr"] == subprocess.PIPE
+                    assert kwargs["timeout"] > 0
 
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
         """Test copy_to_clipboard_detailed uses xclip on X11 when available."""
@@ -816,6 +821,27 @@ class TestTask:
                     assert "failed" in result.error
 
                     assert run_mock.call_count == 2
+
+    def test_copy_to_clipboard_helper_timeout_does_not_hang(self) -> None:
+        """A helper that times out must surface as an error, not hang the caller.
+
+        wl-copy's fork-a-daemon behaviour used to deadlock ``subprocess.run``
+        when stdout was captured; stdout is now ``DEVNULL`` and the call has
+        a hard timeout.  If either defence regresses the caller freezes.
+        """
+        with unittest.mock.patch.dict(
+            os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
+        ):
+            with unittest.mock.patch(
+                "terok.tui.clipboard.shutil.which", return_value="/usr/bin/wl-copy"
+            ):
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
+                    run_mock.side_effect = subprocess.TimeoutExpired(cmd=["wl-copy"], timeout=3.0)
+
+                    result = copy_to_clipboard_detailed("test content")
+                    assert not result.ok
+                    assert result.error is not None
+                    assert "timed out" in result.error
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
