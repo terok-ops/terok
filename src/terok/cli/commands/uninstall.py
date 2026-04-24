@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 
-from terok_sandbox import Marker, bold, stage_begin, stage_end, yellow
+from terok_sandbox import bold, stage_line, yellow
 
 # ── CLI wiring ─────────────────────────────────────────────────────────
 
@@ -114,14 +114,14 @@ def _uninstall_desktop_entry() -> bool:
     """Remove the XDG desktop entry + application icon."""
     from ._desktop_entry import uninstall_desktop_entry
 
-    stage_begin("Desktop entry")
-    try:
-        uninstall_desktop_entry()
-    except Exception as exc:  # noqa: BLE001
-        stage_end(Marker.FAIL, str(exc))
-        return False
-    stage_end(Marker.OK, "removed")
-    return True
+    with stage_line("Desktop entry") as s:
+        try:
+            uninstall_desktop_entry()
+        except Exception as exc:  # noqa: BLE001
+            s.fail(str(exc))
+            return False
+        s.ok("removed")
+        return True
 
 
 def _uninstall_sandbox_stack(*, root: bool) -> bool:
@@ -135,34 +135,34 @@ def _uninstall_sandbox_stack(*, root: bool) -> bool:
     """
     from terok_sandbox import sandbox_uninstall, uninstall_shield_bridge
 
-    stage_begin("Sandbox stack")
-    try:
-        uninstall_shield_bridge()
-    except Exception as exc:  # noqa: BLE001 — soft-fail, next step is authoritative
-        stage_end(Marker.FAIL, f"reader: {exc}")
-        return False
-    try:
-        sandbox_uninstall(root=root)
-    except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
-        stage_end(Marker.FAIL, str(exc))
-        return False
-    stage_end(Marker.OK, "clearance + gate + vault + shield removed")
-    return True
+    with stage_line("Sandbox stack") as s:
+        try:
+            uninstall_shield_bridge()
+        except Exception as exc:  # noqa: BLE001 — soft-fail, next step is authoritative
+            s.fail(f"reader: {exc}")
+            return False
+        try:
+            sandbox_uninstall(root=root)
+        except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
+            s.fail(str(exc))
+            return False
+        s.ok("clearance + gate + vault + shield removed")
+        return True
 
 
 def _purge_credential_db() -> bool:
     """Delete the vault credential database — agents will need re-auth."""
     from terok_sandbox import SandboxConfig
 
-    stage_begin("Credential DB")
-    db_path = SandboxConfig().db_path
-    if not db_path.exists():
-        stage_end(Marker.OK, "already absent")
+    with stage_line("Credential DB") as s:
+        db_path = SandboxConfig().db_path
+        if not db_path.exists():
+            s.ok("already absent")
+            return True
+        try:
+            db_path.unlink()
+        except OSError as exc:
+            s.fail(str(exc))
+            return False
+        s.ok(f"removed {db_path}")
         return True
-    try:
-        db_path.unlink()
-    except OSError as exc:
-        stage_end(Marker.FAIL, str(exc))
-        return False
-    stage_end(Marker.OK, f"removed {db_path}")
-    return True

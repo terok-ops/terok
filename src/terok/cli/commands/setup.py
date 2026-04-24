@@ -32,7 +32,7 @@ import shutil
 import sys
 
 from terok_executor import AUTH_PROVIDERS
-from terok_sandbox import Marker, bold, red, stage_begin, stage_end, yellow
+from terok_sandbox import bold, red, stage_line, yellow
 
 from ...lib.core.projects import load_project
 from ...lib.domain.facade import (
@@ -185,17 +185,17 @@ def _run_image_build(*, base: str, family: str | None) -> bool:
     """
     from terok_executor import BuildError, build_base_images
 
-    stage_begin("Base images (L0/L1)")
-    try:
-        build_base_images(base_image=base, family=family)
-    except BuildError as exc:
-        stage_end(Marker.FAIL, str(exc))
-        return False
-    except SystemExit:
-        stage_end(Marker.FAIL, "factory exited unexpectedly")
-        return False
-    stage_end(Marker.OK, "built")
-    return True
+    with stage_line("Base images (L0/L1)") as s:
+        try:
+            build_base_images(base_image=base, family=family)
+        except BuildError as exc:
+            s.fail(str(exc))
+            return False
+        except SystemExit:
+            s.fail("factory exited unexpectedly")
+            return False
+        s.ok("built")
+        return True
 
 
 # ── Desktop entry phase (terok-specific, not in sandbox aggregator) ───
@@ -220,32 +220,31 @@ def _ensure_desktop_entry() -> bool:
     """
     from ._desktop_entry import DesktopBackend, install_desktop_entry
 
-    stage_begin("Desktop entry")
-    bin_path = shutil.which("terok-tui")
-    if bin_path is None:
-        # pipx installs go under ~/.local/bin which isn't on the
-        # setup-run PATH everywhere; still write the entry but fall back
-        # to the bare binary name so an updated PATH picks it up.
-        bin_path = "terok-tui"
-    try:
-        backend = install_desktop_entry(bin_path)
-    except Exception as exc:  # noqa: BLE001
-        stage_end(Marker.FAIL, str(exc))
-        return False
-    if backend is DesktopBackend.XDG_UTILS:
-        stage_end(Marker.OK, "installed")
-    else:
-        # The fallback writes the right XDG paths on spec-compliant
-        # hosts but skips desktop-file-install validation and can't
-        # cover DE-specific layout drift.  We also land here when
-        # xdg-utils *is* on PATH but its install calls failed (DEBUG
-        # log carries the detail) — "missing or failed" covers both.
-        stage_end(
-            Marker.WARN,
-            "installed via built-in fallback — xdg-utils missing or failed; "
-            "install it for standard XDG registration",
-        )
-    return True
+    with stage_line("Desktop entry") as s:
+        bin_path = shutil.which("terok-tui")
+        if bin_path is None:
+            # pipx installs go under ~/.local/bin which isn't on the
+            # setup-run PATH everywhere; still write the entry but fall back
+            # to the bare binary name so an updated PATH picks it up.
+            bin_path = "terok-tui"
+        try:
+            backend = install_desktop_entry(bin_path)
+        except Exception as exc:  # noqa: BLE001
+            s.fail(str(exc))
+            return False
+        if backend is DesktopBackend.XDG_UTILS:
+            s.ok("installed")
+        else:
+            # The fallback writes the right XDG paths on spec-compliant
+            # hosts but skips desktop-file-install validation and can't
+            # cover DE-specific layout drift.  We also land here when
+            # xdg-utils *is* on PATH but its install calls failed (DEBUG
+            # log carries the detail) — "missing or failed" covers both.
+            s.warn(
+                "installed via built-in fallback — xdg-utils missing or failed; "
+                "install it for standard XDG registration"
+            )
+        return True
 
 
 # ── Per-project setup ──────────────────────────────────────────────────
