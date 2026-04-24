@@ -30,6 +30,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -375,8 +376,6 @@ class ShowSshKeyScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         """Build the hint + bare public key."""
-        from rich.text import Text
-
         yield Static(
             "Shift-drag to select the key below  ·  Esc, Enter or q to return",
             id="wizard-ssh-show-hint",
@@ -715,7 +714,18 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
             log.write(f"[green]✓[/] SSH key minted: {result['comment']}")
 
             if project_needs_key_registration(self._project_id):
-                self.query_one("#wizard-init-ssh-pubkey", Static).update(result["public_line"])
+                # ``overflow="fold"`` is load-bearing: Static's default
+                # word-wrap can't break a base64 blob (no spaces), so
+                # long keys silently truncate at the right edge of the
+                # bordered box — the user doesn't see there's more key
+                # off-screen and might copy an incomplete key.  Folding
+                # forces a character-level wrap so the full key is
+                # visible, even if border chars sit alongside it; a
+                # byte-clean copy is still one click away via "Copy"
+                # or "Show full key".
+                self.query_one("#wizard-init-ssh-pubkey", Static).update(
+                    Text(result["public_line"], overflow="fold", no_wrap=False)
+                )
                 # Show the fingerprint beside the key so the user can
                 # check it matches what their remote (e.g. GitHub) shows
                 # *after* pasting — by then the pubkey is already gone
