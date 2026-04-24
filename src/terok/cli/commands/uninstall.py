@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 
-from ._setup_ui import _bold, _stage_begin, _status_label, _yellow
+from terok_sandbox import Marker, bold, stage_begin, stage_end, yellow
 
 # ── CLI wiring ─────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ def cmd_uninstall(
     than it survives losing its shield hooks, so the aggregator's
     order keeps shield-hooks last.
     """
-    print(_bold("\nUninstalling terok host services\n"))
+    print(bold("\nUninstalling terok host services\n"))
 
     all_ok = True
     if not no_desktop_entry:
@@ -101,9 +101,9 @@ def cmd_uninstall(
 
     print()
     if all_ok:
-        print(_bold("Uninstall complete."))
+        print(bold("Uninstall complete."))
     else:
-        print(_bold(_yellow("Some uninstall phases reported errors (see above).")))
+        print(bold(yellow("Some uninstall phases reported errors (see above).")))
         raise SystemExit(1)
 
 
@@ -114,13 +114,13 @@ def _uninstall_desktop_entry() -> bool:
     """Remove the XDG desktop entry + application icon."""
     from ._desktop_entry import uninstall_desktop_entry
 
-    _stage_begin("Desktop entry")
+    stage_begin("Desktop entry")
     try:
         uninstall_desktop_entry()
     except Exception as exc:  # noqa: BLE001
-        print(f"{_status_label(False)} ({exc})")
+        stage_end(Marker.FAIL, str(exc))
         return False
-    print(f"{_status_label(True)} (removed)")
+    stage_end(Marker.OK, "removed")
     return True
 
 
@@ -135,18 +135,18 @@ def _uninstall_sandbox_stack(*, root: bool) -> bool:
     """
     from terok_sandbox import sandbox_uninstall, uninstall_shield_bridge
 
-    _stage_begin("Sandbox stack")
+    stage_begin("Sandbox stack")
     try:
         uninstall_shield_bridge()
     except Exception as exc:  # noqa: BLE001 — soft-fail, next step is authoritative
-        print(f"{_status_label(False)} (reader: {exc})")
+        stage_end(Marker.FAIL, f"reader: {exc}")
         return False
     try:
         sandbox_uninstall(root=root)
     except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
-        print(f"{_status_label(False)} ({exc})")
+        stage_end(Marker.FAIL, str(exc))
         return False
-    print(f"  {_status_label(True)} (clearance + gate + vault + shield removed)")
+    stage_end(Marker.OK, "clearance + gate + vault + shield removed")
     return True
 
 
@@ -154,15 +154,15 @@ def _purge_credential_db() -> bool:
     """Delete the vault credential database — agents will need re-auth."""
     from terok_sandbox import SandboxConfig
 
-    _stage_begin("Credential DB")
+    stage_begin("Credential DB")
     db_path = SandboxConfig().db_path
     if not db_path.exists():
-        print(f"{_status_label(True)} (already absent)")
+        stage_end(Marker.OK, "already absent")
         return True
     try:
         db_path.unlink()
     except OSError as exc:
-        print(f"{_status_label(False)} ({exc})")
+        stage_end(Marker.FAIL, str(exc))
         return False
-    print(f"{_status_label(True)} (removed {db_path})")
+    stage_end(Marker.OK, f"removed {db_path}")
     return True

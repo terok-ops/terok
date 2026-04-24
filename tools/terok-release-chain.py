@@ -55,7 +55,7 @@ CHAIN = ["terok-clearance", "terok-shield", "terok-sandbox", "terok-executor", "
 # cross-checks the two and aborts the next release otherwise.
 DEPS: DepGraph = {
     "terok-clearance": [],
-    "terok-shield": ["terok-clearance"],
+    "terok-shield": [],
     "terok-sandbox": ["terok-shield", "terok-clearance"],
     "terok-executor": ["terok-sandbox"],
     "terok": ["terok-executor", "terok-sandbox", "terok-shield", "terok-clearance"],
