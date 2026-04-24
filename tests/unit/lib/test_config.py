@@ -754,6 +754,80 @@ def test_is_claude_oauth_not_exposed_by_default(
     assert cfg.is_claude_oauth_exposed() is False
 
 
+# ---------- Codex OAuth helpers (mirror Claude) ----------
+
+
+def test_codex_allow_oauth_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_codex_allow_oauth()`` defaults to False."""
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.get_codex_allow_oauth() is False
+
+
+def test_codex_expose_oauth_token_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``get_codex_expose_oauth_token()`` reads ``agent.codex.expose_oauth_token``."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  codex:\n    expose_oauth_token: true\n")),
+    )
+    assert cfg.get_codex_expose_oauth_token() is True
+
+
+def test_codex_agent_config_non_dict_returns_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_codex_agent_config()`` returns ``{}`` when ``agent.codex`` is not a dict."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  codex: just-a-string\n")),
+    )
+    assert cfg.get_codex_allow_oauth() is False
+    assert cfg.get_codex_expose_oauth_token() is False
+
+
+def test_is_codex_oauth_exposed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """``is_codex_oauth_exposed()`` requires experimental + expose_oauth_token."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(
+                tmp_path,
+                "experimental: true\nagent:\n  codex:\n    expose_oauth_token: true\n",
+            )
+        ),
+    )
+    assert cfg.is_codex_oauth_exposed() is True
+
+
+def test_is_codex_oauth_not_exposed_without_experimental(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_codex_oauth_exposed()`` returns False without the experimental gate."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  codex:\n    expose_oauth_token: true\n")),
+    )
+    assert cfg.is_codex_oauth_exposed() is False
+
+
+def test_is_codex_oauth_proxied_is_phase3_skeleton(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``is_codex_oauth_proxied()`` honours the same flag combo as Claude.
+
+    Phase 1 ships the gate but no refresh route, so a ``True`` here
+    currently has no broker on the other side — the shield deny rule
+    wired in task_runners.py still fires, which is intentional: the
+    moment Phase 3 adds the route, nothing else needs to change.
+    """
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(tmp_path, "experimental: true\nagent:\n  codex:\n    allow_oauth: true\n")
+        ),
+    )
+    assert cfg.is_codex_oauth_proxied() is True
+
+
 # ---------- Layered config merging ----------
 
 

@@ -669,3 +669,66 @@ def is_claude_oauth_exposed() -> bool:
     instead of being replaced with a phantom marker.
     """
     return is_experimental() and get_claude_expose_oauth_token()
+
+
+# ---------- Codex OAuth config (agent.codex.*) ----------
+
+
+def _codex_agent_config() -> dict:
+    """Return the ``agent.codex`` sub-dict, guarding against non-dict values."""
+    codex = _load_validated().agent.get("codex")
+    return codex if isinstance(codex, dict) else {}
+
+
+def get_codex_allow_oauth() -> bool:
+    """Return ``agent.codex.allow_oauth`` from global config (default False).
+
+    Phase 3 skeleton.  Reserved for the future vault-brokered Codex OAuth
+    flow — currently a no-op because no Codex proxy route is wired yet.
+
+    Global config (config.yml)::
+
+        agent:
+          codex:
+            allow_oauth: true
+    """
+    return _codex_agent_config().get("allow_oauth", False) is True
+
+
+def get_codex_expose_oauth_token() -> bool:
+    """Return ``agent.codex.expose_oauth_token`` from global config (default False).
+
+    When True (and experimental is enabled), the real Codex ``auth.json``
+    is copied into the shared mount so the in-container Codex CLI reads
+    the live OAuth token directly.  The vault is bypassed for Codex.
+    Shield must allow ``api.openai.com``.
+
+    Global config (config.yml)::
+
+        agent:
+          codex:
+            expose_oauth_token: true
+    """
+    return _codex_agent_config().get("expose_oauth_token", False) is True
+
+
+def is_codex_oauth_proxied() -> bool:
+    """Return True when Codex OAuth traffic should be routed through the proxy.
+
+    Phase 3 gate — kept in lockstep with :func:`is_claude_oauth_proxied`
+    so shield rules and env overrides can be wired symmetrically.  In
+    Phase 1 this always returns False because no Codex OAuth refresh
+    route is defined yet (see ``codex.yaml``'s missing ``oauth_refresh``
+    block).
+    """
+    return is_experimental() and get_codex_allow_oauth() and not get_codex_expose_oauth_token()
+
+
+def is_codex_oauth_exposed() -> bool:
+    """Return True when the real Codex OAuth token is intentionally exposed.
+
+    Exposed mode trades token security for working Codex OAuth — the real
+    ``auth.json`` is mounted into every task container instead of being
+    wiped post-capture.  This is Phase 1's only path to a usable Codex.
+    """
+    return is_experimental() and get_codex_expose_oauth_token()

@@ -324,6 +324,36 @@ class TestMaybeDenyAnthropicApi:
             _maybe_deny_anthropic_api("ctr", MOCK_TASK_DIR)
 
 
+# ── _maybe_deny_openai_api ────────────────────────────
+
+
+class TestMaybeDenyOpenAiApi:
+    """Verify shield deny for api.openai.com when Codex OAuth is proxied."""
+
+    def test_noop_when_not_proxied(self) -> None:
+        """No-op in Phase 1 — ``is_codex_oauth_proxied`` always False."""
+        from terok.lib.orchestration.task_runners import _maybe_deny_openai_api
+
+        with patch(
+            "terok.lib.core.config.is_codex_oauth_proxied",
+            return_value=False,
+        ):
+            _maybe_deny_openai_api("ctr", MOCK_TASK_DIR)
+
+    def test_calls_shield_deny_when_proxied(self, tmp_path: Path) -> None:
+        """Calls shield.deny('api.openai.com') when Codex OAuth is proxied."""
+        from terok.lib.orchestration.task_runners import _maybe_deny_openai_api
+
+        mock_shield = MagicMock()
+        with (
+            patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=True),
+            patch("terok_sandbox.make_shield", return_value=mock_shield),
+        ):
+            _maybe_deny_openai_api("ctr", tmp_path)
+
+        mock_shield.deny.assert_called_once_with("ctr", "api.openai.com")
+
+
 # ── _run_container ────────────────────────────────────────
 
 

@@ -75,6 +75,7 @@ _TOAD_INTERNAL_PORT = 8081
 """Loopback port that toad binds inside the container — reached only via Caddy."""
 _TOAD_TOKEN_FILE_NAME = "toad.token"  # nosec B105 — filename, not a credential
 _ANTHROPIC_API_HOST = "api.anthropic.com"
+_OPENAI_API_HOST = "api.openai.com"
 _FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
 _CONTAINER_TEROK_CONFIG = "/home/dev/.terok"
 
@@ -395,6 +396,27 @@ def _maybe_deny_anthropic_api(cname: str, task_dir: Path) -> None:
         warnings.warn(f"shield deny {_ANTHROPIC_API_HOST}: {exc}", stacklevel=2)
 
 
+def _maybe_deny_openai_api(cname: str, task_dir: Path) -> None:
+    """Block ``api.openai.com`` when Codex OAuth is proxied.
+
+    Phase 3 hook — currently a no-op because ``is_codex_oauth_proxied``
+    always returns False until a Codex refresh route is wired.  Ships
+    now so Phase 3 only needs to flip the gate, not add new plumbing.
+    """
+    from ..core.config import is_codex_oauth_proxied
+
+    if not is_codex_oauth_proxied():
+        return
+    try:
+        from terok_sandbox import make_shield
+
+        make_shield(task_dir).deny(cname, _OPENAI_API_HOST)
+    except Exception as exc:  # noqa: BLE001
+        import warnings
+
+        warnings.warn(f"shield deny {_OPENAI_API_HOST}: {exc}", stacklevel=2)
+
+
 def _apply_shield_policy(
     project: ProjectConfig, cname: str, task_dir: Path, *, is_restart: bool
 ) -> None:
@@ -423,6 +445,7 @@ def _apply_shield_policy(
         _write_desired_shield_state(task_dir, "up")
 
     _maybe_deny_anthropic_api(cname, task_dir)
+    _maybe_deny_openai_api(cname, task_dir)
 
 
 def _run_container(

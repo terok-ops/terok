@@ -201,12 +201,14 @@ def authenticate(provider: str, project_id: str | None = None) -> None:
     duplicate or overwrite credentials.
     """
     from ..core.config import (
-        get_claude_expose_oauth_token,
-        is_experimental,
+        is_claude_oauth_exposed,
+        is_codex_oauth_exposed,
         sandbox_live_mounts_dir,
     )
 
-    expose = provider == "claude" and is_experimental() and get_claude_expose_oauth_token()
+    expose = (provider == "claude" and is_claude_oauth_exposed()) or (
+        provider == "codex" and is_codex_oauth_exposed()
+    )
 
     if project_id is None:
         image = _resolve_host_auth_image(provider)

@@ -74,6 +74,65 @@ class TestClaudeOAuthOverrides:
         assert env == original
 
 
+class TestCodexOAuthOverrides:
+    """Verify _apply_codex_oauth_overrides mode selection and phantom guard."""
+
+    def test_skipped_strips_phantom_and_base_url(self) -> None:
+        """Default mode + phantom-valued OPENAI_API_KEY → strip both proxy vars."""
+        from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
+
+        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+
+        env = {
+            "OPENAI_API_KEY": PHANTOM_CREDENTIALS_MARKER,
+            "OPENAI_BASE_URL": "http://host.containers.internal:18731",
+            "TEROK_TOKEN_BROKER_PORT": "18731",
+        }
+        with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=False):
+            _apply_codex_oauth_overrides(env)
+
+        assert "OPENAI_API_KEY" not in env
+        assert "OPENAI_BASE_URL" not in env
+        assert "TEROK_TOKEN_BROKER_PORT" in env
+
+    def test_proxied_keeps_base_url_drops_phantom(self) -> None:
+        """Phase 3 path: proxied → drop phantom, keep OPENAI_BASE_URL for vault routing."""
+        from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
+
+        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+
+        env = {
+            "OPENAI_API_KEY": PHANTOM_CREDENTIALS_MARKER,
+            "OPENAI_BASE_URL": "http://host.containers.internal:18731",
+        }
+        with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=True):
+            _apply_codex_oauth_overrides(env)
+
+        assert "OPENAI_API_KEY" not in env
+        assert env["OPENAI_BASE_URL"] == "http://host.containers.internal:18731"
+
+    def test_leaves_user_set_real_key_untouched(self) -> None:
+        """User-set ``OPENAI_API_KEY`` (not phantom) must survive the override."""
+        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+
+        env = {
+            "OPENAI_API_KEY": "sk-real-user-key",
+            "OPENAI_BASE_URL": "https://api.openai.com",
+        }
+        original = dict(env)
+        _apply_codex_oauth_overrides(env)
+        assert env == original
+
+    def test_noop_without_openai_api_key(self) -> None:
+        """No ``OPENAI_API_KEY`` → nothing to clean up."""
+        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+
+        env = {"ANTHROPIC_API_KEY": "sk-ant"}
+        original = dict(env)
+        _apply_codex_oauth_overrides(env)
+        assert env == original
+
+
 class TestLeakedCredentialsScan:
     """Verify _warn_leaked_credentials with exposed-token filtering."""
 
@@ -120,6 +179,7 @@ class TestLeakedCredentialsScan:
                 ],
             ),
             patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=True),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=False),
         ):
             _warn_leaked_credentials()
 
@@ -129,4 +189,34 @@ class TestLeakedCredentialsScan:
         # Claude filtered out, vibe still warned via logger
         log_messages = [r.message for r in caplog.records]
         assert not any("claude" in m for m in log_messages)
+        assert any("vibe" in m for m in log_messages)
+
+    def test_exposed_codex_token_suppresses_codex_warning(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Exposed Codex OAuth token: Codex warning suppressed, banner printed."""
+        from terok.lib.orchestration.environment import _warn_leaked_credentials
+
+        with (
+            caplog.at_level(logging.WARNING, logger="terok.lib.orchestration.environment"),
+            patch(
+                "terok.lib.orchestration.environment.sandbox_live_mounts_dir",
+                return_value=Path("/tmp/terok-testing/mounts"),
+            ),
+            patch(
+                "terok_executor.scan_leaked_credentials",
+                return_value=[
+                    ("codex", Path("/tmp/terok-testing/m/_codex-config/auth.json")),
+                    ("vibe", Path("/tmp/terok-testing/m/config.toml")),
+                ],
+            ),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=True),
+        ):
+            _warn_leaked_credentials()
+
+        err = capsys.readouterr().err
+        assert "Codex" in err and "EXPOSED" in err
+        log_messages = [r.message for r in caplog.records]
+        assert not any("codex" in m for m in log_messages)
         assert any("vibe" in m for m in log_messages)

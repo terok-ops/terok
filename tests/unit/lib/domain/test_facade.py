@@ -220,7 +220,7 @@ class TestAuthenticate:
         """``authenticate(provider, project_id)`` reuses the project's L2 image."""
         from terok.lib.domain import facade
 
-        # sandbox_live_mounts_dir / is_experimental / expose-token are
+        # sandbox_live_mounts_dir and the expose-token predicates are
         # lazy-imported inside the function body, so patching happens
         # at their definition modules rather than on the facade.
         with (
@@ -228,8 +228,8 @@ class TestAuthenticate:
                 "terok.lib.domain.facade.project_cli_image", return_value="terok-p1:latest"
             ) as mock_l2,
             patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
-            patch("terok.lib.core.config.is_experimental", return_value=False),
-            patch("terok.lib.core.config.get_claude_expose_oauth_token", return_value=False),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=False),
             patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
         ):
             facade.authenticate("claude", project_id="p1")
@@ -239,6 +239,7 @@ class TestAuthenticate:
         # Positional call arg 0 is the container-scope string: the project id.
         assert mock_auth.call_args.args[0] == "p1"
         assert mock_auth.call_args.kwargs["image"] == "terok-p1:latest"
+        assert mock_auth.call_args.kwargs["expose_token"] is False
 
     def test_host_wide_resolves_l1_and_passes_none_scope(self) -> None:
         """``authenticate(provider)`` (no project) passes ``None`` scope and an L1 image."""
@@ -250,8 +251,8 @@ class TestAuthenticate:
                 return_value="terok-l1-cli:ubuntu-24.04",
             ) as mock_resolve,
             patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
-            patch("terok.lib.core.config.is_experimental", return_value=False),
-            patch("terok.lib.core.config.get_claude_expose_oauth_token", return_value=False),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=False),
             patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
         ):
             facade.authenticate("claude")
@@ -259,6 +260,42 @@ class TestAuthenticate:
         mock_resolve.assert_called_once_with("claude")
         assert mock_auth.call_args.args[0] is None
         assert mock_auth.call_args.kwargs["image"] == "terok-l1-cli:ubuntu-24.04"
+
+    def test_codex_expose_flag_forwards_expose_token(self) -> None:
+        """``is_codex_oauth_exposed()`` True → ``expose_token=True`` for codex."""
+        from terok.lib.domain import facade
+
+        with (
+            patch(
+                "terok.lib.domain.facade._resolve_host_auth_image",
+                return_value="terok-l1-cli:ubuntu-24.04",
+            ),
+            patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=True),
+            patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
+        ):
+            facade.authenticate("codex")
+
+        assert mock_auth.call_args.kwargs["expose_token"] is True
+
+    def test_codex_expose_flag_does_not_leak_to_claude(self) -> None:
+        """Codex expose flag must not flip expose_token for a Claude auth flow."""
+        from terok.lib.domain import facade
+
+        with (
+            patch(
+                "terok.lib.domain.facade._resolve_host_auth_image",
+                return_value="terok-l1-cli:ubuntu-24.04",
+            ),
+            patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=True),
+            patch("terok.lib.domain.facade._authenticate_raw") as mock_auth,
+        ):
+            facade.authenticate("claude")
+
+        assert mock_auth.call_args.kwargs["expose_token"] is False
 
 
 class TestResolveHostAuthImage:

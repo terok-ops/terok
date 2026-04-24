@@ -263,38 +263,76 @@ def _apply_claude_oauth_overrides(env: dict[str, str]) -> None:
             env.pop(key, None)
 
 
+def _apply_codex_oauth_overrides(env: dict[str, str]) -> None:
+    """Adjust Codex OAuth env vars based on the experimental proxy config.
+
+    Codex reuses the generic ``OPENAI_API_KEY`` as its phantom env var, so
+    presence alone is ambiguous — the user may have set a real key.  We
+    gate on the phantom marker value to only strip executor-injected
+    vault plumbing:
+
+    - **Proxied** (``is_codex_oauth_proxied``, Phase 3): keep
+      ``OPENAI_BASE_URL`` for vault routing; remove the phantom token so
+      the proxy picks auth from the mounted ``auth.json`` marker.  Unused
+      in Phase 1 — no Codex refresh route exists yet.
+    - **Skipped / Exposed**: clear both env vars so the in-container Codex
+      CLI reaches ``api.openai.com`` directly via ``auth.json``.
+    """
+    from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
+
+    from ..core.config import is_codex_oauth_proxied
+
+    if env.get("OPENAI_API_KEY") != PHANTOM_CREDENTIALS_MARKER:
+        return  # Real key (user-set) or nothing injected — don't touch.
+
+    if is_codex_oauth_proxied():
+        env.pop("OPENAI_API_KEY", None)
+    else:
+        for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL"):
+            env.pop(key, None)
+
+
 def _warn_leaked_credentials() -> None:
     """Warn about real credential files in shared mounts.
 
-    When the Claude OAuth token is intentionally exposed (for Claude Code
-    subscription features), the Claude-specific warning is suppressed.
+    When an OAuth token is intentionally exposed (for Claude subscription
+    features or for Codex OAuth until a proxy route exists), the
+    provider-specific leak warning is suppressed and replaced by a loud,
+    explicit banner so the user can't miss that a real token is mounted.
     """
+    import sys
+
     from terok_executor import scan_leaked_credentials
 
-    from ..core.config import is_claude_oauth_exposed
+    from ..core.config import is_claude_oauth_exposed, is_codex_oauth_exposed
     from ..util.ansi import bold, supports_color, yellow
 
     leaked = scan_leaked_credentials(sandbox_live_mounts_dir())
+    color = supports_color()
 
-    if is_claude_oauth_exposed():
-        import sys
-
-        color = supports_color()
+    def _banner(provider_label: str, file_desc: str) -> None:
         print(
             "\n"
             + bold(
                 yellow(
-                    "  WARNING: Claude OAuth token is EXPOSED to all task containers.\n"
-                    "  The vault does NOT protect this token — it is mounted\n"
-                    "  directly via .credentials.json in the shared config directory.\n"
-                    "  Every task container managed by terok can read the real token.\n",
+                    f"  WARNING: {provider_label} OAuth token is EXPOSED to all task containers.\n"
+                    f"  The vault does NOT protect this token — it is mounted\n"
+                    f"  directly via {file_desc} in the shared config directory.\n"
+                    f"  Every task container managed by terok can read the real token.\n",
                     color,
                 ),
                 color,
             ),
             file=sys.stderr,
         )
+
+    if is_claude_oauth_exposed():
+        _banner("Claude", ".credentials.json")
         leaked = [(p, path) for p, path in leaked if p != "claude"]
+
+    if is_codex_oauth_exposed():
+        _banner("Codex", "auth.json")
+        leaked = [(p, path) for p, path in leaked if p != "codex"]
 
     for provider, path in leaked:
         _logger.warning("Real credential in shared mount for provider %s", provider)
@@ -438,9 +476,10 @@ def build_task_env_and_volumes(
 
         volumes.append(VolumeSpec(cfg.runtime_dir, _CONTAINER_RUNTIME_DIR, sharing=Sharing.SHARED))
 
-    # Claude OAuth overrides + leaked-cred scan with exposed-token filtering
+    # Claude/Codex OAuth overrides + leaked-cred scan with exposed-token filtering
     if not vault_bypass:
         _apply_claude_oauth_overrides(env)
+        _apply_codex_oauth_overrides(env)
         _warn_leaked_credentials()
 
     return env, volumes
