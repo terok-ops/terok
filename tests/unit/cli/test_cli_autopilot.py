@@ -15,6 +15,20 @@ from tests.testcli import run_cli
 from tests.testfs import NONEXISTENT_MARKDOWN_PATH
 
 
+@pytest.fixture(autouse=True)
+def _bypass_setup_verdict_gate():
+    """Skip the stamp-based gate in task-CLI unit tests — covered separately.
+
+    ``_cmd_task_run`` now calls :func:`terok.cli.commands.task._setup_verdict_or_exit`
+    at entry which raises exit 3 when the setup stamp is absent.  These
+    tests run in a stamp-free tmp env and assert behaviour downstream
+    of that gate; the gate's own behaviour is pinned by
+    ``test_cli_task_verdict_gate.py``.
+    """
+    with patch("terok.cli.commands.task._setup_verdict_or_exit"):
+        yield
+
+
 def capture_headless_request(project: str, prompt: str, *extra_args: str) -> HeadlessRunRequest:
     """Run ``terok task run --mode headless`` and capture the forwarded request."""
     with (

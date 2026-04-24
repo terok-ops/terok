@@ -395,6 +395,22 @@ def terok_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TerokIntegrati
     sandbox_state.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TEROK_SANDBOX_LIVE_DIR", str(sandbox_live))
     monkeypatch.setenv("TEROK_SANDBOX_STATE_DIR", str(sandbox_state))
+
+    # Seed a valid setup.stamp so subprocess CLIs don't exit 3 at the
+    # verdict gate on ``terok task run`` / ``terok-executor run``.  Real
+    # operators run ``terok setup`` once before tasks; the integration
+    # harness simulates that completed state without running the full
+    # installer.  Tests that specifically exercise the gate's response
+    # to FIRST_RUN / STALE_* verdicts should manipulate the stamp
+    # themselves (or use unit tests which don't rely on this fixture).
+    #
+    # ``TEROK_ROOT`` is set via subprocess env in ``TerokIntegrationEnv.cli_env``
+    # (helpers.py), so we also mirror it into the pytest process so the
+    # in-process ``write_stamp()`` call below targets the same path.
+    monkeypatch.setenv("TEROK_ROOT", str(tmp_path))
+    from terok_sandbox import write_stamp
+
+    write_stamp()
     return env
 
 

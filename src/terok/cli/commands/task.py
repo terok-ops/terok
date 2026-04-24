@@ -319,6 +319,7 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def _cmd_task_run(args: argparse.Namespace) -> None:
     """Dispatch ``terok task run`` to the runner for the chosen mode."""
+    _setup_verdict_or_exit()
     mode = getattr(args, "mode", "cli")
     if mode == "headless":
         _cmd_task_run_headless(args)
@@ -326,6 +327,92 @@ def _cmd_task_run(args: argparse.Namespace) -> None:
         _cmd_task_run_interactive(args, runner=task_run_toad, attach=False)
     else:  # mode == "cli"
         _cmd_task_run_interactive(args, runner=task_run_cli, attach=_resolve_attach(args))
+
+
+def _setup_verdict_or_exit() -> None:
+    """Bounce the user to ``terok setup`` before spawning task containers.
+
+    Mirrors ``terok-executor run``'s phase-4 exit-code contract so
+    scripts see the same signal whether they drive terok or executor
+    directly:
+
+    - ``OK`` → silent return, task runner proceeds.
+    - ``FIRST_RUN`` / ``STALE_AFTER_UPDATE`` / ``STAMP_CORRUPT`` →
+      exit 3 with ``"Fix: terok setup"`` on stderr.
+    - ``STALE_AFTER_DOWNGRADE`` → exit 4 after a multi-line refusal
+      naming the downgraded packages.  Downgrades aren't tested;
+      refusing is deliberate per epic terok-ai/terok#685.
+
+    Cheap enough to call on every ``task run`` / ``task restart``
+    invocation — one ``Path.is_file``, one JSON decode, a handful
+    of ``importlib.metadata.version`` lookups.
+    """
+    from terok_sandbox import SetupVerdict, needs_setup
+    from terok_sandbox.setup_stamp import _installed_versions, _read_stamp, stamp_path
+
+    verdict = needs_setup()
+    if verdict is SetupVerdict.OK:
+        return
+
+    if verdict is SetupVerdict.STALE_AFTER_DOWNGRADE:
+        downgraded = _name_downgraded_packages(stamp_path(), _read_stamp, _installed_versions)
+        names = ", ".join(downgraded) or "one or more packages"
+        print(
+            f"terok: refusing to run — downgrade detected ({names}).\n"
+            "  Downgrades aren't supported; older code may not read newer state correctly.\n"
+            "  Either upgrade back to the stamped version, or "
+            "remove the stamp at your own risk:\n"
+            f"    rm {stamp_path()}",
+            file=sys.stderr,
+        )
+        raise SystemExit(4)
+
+    nudge = {
+        SetupVerdict.FIRST_RUN: "no setup stamp found — terok hasn't been initialised",
+        SetupVerdict.STALE_AFTER_UPDATE: (
+            "package versions changed since the last setup — re-run to apply"
+        ),
+        SetupVerdict.STAMP_CORRUPT: "setup stamp is unreadable — re-run setup to refresh it",
+    }[verdict]
+    print(
+        f"terok: {nudge}.\n  Fix:    terok setup",
+        file=sys.stderr,
+    )
+    raise SystemExit(3)
+
+
+def _name_downgraded_packages(
+    path: Any,
+    read_stamp_fn: Any,
+    installed_fn: Any,
+) -> list[str]:
+    """Return ``[pkg]`` whose installed version is < stamped, or missing entirely.
+
+    Best-effort: if the stamp can't be re-read (race with a parallel
+    setup overwrite) we return an empty list so the caller falls back
+    to a generic "downgrade detected" message instead of crashing.
+    """
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        stamped = read_stamp_fn(path)
+    except Exception:  # noqa: BLE001 — diagnostic helper, never the source of truth
+        return []
+    installed = installed_fn()
+
+    out: list[str] = []
+    for pkg, stamp_ver in stamped.items():
+        if pkg not in installed:
+            out.append(f"{pkg} (uninstalled)")
+            continue
+        cur = installed[pkg]
+        try:
+            if Version(cur) < Version(stamp_ver):
+                out.append(f"{pkg} {stamp_ver} → {cur}")
+        except InvalidVersion:
+            if cur < stamp_ver:
+                out.append(f"{pkg} {stamp_ver} → {cur}")
+    return out
 
 
 def _cmd_task_run_interactive(args: argparse.Namespace, *, runner: Any, attach: bool) -> None:
@@ -492,8 +579,10 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
     elif args.task_cmd == "stop":
         task_stop(pid, tid, timeout=getattr(args, "timeout", None))
     elif args.task_cmd == "restart":
+        _setup_verdict_or_exit()
         task_restart(pid, tid)
     elif args.task_cmd == "followup":
+        _setup_verdict_or_exit()
         task_followup_headless(
             pid,
             tid,
