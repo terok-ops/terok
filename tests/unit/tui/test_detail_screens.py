@@ -777,6 +777,53 @@ class TestSSHKeyRegistration:
             m_summarize.assert_called_once_with(_FAKE_SSH_INIT_RESULT)
 
 
+class TestActionAuth:
+    """Per-project ``_action_auth`` and host-wide ``_action_auth_host_wide``."""
+
+    def _get_mixin(self):
+        from terok.tui.project_actions import ProjectActionsMixin
+
+        return ProjectActionsMixin
+
+    def test_per_project_calls_authenticate_with_project_id(self) -> None:
+        """``_action_auth`` is the project-details path — passes the selection."""
+        mixin = self._get_mixin()
+        instance = mock.Mock(spec=mixin)
+        instance.current_project_id = "myproj"
+        instance._run_suspended = mock.AsyncMock(side_effect=lambda fn, **kw: fn())
+
+        with mock.patch("terok.tui.project_actions.authenticate") as m_auth:
+            run(mixin._action_auth(instance, "claude"))
+        m_auth.assert_called_once_with("claude", "myproj")
+
+    def test_per_project_without_selection_notifies_and_skips(self) -> None:
+        """Without a selection ``_action_auth`` is a no-op — host-wide path is separate."""
+        mixin = self._get_mixin()
+        instance = mock.Mock(spec=mixin)
+        instance.current_project_id = None
+        # ``notify`` lives on the App parent, not the mixin spec — wire it
+        # explicitly so the early-return path can call it without erroring.
+        instance.notify = mock.Mock()
+        instance._run_suspended = mock.AsyncMock()
+
+        with mock.patch("terok.tui.project_actions.authenticate") as m_auth:
+            run(mixin._action_auth(instance, "claude"))
+        m_auth.assert_not_called()
+        instance._run_suspended.assert_not_called()
+        instance.notify.assert_called_once()
+
+    def test_host_wide_passes_none_regardless_of_selection(self) -> None:
+        """``_action_auth_host_wide`` ignores ``current_project_id`` by design."""
+        mixin = self._get_mixin()
+        instance = mock.Mock(spec=mixin)
+        instance.current_project_id = "selected-but-irrelevant"
+        instance._run_suspended = mock.AsyncMock(side_effect=lambda fn, **kw: fn())
+
+        with mock.patch("terok.tui.project_actions.authenticate") as m_auth:
+            run(mixin._action_auth_host_wide(instance, "claude"))
+        m_auth.assert_called_once_with("claude", None)
+
+
 class TestActionSelection:
     """Tests for task selection after task creation flows."""
 
@@ -981,6 +1028,64 @@ class TestCommandPalette:
             commands = list(app_class.get_system_commands(instance, screen=mock.Mock()))
         titles = [cmd.title for cmd in commands]
         assert "Git Gate Server" in titles
+
+    def test_get_system_commands_includes_authenticate(self) -> None:
+        """The host-wide auth flow is reachable from the command palette."""
+        from tests.unit.tui.tui_test_helpers import build_textual_stubs
+
+        stubs = build_textual_stubs()
+        _, app_class = import_app(stubs)
+        instance = app_class()
+        with mock.patch.dict(sys.modules, stubs):
+            commands = list(app_class.get_system_commands(instance, screen=mock.Mock()))
+        titles = [cmd.title for cmd in commands]
+        assert "Authenticate agents and tools" in titles
+
+
+class TestGlobalAuthBinding:
+    """The top-level ``a`` shortcut + ``action_authenticate`` route."""
+
+    def test_app_binds_a_to_authenticate(self) -> None:
+        """``a`` on the main screen opens the auth modal — no project required."""
+        _, app_class = import_app()
+        bindings = {(b[0], b[1]) for b in app_class.BINDINGS}
+        assert ("a", "authenticate") in bindings
+
+    def test_action_authenticate_pushes_auth_actions_screen(self) -> None:
+        """``action_authenticate`` opens :class:`AuthActionsScreen`."""
+        _, app_class = import_app()
+        # No spec — ``push_screen`` is inherited from the Textual ``App``
+        # stub and isn't present on the inner ``TerokTUI`` class itself.
+        instance = mock.MagicMock()
+        instance.push_screen = mock.AsyncMock()
+        run(app_class.action_authenticate(instance))
+        instance.push_screen.assert_awaited_once()
+        pushed_screen, callback = instance.push_screen.await_args.args
+        assert type(pushed_screen).__name__ == "AuthActionsScreen"
+        assert callback == instance._on_authenticate_result
+
+    def test_on_authenticate_result_routes_to_host_wide(self) -> None:
+        """``auth_<provider>`` from the global modal lands in the host-wide handler."""
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._on_authenticate_result(instance, "auth_claude"))
+        instance._action_auth_host_wide.assert_awaited_once_with("claude")
+        instance._action_auth.assert_not_called()
+
+    def test_on_authenticate_result_routes_opencode_import(self) -> None:
+        """OpenCode import from the global modal reuses the project-screen handler."""
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._on_authenticate_result(instance, "import_opencode_config"))
+        instance._action_import_opencode_config.assert_awaited_once()
+
+    def test_on_authenticate_result_ignores_cancel(self) -> None:
+        """Esc on the modal returns ``None`` — handler is a no-op."""
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._on_authenticate_result(instance, None))
+        instance._action_auth_host_wide.assert_not_called()
+        instance._action_import_opencode_config.assert_not_called()
 
 
 class TestRenderGateServerStatus:

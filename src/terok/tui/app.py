@@ -272,6 +272,7 @@ if _HAS_TEXTUAL:
 
         BINDINGS = [
             ("q", "quit", "Quit"),
+            ("a", "authenticate", "Auth"),
             ("P", "panic", "PANIC"),
         ]
 
@@ -1388,6 +1389,39 @@ if _HAS_TEXTUAL:
                 "Monitor blocked connections and send verdicts via D-Bus",
                 self.action_show_clearance,
             )
+            yield SystemCommand(
+                "Authenticate agents and tools",
+                "Run the host-wide auth flow for an agent or tool — no project required",
+                self.action_authenticate,
+            )
+
+        async def action_authenticate(self) -> None:
+            """Open the host-wide ``Authenticate agents and tools`` modal.
+
+            Reuses :class:`AuthActionsScreen`, but the result handler
+            forces a host-wide auth flow (``project_id=None``) regardless
+            of what's selected in the main pane — the per-project entry
+            lives on the project-details screen.
+            """
+            from .screens import AuthActionsScreen
+
+            await self.push_screen(AuthActionsScreen(), self._on_authenticate_result)
+
+        async def _on_authenticate_result(self, result: str | None) -> None:
+            """Route the host-wide auth modal's selection.
+
+            ``auth_<provider>`` lands in :meth:`_action_auth_host_wide`
+            (forced ``project_id=None``); ``import_opencode_config``
+            shares the project-screen handler since the import is
+            project-agnostic anyway.
+            """
+            if not result:
+                return
+            if result.startswith("auth_"):
+                await self._action_auth_host_wide(result[5:])
+                return
+            if result == "import_opencode_config":
+                await self._action_import_opencode_config()
 
         async def action_show_gate_server(self) -> None:
             """Open the gate server management screen."""
