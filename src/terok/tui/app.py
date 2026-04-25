@@ -63,13 +63,15 @@ if _HAS_TEXTUAL:
         EnvironmentCheck,
         GateServerStatus,
         GateStalenessInfo,
+        SetupVerdict,
         VaultStatus,
         check_environment as _shield_check_environment,
         get_server_status,
         get_vault_status,
+        needs_setup,
         state as _shield_state,
     )
-    from textual import on
+    from textual import on, work
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
     from textual.widgets import Footer, Header, Static
@@ -122,6 +124,7 @@ if _HAS_TEXTUAL:
         TaskDetailsScreen,
         VaultScreen,
     )
+    from .setup_screen import SetupOutcome, SetupScreen
     from .task_actions import TaskActionsMixin
     from .widgets import (
         PanicButton,
@@ -132,6 +135,7 @@ if _HAS_TEXTUAL:
         TaskListItem,
         TaskMeta,
     )
+    from .worker_log_screen import WorkerLogScreen
 
     # -- Dispatch tables mapping action IDs to handler method names ----------
     # These are the single source of truth for action routing.  Both
@@ -400,22 +404,117 @@ if _HAS_TEXTUAL:
             # Start periodic gate server polling
             self._start_gate_server_polling()
 
-            # First-run nudge: zero projects *and* zero broken configs on
-            # a fresh install → auto-open the wizard so the user never
-            # lands on a blank TUI wondering what to do next.  The
-            # dismissed flag persists through ``terok-state.json`` so a
-            # user who closes the wizard once isn't nagged again.
-            if not self._projects_by_id and not self._broken_by_id:
-                await self._maybe_show_first_run_wizard()
+            # First-run nudge: drive setup → wizard on a fresh install,
+            # but also re-prompt for setup whenever a stale stamp is
+            # detected (e.g. after a package upgrade).  The dismissed
+            # flag persists through ``terok-state.json`` so a user who
+            # closes both screens isn't nagged again — but a non-OK
+            # verdict overrides the flag, since a stale stamp is
+            # actionable feedback the user shouldn't be allowed to mute
+            # indefinitely.
+            await self._maybe_show_first_run_flow()
 
-        async def _maybe_show_first_run_wizard(self) -> None:
-            """Auto-open the wizard on a genuinely-empty install, once per user."""
-            if getattr(self, "_first_run_dismissed", False):
+        async def _maybe_show_first_run_flow(self) -> None:
+            """Probe the setup verdict and decide whether to drive the first-run flow."""
+            empty_install = not self._projects_by_id and not self._broken_by_id
+            try:
+                verdict = needs_setup()
+            except Exception:
+                verdict = SetupVerdict.OK  # keep the TUI usable on probe failure
+
+            already_dismissed = getattr(self, "_first_run_dismissed", False)
+            if verdict is SetupVerdict.OK and (already_dismissed or not empty_install):
                 return
+
             self._first_run_dismissed = True
             self._save_selection_state()
-            # The action kicks off a worker; no need to await.
-            self.action_new_project_wizard()
+            self._run_first_run_flow(verdict=verdict, empty_install=empty_install)
+
+        @work(exclusive=True, group="first-run-flow", exit_on_error=False)
+        async def _run_first_run_flow(self, *, verdict: SetupVerdict, empty_install: bool) -> None:
+            """Drive setup → wizard sequencing on a single worker.
+
+            Runs the setup flow first when the verdict is non-OK, then
+            chains into the new-project wizard *only* if setup
+            succeeded (or wasn't needed) and the install is empty.
+            Surfaces unexpected exceptions as a TUI notification so a
+            crash in either screen can never silently swallow the
+            user's first impression.
+            """
+            try:
+                proceed = await self._run_setup_flow(verdict)
+                if proceed and empty_install:
+                    self.action_new_project_wizard()
+            except Exception as exc:  # noqa: BLE001 — last-resort surface
+                self.notify(
+                    f"First-run flow failed: {exc}",
+                    severity="error",
+                    timeout=15,
+                )
+                raise
+
+        async def _run_setup_flow(self, verdict: SetupVerdict) -> bool:
+            """Show the setup screen + worker log; return True if the wizard may follow.
+
+            ``True`` covers both "setup completed cleanly" and "verdict
+            was already OK so we skipped the screen" — either way the
+            host stack is in a state where the project wizard makes
+            sense.  ``False`` covers user-initiated skip / refusal /
+            failure: the wizard is gated behind a working sandbox stack,
+            so chaining into it on a known-broken host would just
+            produce confusing follow-on errors.
+            """
+            if verdict is SetupVerdict.OK:
+                return True
+
+            outcome = await self.push_screen_wait(SetupScreen(verdict=verdict))
+            match outcome:
+                case SetupOutcome.SHOULD_RUN:
+                    return await self._run_setup_subprocess()
+                case SetupOutcome.SKIPPED | SetupOutcome.CANCELLED:
+                    self.notify(
+                        "Skipped terok setup.  Run it any time from the command "
+                        "palette → Run terok setup.",
+                        severity="warning",
+                        timeout=10,
+                    )
+                case SetupOutcome.REFUSED:
+                    self.notify(
+                        "Setup refused due to a downgrade.  Re-upgrade or remove "
+                        "the setup stamp; see ``terok setup`` from a shell for "
+                        "details.",
+                        severity="error",
+                        timeout=15,
+                    )
+            return False
+
+        async def _run_setup_subprocess(self) -> bool:
+            """Stream ``terok setup`` through :class:`WorkerLogScreen`; True on exit 0."""
+            result = await self.push_screen_wait(
+                WorkerLogScreen(["terok", "setup"], title="Running terok setup…")
+            )
+            if result.ok:
+                return True
+            self.notify(
+                "terok setup reported errors.  Re-run from the command palette "
+                "once the underlying issue is fixed.",
+                severity="error",
+                timeout=15,
+            )
+            return False
+
+        async def action_run_setup(self) -> None:
+            """Open the setup flow on demand (command palette / re-run).
+
+            Always probes the current verdict so the user sees the live
+            state — useful even on a healthy install when they want to
+            re-apply the (idempotent) systemd cycle after an upgrade.
+            """
+            try:
+                verdict = needs_setup()
+            except Exception:
+                verdict = SetupVerdict.FIRST_RUN
+            await self._run_setup_flow(verdict)
 
         def _log_layout_debug(self) -> None:
             """Write a one-shot snapshot of key widget sizes to the state dir.
@@ -1259,6 +1358,11 @@ if _HAS_TEXTUAL:
             from textual.app import SystemCommand
 
             yield from super().get_system_commands(screen)
+            yield SystemCommand(
+                "Run terok setup",
+                "Install or re-apply the host services (shield, vault, gate, clearance) + desktop entry",
+                self.action_run_setup,
+            )
             yield SystemCommand(
                 "Git Gate Server",
                 "Manage gate server status and operations",

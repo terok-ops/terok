@@ -66,6 +66,7 @@ allowed_importers =
     terok.tui.polling
     terok.tui.project_actions
     terok.tui.screens
+    terok.tui.setup_screen
     terok.tui.task_actions
     terok.tui.widgets.project_state
 
