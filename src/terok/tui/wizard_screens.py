@@ -300,6 +300,13 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
             yield TextArea.code_editor(
                 self._rendered,
                 language="yaml",
+                theme="vscode_dark",
+                # Keep Tab on the focus ring — the project template uses
+                # 2-space indent, so a literal tab here would yield an
+                # invalid YAML on save.  Shift-Tab to reach "Initialize"
+                # was a UX wart; Tab now cycles widgets like everywhere
+                # else, and indentation comes from the renderer.
+                tab_behavior="focus",
                 id="wizard-review-yaml",
             )
             with Horizontal(id="wizard-review-buttons"):
