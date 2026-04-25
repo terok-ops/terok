@@ -48,10 +48,10 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-# DEV-TIME BRANCH PINS — track the dossier-in-events chain end-to-end.
-# Release script flips back to wheel URLs once the four siblings ship.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.126/terok_executor-0.0.126-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.105/terok_sandbox-0.0.105-py3-none-any.whl"}
+# DEV-TIME BRANCH PINS — track the Codex vaulted-OAuth PR chain until the
+# sibling wheels ship.  The release chain flips these back to wheel URLs.
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "feat/codex-oauth-expose-dispatch"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/codex-shared-oauth-vault"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.35/terok_shield-0.6.35-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.7/terok_clearance-0.6.7-py3-none-any.whl"}
 
