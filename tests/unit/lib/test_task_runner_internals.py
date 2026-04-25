@@ -331,7 +331,7 @@ class TestMaybeDenyOpenAiApi:
     """Verify shield deny for api.openai.com when Codex OAuth is proxied."""
 
     def test_noop_when_not_proxied(self) -> None:
-        """No-op in Phase 1 — ``is_codex_oauth_proxied`` always False."""
+        """No-op when Codex OAuth proxying is disabled."""
         from terok.lib.orchestration.task_runners import _maybe_deny_openai_api
 
         with patch(

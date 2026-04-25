@@ -1,18 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for terok-specific vault overrides.
+"""Tests for terok-specific vault env/policy selection.
 
 Generic vault plumbing (phantom tokens, socket transport, SSH signer) is
 tested in terok-executor (test_env_builder.py).  These tests cover the
-terok-only Claude OAuth mode overrides and leaked-credential scan with
-exposed-token filtering.
+terok-only Claude OAuth env override, shared config-patch selection, and
+leaked-credential scan with exposed-token filtering.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -74,63 +75,36 @@ class TestClaudeOAuthOverrides:
         assert env == original
 
 
-class TestCodexOAuthOverrides:
-    """Verify _apply_codex_oauth_overrides mode selection and phantom guard."""
+class TestEnabledVaultPatchProviders:
+    """Verify Codex shared-config patch selection from terok config."""
 
-    def test_skipped_strips_phantom_and_base_url(self) -> None:
-        """Default mode + phantom-valued OPENAI_API_KEY → strip both proxy vars."""
-        from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
+    def _roster(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            vault_routes={
+                "codex": SimpleNamespace(shared_config_patch={"file": "config.toml"}),
+                "vibe": SimpleNamespace(shared_config_patch={"file": "config.toml"}),
+                "gh": SimpleNamespace(shared_config_patch={"file": "config.yml"}),
+                "claude": SimpleNamespace(shared_config_patch=None),
+            }
+        )
 
-        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+    def test_proxied_keeps_codex_patch(self) -> None:
+        """Codex shared config patch is enabled only in proxied mode."""
+        from terok.lib.orchestration.environment import _enabled_vault_patch_providers
 
-        env = {
-            "OPENAI_API_KEY": PHANTOM_CREDENTIALS_MARKER,
-            "OPENAI_BASE_URL": "http://host.containers.internal:18731",
-            "TEROK_TOKEN_BROKER_PORT": "18731",
-        }
-        with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=False):
-            _apply_codex_oauth_overrides(env)
-
-        assert "OPENAI_API_KEY" not in env
-        assert "OPENAI_BASE_URL" not in env
-        assert "TEROK_TOKEN_BROKER_PORT" in env
-
-    def test_proxied_keeps_base_url_drops_phantom(self) -> None:
-        """Phase 3 path: proxied → drop phantom, keep OPENAI_BASE_URL for vault routing."""
-        from terok_sandbox import PHANTOM_CREDENTIALS_MARKER
-
-        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
-
-        env = {
-            "OPENAI_API_KEY": PHANTOM_CREDENTIALS_MARKER,
-            "OPENAI_BASE_URL": "http://host.containers.internal:18731",
-        }
         with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=True):
-            _apply_codex_oauth_overrides(env)
+            providers = _enabled_vault_patch_providers(self._roster())
 
-        assert "OPENAI_API_KEY" not in env
-        assert env["OPENAI_BASE_URL"] == "http://host.containers.internal:18731"
+        assert providers == frozenset({"codex", "gh", "vibe"})
 
-    def test_leaves_user_set_real_key_untouched(self) -> None:
-        """User-set ``OPENAI_API_KEY`` (not phantom) must survive the override."""
-        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
+    def test_skipped_omits_codex_patch(self) -> None:
+        """Default/exposed modes omit Codex's shared config rewrite."""
+        from terok.lib.orchestration.environment import _enabled_vault_patch_providers
 
-        env = {
-            "OPENAI_API_KEY": "sk-real-user-key",
-            "OPENAI_BASE_URL": "https://api.openai.com",
-        }
-        original = dict(env)
-        _apply_codex_oauth_overrides(env)
-        assert env == original
+        with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=False):
+            providers = _enabled_vault_patch_providers(self._roster())
 
-    def test_noop_without_openai_api_key(self) -> None:
-        """No ``OPENAI_API_KEY`` → nothing to clean up."""
-        from terok.lib.orchestration.environment import _apply_codex_oauth_overrides
-
-        env = {"ANTHROPIC_API_KEY": "sk-ant"}
-        original = dict(env)
-        _apply_codex_oauth_overrides(env)
-        assert env == original
+        assert providers == frozenset({"gh", "vibe"})
 
 
 class TestLeakedCredentialsScan:
