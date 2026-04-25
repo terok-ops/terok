@@ -274,13 +274,33 @@ class ProjectActionsMixin:
     # ---------- Authentication actions ----------
 
     async def _action_auth(self, provider: str) -> None:
-        """Run auth flow for the given provider."""
+        """Run the auth flow for *provider* against the selected project.
+
+        Reached from the project-details screen, where a project is
+        always selected.  The top-level "Authenticate agents and tools"
+        entry uses :meth:`_action_auth_host_wide` instead — it bypasses
+        ``current_project_id`` so a stray selection in the main pane
+        doesn't silently scope a host-wide intent to one project.
+        """
         if not self.current_project_id:
             self.notify("No project selected.")
             return
         await self._run_suspended(
             lambda: authenticate(provider, self.current_project_id),
             success_msg=f"Auth completed for {provider}",
+            refresh=None,
+        )
+
+    async def _action_auth_host_wide(self, provider: str) -> None:
+        """Run the host-wide auth flow for *provider* — no project context.
+
+        Resolves a shared L1 image (or builds one) and writes credentials
+        provider-scoped to the vault, so a later switch to per-project
+        auth doesn't duplicate or overwrite anything.
+        """
+        await self._run_suspended(
+            lambda: authenticate(provider, None),
+            success_msg=f"Auth completed for {provider} (host-wide)",
             refresh=None,
         )
 
