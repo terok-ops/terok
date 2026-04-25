@@ -185,6 +185,25 @@ async def test_review_screen_initialize_returns_edited_yaml() -> None:
     assert app.result == "project:\n  id: demo\n  edited: true\n"
 
 
+@pytest.mark.asyncio
+async def test_review_screen_textarea_keeps_tab_on_focus_ring() -> None:
+    """Tab cycles widgets — the project template uses 2-space indent.
+
+    A literal tab inside the YAML would silently corrupt the file, and
+    Shift-Tab to escape the editor was a UX wart that hid the
+    "Initialize project" button from new users.  YAML language +
+    coloured theme are also asserted here so a dependency upgrade
+    that drops either is caught.
+    """
+    app = _WizardHost(ProjectReviewScreen("demo", "project:\n  id: demo\n"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ta = app.screen.query_one("#wizard-review-yaml", TextArea)
+        assert ta.tab_behavior == "focus"
+        assert ta.language == "yaml"
+        assert ta.theme == "vscode_dark"
+
+
 # ── Registry-level smoke ──────────────────────────────────────────────
 
 
