@@ -37,7 +37,11 @@ include = [
 python = ">=3.12,<4.0"
 pydantic = ">=2.6"
 "ruamel.yaml" = ">=0.18"
-textual = "8.2.4"
+# The ``syntax`` extra pulls in ``tree-sitter`` + per-language grammars
+# so the wizard's ``project.yml`` review editor actually highlights
+# (without it, ``language="yaml"`` is silently a no-op and the buffer
+# renders as plain white text).
+textual = {version = "8.2.4", extras = ["syntax"]}
 argcomplete = ">=3.1"
 requests = ">=2.31"
 rich = ">=13.0"
