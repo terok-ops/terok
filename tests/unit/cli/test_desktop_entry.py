@@ -463,7 +463,7 @@ class TestIsDesktopEntryInstalled:
 
 
 class TestBackendSelection:
-    """``_xdg_utils_available`` gates the whole strategy."""
+    """``xdg_utils_available`` gates the whole strategy."""
 
     def test_both_binaries_required(self) -> None:
         """Half-installed xdg-utils (one of the two missing) → manual fallback."""
@@ -472,7 +472,7 @@ class TestBackendSelection:
             return "/usr/bin/xdg-desktop-menu" if name == "xdg-desktop-menu" else None
 
         with mock.patch("terok.cli.commands._desktop_entry.shutil.which", side_effect=only_menu):
-            assert desktop._xdg_utils_available() is False
+            assert desktop.xdg_utils_available() is False
 
     def test_xdg_desktop_icon_alone_is_not_enough(self) -> None:
         """Presence of ``xdg-desktop-icon`` (wrong tool) must not flip the gate on.
@@ -489,11 +489,11 @@ class TestBackendSelection:
             "terok.cli.commands._desktop_entry.shutil.which",
             side_effect=only_wrong_icon_tool,
         ):
-            assert desktop._xdg_utils_available() is False
+            assert desktop.xdg_utils_available() is False
 
     def test_returns_true_when_both_on_path(self) -> None:
         """Full xdg-utils → backend switches to the delegated install."""
         with mock.patch(
             "terok.cli.commands._desktop_entry.shutil.which", side_effect=_which_everything
         ):
-            assert desktop._xdg_utils_available() is True
+            assert desktop.xdg_utils_available() is True

@@ -44,14 +44,8 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-# DEV-TIME BRANCH PINS — terok-sandbox PR #216 adds the ``stage_line``
-# context manager for progressive rendering; terok's CLI frontend
-# migrates to it here.  terok-executor PR #236 re-pins its own sandbox
-# dep so Poetry can resolve a consistent sandbox revision across the
-# chain during review.  Release script flips both to wheel URLs at
-# merge.
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.121/terok_executor-0.0.121-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.101/terok_sandbox-0.0.101-py3-none-any.whl"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.122/terok_executor-0.0.122-py3-none-any.whl"}
+terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.102/terok_sandbox-0.0.102-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.32/terok_shield-0.6.32-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.4/terok_clearance-0.6.4-py3-none-any.whl"}
 

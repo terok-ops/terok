@@ -658,6 +658,7 @@ expose = [
     "vault_dir",
     "get_logs_partial_streaming",
     "get_tui_default_tmux",
+    "get_tui_desktop_entry",
     "get_global_human_name",
     "get_global_human_email",
     "get_global_default_agent",
