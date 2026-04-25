@@ -414,11 +414,13 @@ class RawTUISection(BaseModel):
     desktop_entry: Literal["auto", "skip", "install"] = Field(
         default="auto",
         description=(
-            "XDG desktop-entry install policy for ``terok setup``: ``auto`` "
-            "installs only when ``xdg-utils`` is on PATH and otherwise skips "
-            "with a hint, ``skip`` always skips silently (default for headless "
-            "hosts), ``install`` always installs (uses the built-in fallback "
-            "when ``xdg-utils`` is missing)"
+            "XDG desktop-entry install policy for ``terok setup`` "
+            "(default: ``auto``).  ``auto`` installs only when "
+            "``xdg-utils`` is on PATH and otherwise skips with a hint.  "
+            "``skip`` always skips silently — recommended for headless "
+            "hosts that will never resolve the launcher.  ``install`` "
+            "always installs, using the built-in fallback writer when "
+            "``xdg-utils`` is missing."
         ),
     )
 
