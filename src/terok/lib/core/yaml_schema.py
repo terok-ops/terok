@@ -411,6 +411,16 @@ class RawTUISection(BaseModel):
     default_tmux: bool = Field(
         default=False, description="Default to tmux mode when launching the TUI"
     )
+    desktop_entry: Literal["auto", "skip", "install"] = Field(
+        default="auto",
+        description=(
+            "XDG desktop-entry install policy for ``terok setup``: ``auto`` "
+            "installs only when ``xdg-utils`` is on PATH and otherwise skips "
+            "with a hint, ``skip`` always skips silently (default for headless "
+            "hosts), ``install`` always installs (uses the built-in fallback "
+            "when ``xdg-utils`` is missing)"
+        ),
+    )
 
 
 class RawLogsSection(BaseModel):

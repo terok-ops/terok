@@ -118,7 +118,7 @@ def install_desktop_entry(bin_path: str | Path) -> DesktopBackend:
         _load_template().replace("{{BIN}}", str(bin_path)).replace("{{TRY_EXEC}}", str(bin_path))
     )
     logo_bytes = _resource_dir().joinpath(_LOGO_NAME).read_bytes()
-    if _xdg_utils_available() and _install_via_xdg_utils(rendered, logo_bytes):
+    if xdg_utils_available() and _install_via_xdg_utils(rendered, logo_bytes):
         return DesktopBackend.XDG_UTILS
     # xdg-utils missing *or* it barfed (readonly menu dir, timeout, bad
     # DE detection) — land the files ourselves so the operator still
@@ -138,7 +138,7 @@ def uninstall_desktop_entry() -> DesktopBackend:
         retry via manual unlinks and report FALLBACK so the teardown
         leaves no stragglers even when xdg-utils misbehaves.
     """
-    if _xdg_utils_available() and _uninstall_via_xdg_utils():
+    if xdg_utils_available() and _uninstall_via_xdg_utils():
         return DesktopBackend.XDG_UTILS
     _uninstall_manually()
     return DesktopBackend.FALLBACK
@@ -157,7 +157,7 @@ def is_desktop_entry_installed() -> bool:
 # ── xdg-utils backend ─────────────────────────────────────────────────
 
 
-def _xdg_utils_available() -> bool:
+def xdg_utils_available() -> bool:
     """Return True only when *both* xdg-utils front-ends are on PATH."""
     return bool(shutil.which(_XDG_MENU_BINARY) and shutil.which(_XDG_ICON_RESOURCE_BINARY))
 
@@ -240,7 +240,7 @@ def _run_xdg(binary: str, *args: str) -> bool:
     hand off to the manual fallback.
     """
     found = shutil.which(binary)
-    if not found:  # pragma: no cover — gated by _xdg_utils_available
+    if not found:  # pragma: no cover — gated by xdg_utils_available
         return False
     # nosec B603 — argv is our own literal binary path plus subcommand/arg tokens.
     try:

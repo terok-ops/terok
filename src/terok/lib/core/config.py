@@ -425,6 +425,22 @@ def get_tui_default_tmux() -> bool:
     return _load_validated().tui.default_tmux
 
 
+def get_tui_desktop_entry() -> str:
+    """Return the XDG desktop-entry install policy for ``terok setup``.
+
+    One of ``"auto"`` (install when ``xdg-utils`` is present, else skip
+    with a hint), ``"skip"`` (always skip silently — sensible default
+    for headless hosts), or ``"install"`` (always install, falling back
+    to the built-in writer when ``xdg-utils`` is missing).
+
+    Global config (config.yml)::
+
+        tui:
+          desktop_entry: skip   # auto (default) | skip | install
+    """
+    return _load_validated().tui.desktop_entry
+
+
 def get_logs_partial_streaming() -> bool:
     """Return whether partial streaming is enabled for log viewing (default True).
 

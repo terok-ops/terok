@@ -59,12 +59,22 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "desktop entry for ``terok-tui`` on top.  Safe to re-run."
         ),
     )
-    p_setup.add_argument(
+    desktop_group = p_setup.add_mutually_exclusive_group()
+    desktop_group.add_argument(
         "--no-desktop-entry",
         action="store_true",
         help=(
-            "Skip the XDG desktop entry and icon for terok-tui.  Use on "
-            "headless / server hosts with no application launcher."
+            "Skip the XDG desktop entry and icon for terok-tui.  Equivalent to "
+            "``tui.desktop_entry: skip`` for one run."
+        ),
+    )
+    desktop_group.add_argument(
+        "--install-desktop-entry",
+        action="store_true",
+        help=(
+            "Force-install the XDG desktop entry, falling back to the built-in "
+            "writer when xdg-utils is missing.  Equivalent to "
+            "``tui.desktop_entry: install`` for one run."
         ),
     )
     p_setup.add_argument(
@@ -97,6 +107,7 @@ def dispatch(args: argparse.Namespace) -> bool:
         return False
     cmd_setup(
         no_desktop_entry=getattr(args, "no_desktop_entry", False),
+        install_desktop_entry=getattr(args, "install_desktop_entry", False),
         with_images=getattr(args, "with_images", None),
         family=getattr(args, "family", None),
     )
@@ -109,6 +120,7 @@ def dispatch(args: argparse.Namespace) -> bool:
 def cmd_setup(
     *,
     no_desktop_entry: bool = False,
+    install_desktop_entry: bool = False,
     with_images: str | None = None,
     family: str | None = None,
 ) -> None:
@@ -119,6 +131,11 @@ def cmd_setup(
     desktop entry step is non-fatal when xdg-utils is missing — the
     built-in fallback covers spec-compliant hosts and the warning is
     a WARN, not a FAIL.
+
+    Desktop-entry policy resolution: ``--no-desktop-entry`` /
+    ``--install-desktop-entry`` (mutually exclusive) override the
+    config key ``tui.desktop_entry`` (``auto`` / ``skip`` / ``install``,
+    default ``auto``) for a single run.
 
     When ``with_images`` is ``None`` (the default) the L0/L1 build is
     *skipped entirely* — image-build decisions are per-project and
@@ -146,8 +163,11 @@ def cmd_setup(
         # depends on images will be useful anyway.
         images_failed = not _run_image_build(base=with_images, family=family)
 
-    print()
-    desktop_ok = no_desktop_entry or _ensure_desktop_entry()
+    desktop_policy = _resolve_desktop_policy(
+        no_desktop_entry=no_desktop_entry,
+        install_desktop_entry=install_desktop_entry,
+    )
+    desktop_ok = _ensure_desktop_entry(policy=desktop_policy)
 
     print()
     if not sandbox_failed and not images_failed and desktop_ok:
@@ -201,32 +221,61 @@ def _run_image_build(*, base: str, family: str | None) -> bool:
 # ── Desktop entry phase (terok-specific, not in sandbox aggregator) ───
 
 
-def _ensure_desktop_entry() -> bool:
-    """Install the XDG desktop entry + application icon for ``terok-tui``.
+def _resolve_desktop_policy(*, no_desktop_entry: bool, install_desktop_entry: bool) -> str:
+    """Resolve the effective desktop-entry policy for this run.
 
-    Writes three things, each soft-failing if the user doesn't have an
-    application launcher (headless SSH box, container CI image):
-      1. The ``.desktop`` file with ``Exec`` templated to the operator's
-         resolved ``terok-tui`` binary — desktop launchers run with a
-         minimal PATH so ``~/.local/bin`` entries from ``pipx`` installs
-         won't be found by name alone.
-      2. The ``terok-logo.png`` at ``hicolor/256x256/apps/terok.png`` so
-         GNOME / KDE / XFCE can resolve ``Icon=terok`` via the standard
-         icon theme lookup.
-      3. A best-effort ``update-desktop-database`` + ``gtk-update-icon-cache``
-         to nudge the menu / icon caches; the launcher finds the file on
-         its own, but the refresh makes it appear in the next-session
-         menu without an X-server restart.
+    CLI flags win over the config key — argparse already enforces that
+    the two flags are mutually exclusive.  Falls through to
+    ``tui.desktop_entry`` (default ``"auto"``) when neither flag is set.
     """
-    from ._desktop_entry import DesktopBackend, install_desktop_entry
+    from ...lib.core.config import get_tui_desktop_entry
+
+    if no_desktop_entry:
+        return "skip"
+    if install_desktop_entry:
+        return "install"
+    return get_tui_desktop_entry()
+
+
+def _ensure_desktop_entry(*, policy: str) -> bool:
+    """Apply the resolved desktop-entry *policy* — silent skip, hint, or install.
+
+    Three branches keyed off *policy*:
+
+    - ``skip`` → emit nothing.  The operator knows what they asked for.
+    - ``auto`` without ``xdg-utils`` → skip with a single WARN stage line
+      naming both escape hatches (``--install-desktop-entry`` for one
+      run, ``tui.desktop_entry: skip`` to silence permanently).
+      Headless servers usually want this default.
+    - ``auto`` with ``xdg-utils``, or ``install`` → run the install,
+      reporting the actually-used backend.  The fallback writer kicks
+      in for ``install`` on a host without xdg-utils.
+    """
+    if policy == "skip":
+        return True
+
+    from ._desktop_entry import (
+        DesktopBackend,
+        install_desktop_entry,
+        xdg_utils_available,
+    )
+
+    print()
+    if policy == "auto" and not xdg_utils_available():
+        with stage_line("Desktop entry") as s:
+            s.warn(
+                "skipped — xdg-utils not installed.  Run "
+                "``terok setup --install-desktop-entry`` to install via the "
+                "built-in fallback, or set ``tui.desktop_entry: skip`` in "
+                "config.yml to silence this hint."
+            )
+        return True
 
     with stage_line("Desktop entry") as s:
-        bin_path = shutil.which("terok-tui")
-        if bin_path is None:
-            # pipx installs go under ~/.local/bin which isn't on the
-            # setup-run PATH everywhere; still write the entry but fall back
-            # to the bare binary name so an updated PATH picks it up.
-            bin_path = "terok-tui"
+        # pipx installs go under ~/.local/bin which isn't on the setup-run
+        # PATH everywhere; fall back to the bare name so an updated PATH
+        # picks it up at launcher time.
+        bin_path = shutil.which("terok-tui") or "terok-tui"
         try:
             backend = install_desktop_entry(bin_path)
         except Exception as exc:  # noqa: BLE001
