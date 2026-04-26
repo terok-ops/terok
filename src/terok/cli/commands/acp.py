@@ -128,7 +128,7 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
     is preserved.
     """
     sock_path = acp_socket_path(project_id, task_id)
-    if not sock_path.exists():
+    if not _socket_is_live(sock_path):
         _spawn_daemon(project_id, task_id)
         _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC)
 
@@ -161,10 +161,16 @@ def _spawn_daemon(project_id: str, task_id: str) -> None:
 
 
 def _wait_for_socket(path: Path, *, timeout: float) -> None:
-    """Block until *path* appears or *timeout* elapses (then exits)."""
+    """Block until *path* is bound by a live daemon or *timeout* elapses.
+
+    A bare existence check would race against a stale ``.sock`` left by
+    a previous crash — ``connect`` would think the daemon is up and
+    skip the spawn.  Probing accept-readiness instead lets the wait
+    loop drive a real handshake.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if path.exists():
+        if _socket_is_live(path):
             return
         time.sleep(0.05)
     print(
@@ -172,6 +178,24 @@ def _wait_for_socket(path: Path, *, timeout: float) -> None:
         file=sys.stderr,
     )
     raise SystemExit(1)
+
+
+def _socket_is_live(path: Path) -> bool:
+    """Return ``True`` when a peer is currently accepting on *path*.
+
+    Mirrors the helper in :mod:`terok.cli.acp_proxy` — kept inline
+    here so the CLI doesn't import the daemon module just for this
+    one helper.
+    """
+    if not path.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(str(path))
+    except OSError:
+        return False
+    return True
 
 
 def _inprocess_pump(sock_path: Path) -> None:
@@ -193,8 +217,8 @@ def _inprocess_pump(sock_path: Path) -> None:
     try:
         while True:
             # Drop stdin from the watch set after EOF — otherwise
-            # ``select`` keeps marking it ready and a second
-            # ``shutdown(SHUT_WR)`` raises, dropping the daemon's
+            # ``select`` keeps marking it ready and we'd attempt a
+            # second ``shutdown(SHUT_WR)``, dropping the daemon's
             # final reply on the floor.
             read_fds: list[object] = [sock]
             if stdin_open:
@@ -203,10 +227,27 @@ def _inprocess_pump(sock_path: Path) -> None:
             if stdin_open and stdin_fd in ready:
                 data = os.read(stdin_fd, 4096)
                 if not data:
-                    sock.shutdown(socket.SHUT_WR)
+                    # ``shutdown`` may raise if the daemon already
+                    # closed its end — tolerate that, the SHUT_WR is
+                    # advisory anyway.
+                    try:
+                        sock.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
                     stdin_open = False
                 else:
-                    sock.sendall(data)
+                    # Non-blocking ``send`` may write fewer bytes than
+                    # requested under backpressure, and ``BlockingIOError``
+                    # signals "kernel send buffer full".  Loop until the
+                    # whole frame is committed; wait for write-readiness
+                    # via a single-fd ``select`` between attempts.
+                    view = memoryview(data)
+                    while view:
+                        try:
+                            sent = sock.send(view)
+                            view = view[sent:]
+                        except BlockingIOError:
+                            select.select([], [sock], [])
             if sock in ready:
                 try:
                     data = sock.recv(4096)
@@ -214,7 +255,12 @@ def _inprocess_pump(sock_path: Path) -> None:
                     continue
                 if not data:
                     return
-                os.write(stdout_fd, data)
+                # ``os.write`` may also write fewer bytes than supplied
+                # (rare on regular fds, but possible on pipes/ptys).
+                view = memoryview(data)
+                while view:
+                    written = os.write(stdout_fd, view)
+                    view = view[written:]
     finally:
         try:
             sock.close()
