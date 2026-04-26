@@ -326,7 +326,11 @@ def _ensure_shell_completions() -> None:
         print("Install manually: terok completions install --shell <bash|zsh|fish>")
         return
     try:
-        _install_completions(shell=shell)
+        # Positional, not ``shell=…``: bandit's B604 heuristic flags any
+        # function call carrying a ``shell`` kwarg (mistaking it for
+        # ``subprocess.run(..., shell=True)``); the underlying API takes
+        # bash/zsh/fish, not a shell-mode flag.
+        _install_completions(shell)
     except Exception as exc:  # noqa: BLE001
         print(yellow(f"Shell completions skipped: {exc}"))
 
