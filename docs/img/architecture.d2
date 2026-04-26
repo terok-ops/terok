@@ -1,6 +1,19 @@
+# Render with:
+#   d2 --layout=elk --elk-nodeNodeBetweenLayers=20 \
+#      --elk-padding='[top=4,left=4,bottom=4,right=4]' \
+#      --theme=0 --dark-theme=200 --pad=8 \
+#      architecture.d2 architecture.svg
+# Then strip the page-background rect (the matching rect inside <mask>
+# must stay — it holds the connection arrow routing together):
+#   python3 -c 'import re,sys;p=sys.argv[1];s=open(p).read();\
+#     m=[(x.start(),x.end()) for x in re.finditer(r"<mask\\b.*?</mask>",s,re.S)];\
+#     pat=re.compile(r"<rect x=\"-?\\d+\" y=\"-?\\d+\" width=\"\\d+\" height=\"\\d+\" fill=\"white\"></rect>");\
+#     it=pat.finditer(s);\
+#     [open(p,"w").write(s[:x.start()]+s[x.end():]) for x in it if not any(a<=x.start()<b for a,b in m)][:1]' architecture.svg
+
 vars: {
   d2-config: {
-    pad: 16
+    pad: 8
   }
 }
 
@@ -8,69 +21,80 @@ vars: {
 # light/dark background; theme-aware fills handle the rest.
 style.fill: transparent
 
-direction: right
+direction: down
 
-operator: |md
-  ### Operator
-  CLI · TUI ·
-  desktop popups
-| {
-  width: 200
-  style: {
-    fill: "#dcfce7"
-    stroke: "#15803d"
-    stroke-width: 2
-    border-radius: 14
+# Per-layer palette: each layer of the stack carries a distinct hue
+# so the colour by itself reads as "what kind of thing is this?"
+classes: {
+  orchestration: {
+    style: {
+      fill: "#dbeafe"
+      stroke: "#1d4ed8"
+      stroke-width: 2
+      border-radius: 12
+    }
+  }
+  pertask: {
+    style: {
+      fill: "#ede9fe"
+      stroke: "#7c3aed"
+      stroke-width: 2
+      border-radius: 12
+    }
+  }
+  runtime: {
+    style: {
+      fill: "#ccfbf1"
+      stroke: "#0d9488"
+      stroke-width: 2
+      border-radius: 12
+    }
+  }
+  boundary: {
+    style: {
+      fill: "#ffedd5"
+      stroke: "#c2410c"
+      stroke-width: 2
+      border-radius: 12
+    }
+  }
+  system: {
+    style: {
+      fill: "#f1f5f9"
+      stroke: "#475569"
+      stroke-width: 2
+      border-radius: 12
+    }
   }
 }
 
-container: |md
-  ### Per-task container
-  - Agent CLI · /workspace
-  - Layered instructions
-  - Standard dev tools
-  - rootless Podman, no host privileges
-| {
-  width: 320
-  style: {
-    fill: "#dbeafe"
-    stroke: "#1d4ed8"
-    stroke-width: 2
-    border-radius: 14
-  }
+terok: "terok\nProject orchestration · multi-agent presets · TUI · sickbay" {
+  class: orchestration
 }
 
-boundary: |md
-  ### Boundary services *(host-side)*
-  - default-deny egress firewall
-  - credential vault on host
-  - per-task git gate
-  - live clearance verdicts
-| {
-  width: 280
-  style: {
-    fill: "#ffedd5"
-    stroke: "#c2410c"
-    stroke-width: 2
-    border-radius: 14
-  }
+executor: "terok-executor\nPer-task agent runner · image factory · auth flows" {
+  class: pertask
 }
 
-world: |md
-  ### Allowed external world
-  - LLM endpoints
-  - Git remote
-  - Package registries
-| {
-  width: 230
-  style: {
-    fill: "#f1f5f9"
-    stroke: "#475569"
-    stroke-width: 2
-    border-radius: 14
-  }
+sandbox: "terok-sandbox\nHardened Podman runtime · credential vault · git gate" {
+  class: runtime
 }
 
-operator -> container: "creates"
-container -> boundary: "every outbound\nrequest"
-boundary -> world: "if allowed"
+shield: "terok-shield\nnftables egress firewall · default-deny · audit" {
+  class: boundary
+}
+
+clearance: "terok-clearance\nLive Allow/Deny prompts · D-Bus + varlink hub" {
+  class: boundary
+}
+
+system: "System foundation\nrootless Podman · nftables · systemd · D-Bus" {
+  class: system
+}
+
+terok -> executor
+executor -> sandbox
+sandbox -> shield
+sandbox -> clearance
+shield -> system
+clearance -> system
