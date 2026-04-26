@@ -42,13 +42,20 @@ See Also:
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import tarfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from terok_executor import get_provider, resolve_instructions
+from terok_executor import (
+    ACPEndpointStatus,
+    get_provider,
+    list_authenticated_agents,
+    resolve_instructions,
+)
 from terok_sandbox import GitGate, SSHManager
 
 from ..core.config import (
@@ -60,7 +67,7 @@ from ..core.config import (
     user_projects_dir,
     vault_dir,
 )
-from ..core.paths import core_state_dir
+from ..core.paths import acp_bound_path, acp_socket_path, core_state_dir
 from ..core.project_model import ProjectConfig
 from ..core.projects import list_presets, load_project
 from ..orchestration.agent_config import resolve_agent_config
@@ -216,6 +223,93 @@ class DeleteProjectResult(TypedDict):
     deleted: list[str]
     skipped: list[str]
     archive: str | None
+
+
+@dataclass(frozen=True)
+class ACPEndpoint:
+    """One per-task ACP endpoint as visible from the host.
+
+    Constructed by :meth:`Project.acp_endpoints`; consumed by the CLI
+    (``terok acp list``) and the TUI panel.  Carries enough state to
+    render a status row without forcing the listing path to actually
+    probe or open the socket.
+    """
+
+    project_id: str
+    """The owning project's id."""
+
+    task_id: str
+    """The task this endpoint serves."""
+
+    socket_path: Path
+    """Where the proxy daemon would bind (or has bound) the socket.
+
+    The path is computed deterministically from the task id and may not
+    yet exist on disk — :attr:`status` records whether it does.
+    """
+
+    status: ACPEndpointStatus
+    """Live state — ``active``, ``ready``, or ``unsupported``."""
+
+    bound_agent: str | None = None
+    """Set only when ``status == ACTIVE`` and the daemon has bound an
+    agent for the open session; ``None`` otherwise."""
+
+
+def _read_bound_agent(project_id: str, task_id: str) -> str | None:
+    """Read the bound-agent name from the proxy daemon's sidecar JSON.
+
+    The daemon writes ``{"agent": "<name>"}`` atomically (via os.replace)
+    when a session binds.  Tolerates partial / missing files — every
+    error path collapses to ``None`` so the listing surface keeps
+    working when the daemon is mid-update or the file is absent.
+    """
+    path = acp_bound_path(project_id, task_id)
+    try:
+        payload = json.loads(path.read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    agent = payload.get("agent") if isinstance(payload, dict) else None
+    return agent if isinstance(agent, str) else None
+
+
+def _task_has_any_authed_agent(project_id: str, task: Task, authed: set[str]) -> bool:
+    """Return ``True`` if the task's image declares any agent in *authed*.
+
+    The image label is the source of truth for "what agents could this
+    task run"; intersecting with the live auth set tells us whether
+    ``acp connect`` would succeed.  Empty image labels surface as
+    ``unsupported`` rather than failing at connect time — that case
+    is real for legacy task images pre-dating the agents label.
+    """
+    image_agents = _image_agents_for_task(project_id, task)
+    return bool(image_agents & authed) if image_agents else False
+
+
+def _image_agents_for_task(project_id: str, task: Task) -> set[str]:
+    """Return the agent set declared on a running task's container image.
+
+    Reads ``ai.terok.agents`` (CSV) via the runtime — falls back to an
+    empty set on any error so the caller can classify the endpoint
+    cleanly without bubbling exceptions to the listing surface.
+    """
+    from terok_executor import AGENTS_LABEL
+    from terok_sandbox import Sandbox
+
+    from ..orchestration.tasks import container_name
+
+    try:
+        sandbox = Sandbox(config=make_sandbox_config())
+        cname = container_name(project_id, task.meta.mode, task.task_id)
+        container = sandbox.runtime.container(cname)
+        image = container.image
+        if image is None:
+            return set()
+        raw = image.labels().get(AGENTS_LABEL, "")
+    except Exception as exc:  # noqa: BLE001
+        _logger.debug("_image_agents_for_task(%s): %s", task.task_id, exc)
+        return set()
+    return {token for token in (s.strip() for s in raw.split(",")) if token}
 
 
 def _archive_project(project_id: str) -> str | None:
@@ -507,6 +601,46 @@ class Project:
         if status:
             metas = [m for m in metas if m.status == status]
         return [Task(self._config, m) for m in metas]
+
+    def acp_endpoints(self) -> list[ACPEndpoint]:
+        """Return one :class:`ACPEndpoint` per running task.
+
+        Cheap discovery surface — walks running tasks, classifies each
+        endpoint as ``active`` (daemon up, socket bound), ``ready``
+        (task running with at least one authed agent, daemon would
+        spawn on first connect), or ``unsupported`` (no agents authed
+        for this task's image; connect would fail).
+
+        No probing, no socket traffic — pure file-existence checks plus
+        one credential-DB read.  ``terok acp list`` and the TUI panel
+        share this entry point.
+        """
+        running = self.list_tasks(status="running")
+        if not running:
+            return []
+        # One DB read for the whole listing — cheap, and identical
+        # across every task in this project (auth is global today).
+        authed = set(list_authenticated_agents())
+        out: list[ACPEndpoint] = []
+        for task in running:
+            sock = acp_socket_path(self._config.id, task.task_id)
+            bound = _read_bound_agent(self._config.id, task.task_id) if sock.exists() else None
+            if sock.exists():
+                status = ACPEndpointStatus.ACTIVE
+            elif _task_has_any_authed_agent(self._config.id, task, authed):
+                status = ACPEndpointStatus.READY
+            else:
+                status = ACPEndpointStatus.UNSUPPORTED
+            out.append(
+                ACPEndpoint(
+                    project_id=self._config.id,
+                    task_id=task.task_id,
+                    socket_path=sock,
+                    status=status,
+                    bound_agent=bound,
+                )
+            )
+        return out
 
     def run_headless(self, request: HeadlessRunRequest) -> Task:
         """Create and run a headless task atomically.  Returns the Task."""
