@@ -78,14 +78,19 @@ Python packages.
 
 ### Prerequisites
 
-- **Podman** (rootless) and **`nft`** (nftables CLI) — the two hard
-  dependencies
+Hard dependencies:
+
+- **Podman** (rootless)
+- **`nft`** (nftables CLI)
 - **Python 3.12+**
 - **OpenSSH client** — for private git repos
-- Optional but recommended: **systemd** user session (gate / vault /
-  clearance daemons), **`dnsmasq`** or **`dig`** (dynamic DNS-based
-  egress allowlisting), a desktop **notification daemon** (the
-  Allow / Deny popups path)
+
+Optional but recommended:
+
+- **systemd** user session — runs the gate / vault / clearance daemons
+- **`dnsmasq`** — dynamic DNS-based egress allowlisting
+- **`dig`** — fallback DNS resolver when dnsmasq is unavailable
+- A desktop **notification daemon** — for the Allow / Deny popups path
 
 ### Installation
 
@@ -109,9 +114,6 @@ To remove everything later:
 ```bash
 terok uninstall                         # reverse of setup; preserves credential DB
 ```
-
-The output reminds you that stored credentials and SSH keys are not
-removed; pass `--purge-credentials` if you want them gone too.
 
 ### First project
 
@@ -169,9 +171,14 @@ terok image cleanup [--dry-run]         # Remove orphaned images
 terok completions install               # Re-install shell completions
 ```
 
-## Tips
+## Notes
 
-- **Clipboard:** If mouse selection doesn't copy to your clipboard,
+- **SELinux hosts**: run `terok selinux setup` (which calls
+  `sudo bash <install-script>`) before `terok setup`, then re-run
+  `terok setup` once the policy module is loaded.  Without it the
+  shield + clearance services bind sockets as `unconfined_t` and
+  podman will refuse to talk to them.
+- **Clipboard**: If mouse selection doesn't copy to your clipboard,
   hold **Shift** while selecting, then **Shift+Ctrl+C** to copy.
   See [Tips](docs/usage.md#tips) for details.
 
@@ -190,27 +197,23 @@ image:
   agents: "all"   # default roster selection for every project
 ```
 
-If `git.human_name` and `git.human_email` are omitted, terok uses the
-values from your host `git config` (if any).  Setting them in
-`config.yml` is the way to override the host-level identity for
-container commits.
+If `git.human_name` and `git.human_email` are omitted, terok falls
+through to your host `git config`.  Setting them in `config.yml` is
+the way to override the host-level identity for container commits.
 
-Per-project overrides live in `project.yml` under `image:` —
-`base_image`, `family` (`deb` or `rpm` — pre-supported bases:
-`ubuntu:24.04`, `debian:13`, `fedora:43`, `nvidia/cuda:*`), and
-`agents` (which roster entries to bake into L1).  See
-[docs/usage.md](docs/usage.md#choosing-which-agents-to-bake-in) for
-the full precedence and selection mechanics.
+To see what you can pick from for `image.agents`:
 
-### Environment Overrides
+```bash
+terok agents                            # list available AI coding agents
+```
 
-| Variable | Purpose |
-|----------|---------|
-| `TEROK_CONFIG_DIR` | Configuration directory (`~/.config/terok`) |
-| `TEROK_CONFIG_FILE` | Global config file path |
-| `TEROK_ROOT` | Shared namespace root for all ecosystem packages |
-| `TEROK_STATE_DIR` | Host-only state (builds, metadata) |
-| `TEROK_VAULT_DIR` | Vault store (vault database, routes, key registry) |
+Officially-tested base images for `image.base_image`: `ubuntu:24.04`,
+`fedora:43`, `quay.io/podman/stable`, `nvcr.io/nvidia/nvhpc`.  Other
+images in the same family (`ubuntu:*`, `debian:*`, `fedora:*`,
+`nvcr.io/nvidia/*`, `quay.io/podman/*`) work via auto-detection;
+anything else needs an explicit `image.family: deb|rpm` override.
+See [docs/usage.md](docs/usage.md#choosing-which-agents-to-bake-in)
+for the full mechanics.
 
 ## Contributing
 

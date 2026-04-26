@@ -16,6 +16,7 @@ import sys
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
+    agents,
     auth,
     clearance,
     completions,
@@ -24,6 +25,7 @@ from .commands import (
     info,
     panic,
     project,
+    selinux,
     setup,
     shield,
     sickbay,
@@ -44,6 +46,7 @@ except ImportError:  # pragma: no cover - optional dep
 _DISPATCHERS = [
     panic.dispatch,
     setup.dispatch,
+    selinux.dispatch,
     uninstall.dispatch,
     auth.dispatch,
     project.dispatch,
@@ -56,6 +59,7 @@ _DISPATCHERS = [
     clearance.dispatch,
     sickbay.dispatch,
     info.dispatch,
+    agents.dispatch,
     completions.dispatch,
 ]
 
@@ -138,6 +142,7 @@ def main(prog: str = "terok") -> None:
     # sibling-wired groups, then dev/shell niceties.
     panic.register(sub)
     setup.register(sub)
+    selinux.register(sub)
     uninstall.register(sub)
     auth.register(sub)
     project.register(sub)
@@ -148,6 +153,7 @@ def main(prog: str = "terok") -> None:
     clearance.register(sub)
     sickbay.register(sub)
     shield.register(sub)
+    agents.register(sub)
     info.register(sub)
 
     # Mount sub-package command registries under scoped prefixes.
