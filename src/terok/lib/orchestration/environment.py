@@ -263,16 +263,36 @@ def _apply_claude_oauth_overrides(env: dict[str, str]) -> None:
             env.pop(key, None)
 
 
-def _enabled_vault_patch_providers(roster: object) -> frozenset[str]:
-    """Return the shared-config patches that should be active for this task."""
-    from ..core.config import is_codex_oauth_proxied
-
-    providers = frozenset(
+def _shared_config_patch_providers(roster: object) -> frozenset[str]:
+    """Return providers that declare shared config patches in the roster."""
+    return frozenset(
         name for name, route in roster.vault_routes.items() if route.shared_config_patch
     )
+
+
+def _vault_patch_provider_sets(
+    roster: object, *, vault_bypass: bool = False
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Return ``(enabled, disabled)`` shared-config patch provider sets.
+
+    Enabled providers have their roster-declared patches applied.  Disabled
+    providers have previously managed values reconciled away if terok still
+    owns them.  Codex is special only in its feature gate: the secure
+    vaulted OAuth mode enables the shared ``~/.codex/config.toml`` rewrite;
+    disabled/exposed/bypassed modes remove stale managed Codex URLs.
+    """
+    from ..core.config import is_codex_oauth_proxied
+
+    providers = _shared_config_patch_providers(roster)
+    if vault_bypass:
+        return frozenset(), providers
+
+    enabled = providers
+    disabled = frozenset()
     if not is_codex_oauth_proxied():
-        providers -= {"codex"}
-    return providers
+        enabled -= {"codex"}
+        disabled |= providers & {"codex"}
+    return enabled, disabled
 
 
 def _warn_leaked_credentials() -> None:
@@ -415,8 +435,8 @@ def build_task_env_and_volumes(
     vault_transport = get_vault_transport()
 
     roster = get_roster()
-    enabled_patch_providers = (
-        frozenset() if vault_bypass else _enabled_vault_patch_providers(roster)
+    enabled_patch_providers, disabled_patch_providers = _vault_patch_provider_sets(
+        roster, vault_bypass=vault_bypass
     )
 
     result = assemble_container_env(
@@ -442,6 +462,7 @@ def build_task_env_and_volumes(
             envs_dir=sandbox_live_mounts_dir(),
             timezone=project.timezone,
             enabled_vault_patch_providers=enabled_patch_providers,
+            disabled_vault_patch_providers=disabled_patch_providers,
         ),
         roster,
         # bypass → skip proxy entirely (no tokens, no check)

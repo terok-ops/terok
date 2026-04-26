@@ -75,7 +75,7 @@ class TestClaudeOAuthOverrides:
         assert env == original
 
 
-class TestEnabledVaultPatchProviders:
+class TestVaultPatchProviderSets:
     """Verify Codex shared-config patch selection from terok config."""
 
     def _roster(self) -> SimpleNamespace:
@@ -90,21 +90,32 @@ class TestEnabledVaultPatchProviders:
 
     def test_proxied_keeps_codex_patch(self) -> None:
         """Codex shared config patch is enabled only in proxied mode."""
-        from terok.lib.orchestration.environment import _enabled_vault_patch_providers
+        from terok.lib.orchestration.environment import _vault_patch_provider_sets
 
         with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=True):
-            providers = _enabled_vault_patch_providers(self._roster())
+            enabled, disabled = _vault_patch_provider_sets(self._roster())
 
-        assert providers == frozenset({"codex", "gh", "vibe"})
+        assert enabled == frozenset({"codex", "gh", "vibe"})
+        assert disabled == frozenset()
 
     def test_skipped_omits_codex_patch(self) -> None:
-        """Default/exposed modes omit Codex's shared config rewrite."""
-        from terok.lib.orchestration.environment import _enabled_vault_patch_providers
+        """Default/exposed modes disable Codex's shared config rewrite."""
+        from terok.lib.orchestration.environment import _vault_patch_provider_sets
 
         with patch("terok.lib.core.config.is_codex_oauth_proxied", return_value=False):
-            providers = _enabled_vault_patch_providers(self._roster())
+            enabled, disabled = _vault_patch_provider_sets(self._roster())
 
-        assert providers == frozenset({"gh", "vibe"})
+        assert enabled == frozenset({"gh", "vibe"})
+        assert disabled == frozenset({"codex"})
+
+    def test_vault_bypass_disables_all_shared_patches(self) -> None:
+        """Vault bypass removes stale managed config for every patch provider."""
+        from terok.lib.orchestration.environment import _vault_patch_provider_sets
+
+        enabled, disabled = _vault_patch_provider_sets(self._roster(), vault_bypass=True)
+
+        assert enabled == frozenset()
+        assert disabled == frozenset({"codex", "gh", "vibe"})
 
 
 class TestLeakedCredentialsScan:

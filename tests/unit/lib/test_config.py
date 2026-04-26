@@ -834,6 +834,19 @@ def test_is_codex_oauth_proxied_when_allowed(
     assert cfg.is_codex_oauth_proxied() is True
 
 
+def test_is_codex_oauth_proxied_can_be_lifted_from_experimental(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """One SSOT switch controls whether secure Codex vaulting needs experimental."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, "agent:\n  codex:\n    allow_oauth: true\n")),
+    )
+    monkeypatch.setattr(cfg, "CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL", False)
+
+    assert cfg.is_codex_oauth_proxied() is True
+
+
 def test_is_codex_oauth_not_proxied_when_exposed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -850,6 +863,25 @@ def test_is_codex_oauth_not_proxied_when_exposed(
     )
     assert cfg.is_codex_oauth_proxied() is False
     assert cfg.is_codex_oauth_exposed() is True
+
+
+def test_codex_expose_flag_blocks_vaulting_even_when_not_experimental(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The insecure expose flag wins even if secure vaulting no longer needs experimental."""
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(
+            write_config(
+                tmp_path,
+                "agent:\n  codex:\n    allow_oauth: true\n    expose_oauth_token: true\n",
+            )
+        ),
+    )
+    monkeypatch.setattr(cfg, "CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL", False)
+
+    assert cfg.is_codex_oauth_proxied() is False
+    assert cfg.is_codex_oauth_exposed() is False
 
 
 # ---------- Layered config merging ----------
