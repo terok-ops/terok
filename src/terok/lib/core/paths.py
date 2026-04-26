@@ -93,6 +93,16 @@ def core_state_dir() -> Path:
 # ── Vault ──────────────────────────────────────────────────────────────
 
 
+def _acp_runtime_path(project_id: str, task_id: str, *, suffix: str) -> Path:
+    """Per-task ACP runtime artefact path with the given file suffix.
+
+    All ACP daemon files (socket, bound-agent sidecar, future log /
+    pid files) live under ``runtime_dir() / "acp" / <project>`` with
+    the same ``<task_id><suffix>`` shape, so they move together.
+    """
+    return runtime_dir() / _ACP_RUNTIME_SUBDIR / project_id / f"{task_id}{suffix}"
+
+
 def acp_socket_path(project_id: str, task_id: str) -> Path:
     """Return the per-task ACP listener socket path on the host.
 
@@ -102,7 +112,7 @@ def acp_socket_path(project_id: str, task_id: str) -> Path:
     (``runtime_dir() / <subdir> / …``) so all transient sockets live
     under a single XDG-compliant root.
     """
-    return runtime_dir() / _ACP_RUNTIME_SUBDIR / project_id / f"{task_id}.sock"
+    return _acp_runtime_path(project_id, task_id, suffix=".sock")
 
 
 def acp_bound_path(project_id: str, task_id: str) -> Path:
@@ -112,7 +122,7 @@ def acp_bound_path(project_id: str, task_id: str) -> Path:
     session; read by the host-side discovery surface to surface the
     bound-agent name in ``acp list`` output.
     """
-    return runtime_dir() / _ACP_RUNTIME_SUBDIR / project_id / f"{task_id}.bound"
+    return _acp_runtime_path(project_id, task_id, suffix=".bound")
 
 
 def vault_root() -> Path:

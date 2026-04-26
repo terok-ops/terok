@@ -76,7 +76,12 @@ class TestTaskHasAnyAuthedAgent:
             return_value={"claude", "codex"},
         ):
             task = _FakeTask("task-1", mode="cli")
-            assert _task_has_any_authed_agent("proj", task, {"claude"}) is True
+            assert (
+                _task_has_any_authed_agent(
+                    "proj", task, {"claude"}, sandbox=mock.Mock(), label_cache={}
+                )
+                is True
+            )
 
     def test_disjoint_yields_false(self) -> None:
         """Image's agents and the authed set don't overlap → ``unsupported``."""
@@ -85,7 +90,12 @@ class TestTaskHasAnyAuthedAgent:
             return_value={"vibe"},
         ):
             task = _FakeTask("task-1", mode="cli")
-            assert _task_has_any_authed_agent("proj", task, {"claude"}) is False
+            assert (
+                _task_has_any_authed_agent(
+                    "proj", task, {"claude"}, sandbox=mock.Mock(), label_cache={}
+                )
+                is False
+            )
 
     def test_empty_image_label_yields_false(self) -> None:
         """No agents in the image label ⇒ surface as ``unsupported``."""
@@ -94,7 +104,12 @@ class TestTaskHasAnyAuthedAgent:
             return_value=set(),
         ):
             task = _FakeTask("task-1", mode="cli")
-            assert _task_has_any_authed_agent("proj", task, {"claude"}) is False
+            assert (
+                _task_has_any_authed_agent(
+                    "proj", task, {"claude"}, sandbox=mock.Mock(), label_cache={}
+                )
+                is False
+            )
 
 
 class TestACPEndpointDataclass:

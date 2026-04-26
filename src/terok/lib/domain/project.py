@@ -273,7 +273,14 @@ def _read_bound_agent(project_id: str, task_id: str) -> str | None:
     return agent if isinstance(agent, str) else None
 
 
-def _task_has_any_authed_agent(project_id: str, task: Task, authed: set[str]) -> bool:
+def _task_has_any_authed_agent(
+    project_id: str,
+    task: Task,
+    authed: set[str],
+    *,
+    sandbox: Any,
+    label_cache: dict[str, set[str]],
+) -> bool:
     """Return ``True`` if the task's image declares any agent in *authed*.
 
     The image label is the source of truth for "what agents could this
@@ -281,35 +288,53 @@ def _task_has_any_authed_agent(project_id: str, task: Task, authed: set[str]) ->
     ``acp connect`` would succeed.  Empty image labels surface as
     ``unsupported`` rather than failing at connect time — that case
     is real for legacy task images pre-dating the agents label.
+
+    *sandbox* and *label_cache* are threaded through from the listing
+    so a project with N running tasks does not pay N podman inspects
+    or N sandbox constructions.
     """
-    image_agents = _image_agents_for_task(project_id, task)
+    image_agents = _image_agents_for_task(
+        project_id, task, sandbox=sandbox, label_cache=label_cache
+    )
     return bool(image_agents & authed) if image_agents else False
 
 
-def _image_agents_for_task(project_id: str, task: Task) -> set[str]:
+def _image_agents_for_task(
+    project_id: str,
+    task: Task,
+    *,
+    sandbox: Any,
+    label_cache: dict[str, set[str]],
+) -> set[str]:
     """Return the agent set declared on a running task's container image.
 
-    Reads ``ai.terok.agents`` (CSV) via the runtime — falls back to an
-    empty set on any error so the caller can classify the endpoint
-    cleanly without bubbling exceptions to the listing surface.
+    Reads ``ai.terok.agents`` (CSV) via the runtime — memoised in
+    *label_cache* by image-id so co-located tasks (most projects ship
+    one image per security class) share one inspect.  Returns an empty
+    set on the expected error paths (podman unreachable, container
+    gone, image absent) so the caller can classify the endpoint
+    cleanly; any other error propagates so real bugs surface.
     """
     from terok_executor import AGENTS_LABEL
-    from terok_sandbox import Sandbox
 
     from ..orchestration.tasks import container_name
 
     try:
-        sandbox = Sandbox(config=make_sandbox_config())
         cname = container_name(project_id, task.meta.mode, task.task_id)
         container = sandbox.runtime.container(cname)
         image = container.image
         if image is None:
             return set()
+        cache_key = image.id or image.ref or cname
+        if cache_key in label_cache:
+            return label_cache[cache_key]
         raw = image.labels().get(AGENTS_LABEL, "")
-    except Exception as exc:  # noqa: BLE001
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
         _logger.debug("_image_agents_for_task(%s): %s", task.task_id, exc)
         return set()
-    return {token for token in (s.strip() for s in raw.split(",")) if token}
+    parsed = {token for token in (s.strip() for s in raw.split(",")) if token}
+    label_cache[cache_key] = parsed
+    return parsed
 
 
 def _archive_project(project_id: str) -> str | None:
@@ -611,23 +636,32 @@ class Project:
         spawn on first connect), or ``unsupported`` (no agents authed
         for this task's image; connect would fail).
 
-        No probing, no socket traffic — pure file-existence checks plus
-        one credential-DB read.  ``terok acp list`` and the TUI panel
+        No probing, no socket traffic — one credential-DB read for
+        the whole listing, one ``Sandbox`` instance shared across
+        tasks, and image-label lookups memoised by image-id (most
+        tasks share an image).  ``terok acp list`` and the TUI panel
         share this entry point.
         """
         running = self.list_tasks(status="running")
         if not running:
             return []
-        # One DB read for the whole listing — cheap, and identical
-        # across every task in this project (auth is global today).
+        from terok_sandbox import Sandbox
+
+        # One DB read + one Sandbox + per-image label cache for the
+        # whole listing.  Auth is global today — same set for every task.
         authed = set(list_authenticated_agents())
+        sandbox = Sandbox(config=make_sandbox_config())
+        label_cache: dict[str, set[str]] = {}
         out: list[ACPEndpoint] = []
         for task in running:
             sock = acp_socket_path(self._config.id, task.task_id)
-            bound = _read_bound_agent(self._config.id, task.task_id) if sock.exists() else None
-            if sock.exists():
+            sock_exists = sock.exists()
+            bound = _read_bound_agent(self._config.id, task.task_id) if sock_exists else None
+            if sock_exists:
                 status = ACPEndpointStatus.ACTIVE
-            elif _task_has_any_authed_agent(self._config.id, task, authed):
+            elif _task_has_any_authed_agent(
+                self._config.id, task, authed, sandbox=sandbox, label_cache=label_cache
+            ):
                 status = ACPEndpointStatus.READY
             else:
                 status = ACPEndpointStatus.UNSUPPORTED

@@ -29,7 +29,6 @@ from terok_sandbox import Sandbox
 
 from ..lib.core.config import make_sandbox_config
 from ..lib.core.paths import acp_socket_path
-from ..lib.domain.facade import get_project
 from ..lib.orchestration.tasks import container_name as resolve_container_name, get_task_meta
 
 _logger = logging.getLogger(__name__)
@@ -67,7 +66,6 @@ async def _run(project_id: str, task_id: str) -> int:
     except FileNotFoundError:
         pass
 
-    project = get_project(project_id)
     task_meta = get_task_meta(project_id, task_id)
     cname = resolve_container_name(project_id, task_meta.mode, task_id)
 
@@ -110,9 +108,7 @@ async def _run(project_id: str, task_id: str) -> int:
         except NotImplementedError:  # pragma: no cover — non-POSIX
             pass
 
-    supervisor = asyncio.create_task(
-        _watch_container(sandbox, cname, stop_event, project=project, task_id=task_id)
-    )
+    supervisor = asyncio.create_task(_watch_container(sandbox, cname, stop_event, task_id=task_id))
     try:
         await stop_event.wait()
     finally:
@@ -146,8 +142,11 @@ def _make_handler(roster: ACPRoster):
         async with busy:
             try:
                 await roster.attach(reader, writer)
-            except Exception as exc:  # noqa: BLE001
-                _logger.warning("proxy: attach loop crashed: %s", exc)
+            except Exception:
+                # Attach-loop crashes are bugs, not "expected" disconnect
+                # paths — surface with traceback at error level so the
+                # daemon log makes the cause obvious.
+                _logger.exception("proxy: attach loop crashed")
             finally:
                 try:
                     writer.close()
@@ -163,17 +162,14 @@ async def _watch_container(
     container_name: str,
     stop_event: asyncio.Event,
     *,
-    project: object,
     task_id: str,
 ) -> None:
     """Set *stop_event* when the container is no longer running.
 
     Polls every :data:`CONTAINER_POLL_INTERVAL_SEC` until the state is
     not ``"running"`` (covers both ``exited`` and the no-such-container
-    case).  Project / task id are accepted purely so log lines carry
-    enough context to debug a stalled daemon.
+    case).  *task_id* is logged for debuggability when a daemon stalls.
     """
-    del project  # currently unused; reserved for future log enrichment
     while not stop_event.is_set():
         try:
             state = sandbox.runtime.container(container_name).state

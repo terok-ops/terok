@@ -26,13 +26,13 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from terok_executor import ACPEndpointStatus
-
 from ...lib.core.paths import acp_socket_path
 from ...lib.domain.facade import list_projects
 from ._completers import add_project_id, add_task_id
 
 if TYPE_CHECKING:
+    from terok_executor import ACPEndpointStatus
+
     from ...lib.domain.project import Project
 
 
@@ -78,6 +78,9 @@ def dispatch(args: argparse.Namespace) -> bool:
 def _cmd_list(project_id_filter: str | None) -> None:
     """Print one row per ACP endpoint, grouped by project."""
     projects = _projects_to_show(project_id_filter)
+    # ``from __future__ import annotations`` (top of module) makes the
+    # ACPEndpointStatus reference below a deferred string — no runtime
+    # import needed, so the executor stays out of the cold-start path.
     rows: list[tuple[str, str, ACPEndpointStatus, str | None, Path]] = []
     for project in projects:
         for ep in project.acp_endpoints():
