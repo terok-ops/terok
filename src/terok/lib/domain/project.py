@@ -320,7 +320,7 @@ def _image_agents_for_task(
     from ..orchestration.tasks import container_name
 
     try:
-        cname = container_name(project_id, task.meta.mode, task.task_id)
+        cname = container_name(project_id, task.mode, task.id)
         container = sandbox.runtime.container(cname)
         image = container.image
         if image is None:
@@ -330,7 +330,7 @@ def _image_agents_for_task(
             return label_cache[cache_key]
         raw = image.labels().get(AGENTS_LABEL, "")
     except (FileNotFoundError, RuntimeError, OSError) as exc:
-        _logger.debug("_image_agents_for_task(%s): %s", task.task_id, exc)
+        _logger.debug("_image_agents_for_task(%s): %s", task.id, exc)
         return set()
     parsed = {token for token in (s.strip() for s in raw.split(",")) if token}
     label_cache[cache_key] = parsed
@@ -457,9 +457,9 @@ def delete_project(project_id: str) -> DeleteProjectResult:
     # 1. Stop + remove all tasks
     for task in get_tasks(pid):
         try:
-            task_delete(pid, task.task_id)
+            task_delete(pid, task.id)
         except Exception as exc:
-            _logger.warning("Failed to delete task %s: %s", task.task_id, exc)
+            _logger.warning("Failed to delete task %s: %s", task.id, exc)
 
     # 2. Remove tasks root (may be user-configured path)
     _rmtree_managed(project.tasks_root, "Tasks root", deleted, skipped)
@@ -654,9 +654,9 @@ class Project:
         label_cache: dict[str, set[str]] = {}
         out: list[ACPEndpoint] = []
         for task in running:
-            sock = acp_socket_path(self._config.id, task.task_id)
+            sock = acp_socket_path(self._config.id, task.id)
             sock_exists = sock.exists()
-            bound = _read_bound_agent(self._config.id, task.task_id) if sock_exists else None
+            bound = _read_bound_agent(self._config.id, task.id) if sock_exists else None
             if sock_exists:
                 status = ACPEndpointStatus.ACTIVE
             elif _task_has_any_authed_agent(
@@ -668,7 +668,7 @@ class Project:
             out.append(
                 ACPEndpoint(
                     project_id=self._config.id,
-                    task_id=task.task_id,
+                    task_id=task.id,
                     socket_path=sock,
                     status=status,
                     bound_agent=bound,

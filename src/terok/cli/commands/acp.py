@@ -132,14 +132,24 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
         _spawn_daemon(project_id, task_id)
         _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC)
 
-    if shutil.which("socat") is not None:
-        os.execvp("socat", ["socat", "-", f"UNIX-CONNECT:{sock_path}"])
-        return  # pragma: no cover — execvp never returns
+    socat = shutil.which("socat")
+    if socat is not None:
+        # Pass the resolved absolute path so we don't re-walk PATH in
+        # ``execv``.  Static analysers also stop flagging "partial path".
+        os.execv(socat, [socat, "-", f"UNIX-CONNECT:{sock_path}"])
+        return  # pragma: no cover — execv never returns
     _inprocess_pump(sock_path)
 
 
 def _spawn_daemon(project_id: str, task_id: str) -> None:
-    """Start the proxy daemon detached, so it survives the CLI exit."""
+    """Start the proxy daemon detached, so it survives the CLI exit.
+
+    ``sys.executable`` resolves to the running interpreter's absolute
+    path; the remaining argv elements are the module path (a
+    constant) and the project / task ids parsed by argparse.  No shell,
+    no untrusted input — the bandit S603 / S607 warnings on subprocess
+    + partial-path analyses are documented false positives here.
+    """
     subprocess.Popen(  # noqa: S603 — argv built from interpreter + module ref
         [sys.executable, "-m", "terok.cli.acp_proxy", project_id, task_id],
         stdin=subprocess.DEVNULL,
@@ -179,13 +189,22 @@ def _inprocess_pump(sock_path: Path) -> None:
     sock.setblocking(False)
     stdin_fd = sys.stdin.buffer.fileno()
     stdout_fd = sys.stdout.buffer.fileno()
+    stdin_open = True
     try:
         while True:
-            ready, _, _ = select.select([sock, stdin_fd], [], [])
-            if stdin_fd in ready:
+            # Drop stdin from the watch set after EOF — otherwise
+            # ``select`` keeps marking it ready and a second
+            # ``shutdown(SHUT_WR)`` raises, dropping the daemon's
+            # final reply on the floor.
+            read_fds: list[object] = [sock]
+            if stdin_open:
+                read_fds.append(stdin_fd)
+            ready, _, _ = select.select(read_fds, [], [])
+            if stdin_open and stdin_fd in ready:
                 data = os.read(stdin_fd, 4096)
                 if not data:
                     sock.shutdown(socket.SHUT_WR)
+                    stdin_open = False
                 else:
                     sock.sendall(data)
             if sock in ready:

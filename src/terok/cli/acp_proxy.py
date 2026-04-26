@@ -8,7 +8,7 @@ ACP agents behind a single endpoint.  Lifetime is tied to the task's
 container: the daemon polls ``runtime.container(name).state`` and exits
 cleanly once the container is gone.
 
-Invoked as a detached process (``python -m terok.acp_proxy <project>
+Invoked as a detached process (``python -m terok.cli.acp_proxy <project>
 <task>``); the ``terok acp connect`` CLI handles the spawn and waits
 for the socket to appear.  One ACP client per socket — a second
 concurrent connection is rejected during ``initialize`` with a JSON-RPC
@@ -60,11 +60,21 @@ async def _run(project_id: str, task_id: str) -> int:
     sock_path = acp_socket_path(project_id, task_id)
     sock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Best-effort cleanup of a stale socket from a previous crashed run.
-    try:
-        sock_path.unlink()
-    except FileNotFoundError:
-        pass
+    # Don't clobber a live socket: probe before unlinking.  Two
+    # ``terok acp connect`` calls can race the daemon spawn, and the
+    # second one would otherwise unlink the first one's freshly bound
+    # socket.  If the probe connects, a peer is already serving — exit
+    # cleanly; otherwise the file is stale and safe to remove.
+    if sock_path.exists():
+        if _socket_is_live(sock_path):
+            _logger.info(
+                "ACP proxy already active at %s for project=%s task=%s — exiting",
+                sock_path,
+                project_id,
+                task_id,
+            )
+            return 0
+        sock_path.unlink(missing_ok=True)
 
     task_meta = get_task_meta(project_id, task_id)
     cname = resolve_container_name(project_id, task_meta.mode, task_id)
@@ -200,6 +210,23 @@ def connect_for_test(socket_path) -> socket.socket:
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(str(socket_path))
     return s
+
+
+def _socket_is_live(path) -> bool:
+    """Return ``True`` if a peer is currently accepting on *path*.
+
+    Used at startup to decide whether the existing socket file belongs
+    to a running daemon or is leftover from a crash.  A successful
+    ``connect`` means a peer is listening; ``ECONNREFUSED`` (and other
+    OSErrors) mean the file is stale.
+    """
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(str(path))
+    except OSError:
+        return False
+    return True
 
 
 if __name__ == "__main__":  # pragma: no cover — module entry point

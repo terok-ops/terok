@@ -26,10 +26,14 @@ class _FakeMeta:
 
 
 class _FakeTask:
-    """Minimal stand-in for :class:`Task` — used by helper functions."""
+    """Minimal stand-in for :class:`Task` — exposes the public API surface
+    (``id``, ``mode``, ``meta``) the listing helpers consume.  Mirrors the
+    real :class:`terok.lib.domain.task.Task`'s shape; ``task_id`` is
+    intentionally absent so accidental ``task.task_id`` reads regress."""
 
     def __init__(self, task_id: str, mode: str | None = None) -> None:
-        self.task_id = task_id
+        self.id = task_id
+        self.mode = mode
         self.meta = _FakeMeta(mode=mode)
 
 
