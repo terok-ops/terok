@@ -21,14 +21,13 @@ import asyncio
 import logging
 import os
 import signal
-import socket
 import sys
 
 from terok_executor import ACPRoster
 from terok_sandbox import Sandbox
 
 from ..lib.core.config import make_sandbox_config
-from ..lib.core.paths import acp_socket_path
+from ..lib.core.paths import acp_socket_is_live, acp_socket_path
 from ..lib.orchestration.tasks import container_name as resolve_container_name, get_task_meta
 
 _logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ async def _run(project_id: str, task_id: str) -> int:
     # socket.  If the probe connects, a peer is already serving — exit
     # cleanly; otherwise the file is stale and safe to remove.
     if sock_path.exists():
-        if _socket_is_live(sock_path):
+        if acp_socket_is_live(sock_path):
             _logger.info(
                 "ACP proxy already active at %s for project=%s task=%s — exiting",
                 sock_path,
@@ -200,33 +199,6 @@ async def _watch_container(
             await asyncio.wait_for(stop_event.wait(), timeout=CONTAINER_POLL_INTERVAL_SEC)
         except TimeoutError:
             continue
-
-
-# ── Helpers exposed for tests ─────────────────────────────────────────
-
-
-def connect_for_test(socket_path) -> socket.socket:
-    """Return a connected AF_UNIX client socket.  Used by integration tests."""
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(str(socket_path))
-    return s
-
-
-def _socket_is_live(path) -> bool:
-    """Return ``True`` if a peer is currently accepting on *path*.
-
-    Used at startup to decide whether the existing socket file belongs
-    to a running daemon or is leftover from a crash.  A successful
-    ``connect`` means a peer is listening; ``ECONNREFUSED`` (and other
-    OSErrors) mean the file is stale.
-    """
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-            probe.settimeout(0.2)
-            probe.connect(str(path))
-    except OSError:
-        return False
-    return True
 
 
 if __name__ == "__main__":  # pragma: no cover — module entry point
