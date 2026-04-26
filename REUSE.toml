@@ -23,6 +23,8 @@ path = [
   "completions/**",
   "vulture_whitelist.py",
   "src/terok/resources/scripts/blablador",
+  "**/*.svg",
+  "**/*.d2",
 ]
 SPDX-FileCopyrightText = "2025 Jiri Vyskocil"
 SPDX-License-Identifier = "Apache-2.0"

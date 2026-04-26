@@ -8,29 +8,69 @@ vars: {
 # light/dark background; theme-aware fills handle the rest.
 style.fill: transparent
 
-direction: down
+direction: right
 
-terok: "terok\nProject orchestration · multi-agent presets · TUI · sickbay" {
-  style.border-radius: 12
+operator: |md
+  ### Operator
+  CLI · TUI ·
+  desktop popups
+| {
+  width: 200
+  style: {
+    fill: "#dcfce7"
+    stroke: "#15803d"
+    stroke-width: 2
+    border-radius: 14
+  }
 }
 
-executor: "terok-executor\nPer-task agent runner · image factory · authentication flows" {
-  style.border-radius: 12
+container: |md
+  ### Per-task container
+  - Agent CLI · /workspace
+  - Layered instructions
+  - Standard dev tools
+  - rootless Podman, no host privileges
+| {
+  width: 320
+  style: {
+    fill: "#dbeafe"
+    stroke: "#1d4ed8"
+    stroke-width: 2
+    border-radius: 14
+  }
 }
 
-sandbox: "terok-sandbox\nHardened Podman runtime · credential vault · git gate · setup" {
-  style.border-radius: 12
+boundary: |md
+  ### Boundary services *(host-side)*
+  - default-deny egress firewall
+  - credential vault on host
+  - per-task git gate
+  - live clearance verdicts
+| {
+  width: 280
+  style: {
+    fill: "#ffedd5"
+    stroke: "#c2410c"
+    stroke-width: 2
+    border-radius: 14
+  }
 }
 
-shield: "terok-shield\nnftables egress firewall · default-deny · per-container audit" {
-  style.border-radius: 12
+world: |md
+  ### Allowed external world
+  - LLM endpoints
+  - Git remote
+  - Package registries
+| {
+  width: 230
+  style: {
+    fill: "#f1f5f9"
+    stroke: "#475569"
+    stroke-width: 2
+    border-radius: 14
+  }
 }
 
-clearance: "terok-clearance\nLive allow/deny prompts · desktop notifications · D-Bus + varlink" {
-  style.border-radius: 12
-}
-
-terok -> executor: "delegates per-task work"
-executor -> sandbox: "launches containers via"
-sandbox -> shield: "installs OCI hooks"
-sandbox -> clearance: "installs notifier daemon"
+operator -> container: "creates"
+container -> boundary: "every outbound\nrequest"
+boundary -> world: "if allowed"
