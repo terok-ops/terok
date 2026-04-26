@@ -57,7 +57,7 @@ classes: {
   }
 }
 
-terok: "terok\nProject orchestration · multi-agent presets · TUI · sickbay" {
+terok: "terok\nProject orchestration · CLI + TUI · task lifecycle · sickbay" {
   width: 540
   class: orchestration
 }
@@ -65,7 +65,6 @@ terok: "terok\nProject orchestration · multi-agent presets · TUI · sickbay" {
 notifications: "Desktop notifications\nAllow / Deny popups" {
   width: 360
   class: system
-  near: top-right
 }
 
 executor: "terok-executor\nPer-task agent runner · image factory · auth flows" {
@@ -91,6 +90,13 @@ clearance: "terok-clearance\nLive Allow / Deny · D-Bus + varlink hub" {
 system: "System foundation\nrootless Podman · nftables · systemd · D-Bus" {
   width: 540
   class: system
+}
+
+# Layout-only invisible edge keeps notifications at the same top
+# rank as terok.  The visible arrow that follows is the real
+# clearance → notifications relationship.
+notifications -> executor: "" {
+  style.opacity: 0.0
 }
 
 terok -> executor

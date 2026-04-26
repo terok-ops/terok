@@ -168,6 +168,7 @@ def cmd_setup(
         install_desktop_entry=install_desktop_entry,
     )
     desktop_ok = _ensure_desktop_entry(policy=desktop_policy)
+    _ensure_shell_completions()
 
     print()
     if not sandbox_failed and not images_failed and desktop_ok:
@@ -294,6 +295,32 @@ def _ensure_desktop_entry(*, policy: str) -> bool:
                 "install it for standard XDG registration"
             )
         return True
+
+
+# ── Shell completions phase (best-effort, skipped silently if installed) ──
+
+
+def _ensure_shell_completions() -> None:
+    """Install shell completions for the detected shell, best-effort.
+
+    Idempotent: silently skips when completions are already installed.
+    On a host where ``$SHELL`` is unset or points at an unsupported
+    shell the install is skipped with a one-line hint pointing the
+    operator at ``terok completions install --shell <name>``.
+    """
+    from .completions import _install_completions, is_completion_installed
+
+    if is_completion_installed():
+        return
+    print()
+    print(bold("Installing shell completions"))
+    try:
+        _install_completions(shell=None)
+    except SystemExit as exc:
+        print(yellow(f"Shell completions skipped: {exc}"))
+        print("Install manually: terok completions install --shell <bash|zsh|fish>")
+    except Exception as exc:  # noqa: BLE001
+        print(yellow(f"Shell completions skipped: {exc}"))
 
 
 # ── Per-project setup ──────────────────────────────────────────────────
