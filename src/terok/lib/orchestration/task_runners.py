@@ -399,9 +399,9 @@ def _maybe_deny_anthropic_api(cname: str, task_dir: Path) -> None:
 def _maybe_deny_openai_api(cname: str, task_dir: Path) -> None:
     """Block ``api.openai.com`` when Codex OAuth is proxied.
 
-    Phase 3 hook — currently a no-op because ``is_codex_oauth_proxied``
-    always returns False until a Codex refresh route is wired.  Ships
-    now so Phase 3 only needs to flip the gate, not add new plumbing.
+    The shared Codex config rewrite points built-in OpenAI traffic at the
+    vault.  When the shield is down, this deny rule prevents accidental
+    fallback to the public OpenAI API host.
     """
     from ..core.config import is_codex_oauth_proxied
 
