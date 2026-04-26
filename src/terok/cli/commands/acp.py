@@ -3,10 +3,10 @@
 
 """Per-task ACP endpoint commands: ``terok acp list`` / ``terok acp connect``.
 
-The ``acp`` group surfaces the host-side ACP host-proxy: a per-task
-Unix socket that aggregates in-container ACP agents (claude, codex, …)
-behind a single endpoint, exposing them through ACP's standard model
-selector as namespaced ``agent:model`` ids.
+The ``acp`` group is the user-facing surface for the per-task ACP
+proxy: each running task gets a Unix socket that aggregates the
+container's in-image agents (claude, codex, …) behind ACP's standard
+model selector as namespaced ``agent:model`` ids.
 
 ``acp list`` is a cheap discovery view — one filesystem check per
 running task plus one credential-DB read.  ``acp connect`` exec's
@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ...lib.core.paths import acp_socket_path
+from ...lib.core.paths import acp_socket_is_live, acp_socket_path
 from ...lib.domain.facade import list_projects
 from ._completers import add_project_id, add_task_id
 
@@ -128,7 +128,7 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
     is preserved.
     """
     sock_path = acp_socket_path(project_id, task_id)
-    if not _socket_is_live(sock_path):
+    if not acp_socket_is_live(sock_path):
         _spawn_daemon(project_id, task_id)
         _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC)
 
@@ -170,7 +170,7 @@ def _wait_for_socket(path: Path, *, timeout: float) -> None:
     """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if _socket_is_live(path):
+        if acp_socket_is_live(path):
             return
         time.sleep(0.05)
     print(
@@ -180,31 +180,15 @@ def _wait_for_socket(path: Path, *, timeout: float) -> None:
     raise SystemExit(1)
 
 
-def _socket_is_live(path: Path) -> bool:
-    """Return ``True`` when a peer is currently accepting on *path*.
-
-    Mirrors the helper in :mod:`terok.cli.acp_proxy` — kept inline
-    here so the CLI doesn't import the daemon module just for this
-    one helper.
-    """
-    if not path.exists():
-        return False
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-            probe.settimeout(0.2)
-            probe.connect(str(path))
-    except OSError:
-        return False
-    return True
-
-
 def _inprocess_pump(sock_path: Path) -> None:
     """Bridge stdin/stdout to *sock_path* in-process — socat fallback.
 
-    Used only when socat is unavailable; covers the basic shape needed
-    for ``terok acp connect`` to work end-to-end.  Switches to
-    non-blocking IO and uses :func:`select` to multiplex stdin and the
-    socket; closes everything on either side reaching EOF.
+    Used only when socat is unavailable.  Stdin EOF triggers a
+    ``SHUT_WR`` on the socket so the daemon sees the half-close and
+    can drain its final reply; daemon EOF returns from the loop and
+    the ``finally`` block closes the socket.  Non-blocking IO with
+    :func:`select` to multiplex; partial sends/writes are looped until
+    drained.
     """
     import select
 

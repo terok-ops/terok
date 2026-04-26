@@ -20,6 +20,7 @@ The four families:
 
 import getpass
 import os
+import socket
 import warnings
 from pathlib import Path
 
@@ -123,6 +124,27 @@ def acp_bound_path(project_id: str, task_id: str) -> Path:
     bound-agent name in ``acp list`` output.
     """
     return _acp_runtime_path(project_id, task_id, suffix=".bound")
+
+
+def acp_socket_is_live(path: Path) -> bool:
+    """Return ``True`` when a peer is currently accepting on *path*.
+
+    Distinguishes a live ACP daemon from a stale socket file left
+    behind by a crash: a successful ``connect`` means a peer is
+    listening, while ``ECONNREFUSED`` (and any other ``OSError``)
+    means the file is safe to unlink.  Used by the daemon at startup
+    (skip-if-already-running) and by ``terok acp connect`` (skip-spawn
+    when the daemon is already up).
+    """
+    if not path.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(str(path))
+    except OSError:
+        return False
+    return True
 
 
 def vault_root() -> Path:

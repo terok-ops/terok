@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from terok_executor import (
+    AGENTS_LABEL,
     ACPEndpointStatus,
     get_provider,
     list_authenticated_agents,
@@ -75,6 +76,7 @@ from ..orchestration.image import build_images, generate_dockerfiles
 from ..orchestration.task_runners import HeadlessRunRequest, task_run_headless
 from ..orchestration.tasks import (
     TaskMeta,
+    container_name,
     get_all_task_states,
     get_task_meta,
     get_tasks,
@@ -315,10 +317,6 @@ def _image_agents_for_task(
     gone, image absent) so the caller can classify the endpoint
     cleanly; any other error propagates so real bugs surface.
     """
-    from terok_executor import AGENTS_LABEL
-
-    from ..orchestration.tasks import container_name
-
     try:
         cname = container_name(project_id, task.mode, task.id)
         container = sandbox.runtime.container(cname)
