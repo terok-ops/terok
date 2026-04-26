@@ -5,6 +5,7 @@
 
 import getpass
 import os
+import socket
 import warnings
 from pathlib import Path
 
@@ -19,6 +20,7 @@ except ImportError:  # optional dependency
 
 APP_NAME = "terok"
 _VAULT_SUBDIR = "vault"
+_ACP_RUNTIME_SUBDIR = "acp"
 
 
 def _is_root() -> bool:
@@ -114,6 +116,59 @@ def runtime_dir() -> Path:
     from terok_sandbox.paths import namespace_runtime_dir
 
     return namespace_runtime_dir()
+
+
+def _acp_runtime_path(project_id: str, task_id: str, *, suffix: str) -> Path:
+    """Per-task ACP runtime artefact path with the given file suffix.
+
+    All ACP daemon files (socket, bound-agent sidecar, future log /
+    pid files) live under ``runtime_dir() / "acp" / <project>`` with
+    the same ``<task_id><suffix>`` shape, so they move together.
+    """
+    return runtime_dir() / _ACP_RUNTIME_SUBDIR / project_id / f"{task_id}{suffix}"
+
+
+def acp_socket_path(project_id: str, task_id: str) -> Path:
+    """Return the per-task ACP listener socket path on the host.
+
+    The proxy daemon binds this Unix socket on first
+    ``terok acp connect`` and tears it down when the task's container
+    exits.  Path layout matches the askpass-service convention
+    (``runtime_dir() / <subdir> / …``) so all transient sockets live
+    under a single XDG-compliant root.
+    """
+    return _acp_runtime_path(project_id, task_id, suffix=".sock")
+
+
+def acp_bound_path(project_id: str, task_id: str) -> Path:
+    """Return the per-task ACP "bound agent" sidecar JSON path.
+
+    Written atomically by the proxy daemon when an agent is bound to a
+    session; read by the host-side discovery surface to surface the
+    bound-agent name in ``acp list`` output.
+    """
+    return _acp_runtime_path(project_id, task_id, suffix=".bound")
+
+
+def acp_socket_is_live(path: Path) -> bool:
+    """Return ``True`` when a peer is currently accepting on *path*.
+
+    Distinguishes a live ACP daemon from a stale socket file left
+    behind by a crash: a successful ``connect`` means a peer is
+    listening, while ``ECONNREFUSED`` (and any other ``OSError``)
+    means the file is safe to unlink.  Used by the daemon at startup
+    (skip-if-already-running) and by ``terok acp connect`` (skip-spawn
+    when the daemon is already up).
+    """
+    if not path.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(str(path))
+    except OSError:
+        return False
+    return True
 
 
 def vault_root() -> Path:

@@ -48,8 +48,8 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.123/terok_executor-0.0.123-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.103/terok_sandbox-0.0.103-py3-none-any.whl"}
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "feat/acp-aggregator"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/exec-stdio-primitive"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.33/terok_shield-0.6.33-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.5/terok_clearance-0.6.5-py3-none-any.whl"}
 
