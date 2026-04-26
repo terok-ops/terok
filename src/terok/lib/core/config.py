@@ -679,6 +679,15 @@ def is_claude_oauth_exposed() -> bool:
 
 # ---------- Codex OAuth config (agent.codex.*) ----------
 
+CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL = True
+"""SSOT for whether secure vaulted Codex OAuth still requires ``experimental``.
+
+The insecure exposed-token path intentionally remains experimental
+forever.  This switch only controls the secure path where real OAuth
+tokens stay in the host-side vault and task containers see synthetic
+Codex auth state.
+"""
+
 
 def _codex_agent_config() -> dict:
     """Return the ``agent.codex`` sub-dict, guarding against non-dict values."""
@@ -725,14 +734,18 @@ def get_codex_expose_oauth_token() -> bool:
 def is_codex_oauth_proxied() -> bool:
     """Return True when Codex OAuth traffic is routed through the proxy.
 
-    Kept in lockstep with [`is_claude_oauth_proxied`][terok.lib.core.config.is_claude_oauth_proxied]
-    so shield rules and env overrides stay symmetrical.  The proxied path
-    relies on the ``oauth_refresh`` block in ``codex.yaml`` for background
-    token rotation, the phantom ``auth.json`` written by
-    `_codex_oauth_mount_writer` for in-container auth brokering, and the
-    shared Codex config patch selected by terok's environment builder.
+    The proxied/vaulted path relies on the ``oauth_refresh`` block in
+    ``codex.yaml`` for background token rotation, the phantom ``auth.json``
+    written by `_codex_oauth_mount_writer` for in-container auth brokering,
+    and the shared Codex config patch selected by terok's environment
+    builder.
+
+    Flip [`CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL`][terok.lib.core.config.CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL]
+    to lift this secure path out of experimental without touching the
+    insecure exposed mode, which remains permanently experimental.
     """
-    return is_experimental() and get_codex_allow_oauth() and not get_codex_expose_oauth_token()
+    gate_open = not CODEX_VAULTED_OAUTH_REQUIRES_EXPERIMENTAL or is_experimental()
+    return gate_open and get_codex_allow_oauth() and not get_codex_expose_oauth_token()
 
 
 def is_codex_oauth_exposed() -> bool:

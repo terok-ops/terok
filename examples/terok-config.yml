@@ -97,3 +97,15 @@ tui:
 #     # via the shared .credentials.json mount. Claude manages its own refresh.
 #     # Shield must allow api.anthropic.com and platform.claude.com.
 #     # expose_oauth_token: false
+#   codex:
+#     # Allow secure vaulted Codex OAuth. The user logs in once via the auth
+#     # container; real tokens stay in the host vault and task containers receive
+#     # synthetic shared ~/.codex/auth.json plus managed vault URL config.
+#     # Currently requires experimental; the secure path has a single code switch
+#     # for lifting that gate. The exposed-token path below remains experimental.
+#     # allow_oauth: false
+#     #
+#     # Insecure escape hatch: expose the real Codex auth.json in the shared
+#     # ~/.codex mount. This breaks terok's "no real credentials in containers"
+#     # promise and should stay behind the experimental gate indefinitely.
+#     # expose_oauth_token: false
