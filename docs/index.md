@@ -1,29 +1,53 @@
 # terok
 
-Orchestration and instrumentation platform for containerized AI coding agents.
-Provides both a CLI (`terok`) and a Textual TUI (`terok-tui`, or `terok tui`).
+An open, Podman-native runtime for AI coding agents you can let off
+the leash — without giving them the leash to your machine.
 
-terok manages the *what* — which agents run, how they're configured, and
-what code they work on.  The hardened container runtime
-([terok-sandbox](https://github.com/terok-ai/terok-sandbox)) manages the
-*how* — Podman isolation, egress firewalling, gated git access, and SSH
-provisioning.
+terok runs each agent task inside a hardened, rootless container with
+default-deny outbound networking, a credential vault that keeps real
+keys on the host, a per-task git checkpoint, and a desktop
+notification path for live allow/deny decisions.  It ships a CLI
+(`terok`) and a Textual TUI (`terok tui`) on top of a focused stack
+of independently-released Python packages.
 
-## Features
+![terok ecosystem at a glance](img/architecture.svg)
 
-- **Multiple Agents**: Claude Code, Codex, GitHub Copilot, Mistral Vibe, Blablador, Kisski, and OpenCode
-- **Selectable Agents**: Pick which agents bake into your image via `image.agents` in `project.yml` or `--agents claude,codex` on the command line — different selections coexist as separate L1 images
-- **Headless Autopilot**: Run agents non-interactively with a prompt — useful for CI/CD and scripted workflows
-- **Presets**: Bundled and custom reusable agent configurations (`solo`, `review`, `team`)
-- **Multi-Agent Teams**: Run multiple specialized sub-agents in a single task
-- **Task Lifecycle**: Create, run, stop, restart, follow up, and archive tasks
-- **Security Modes**: Online and gatekeeping modes for different trust levels
-- **Container Layers**: Efficient three-layer container image architecture (L0/L1/L2)
-- **Distro-Agnostic Base Images**: Ubuntu/Debian (apt) and Fedora/RPM (dnf) base images supported out of the box; `image.family` override for anything outside the allowlist
-- **Nested Containers**: `run.nested_containers: true` declares projects that run podman/docker inside their container — terok adds the SELinux `label=nested` type and `/dev/fuse` device, keeping the outer container's SELinux boundary intact
-- **Hardened Runtime**: Defence-in-depth via [terok-sandbox](https://github.com/terok-ai/terok-sandbox) — egress firewall, gated git access, SSH isolation, GPU passthrough, socket-based credential and SSH transport with SELinux support
-- **Agent Instructions**: Layered, inheritable instruction system delivered to every task
-- **Interactive TUI**: Full-featured Textual interface with project/task management, log viewing, and login sessions
+## What you get
+
+#### Hardening
+
+- **Rootless Podman** — no daemon, no setuid, no escalation surface
+- **Default-deny egress firewall** with curated allowlist profiles
+  and per-container audit logs (via
+  [terok-shield](https://github.com/terok-ai/terok-shield))
+- **Credential vault** — long-lived secrets stay on the host; the
+  container handles short-lived phantom tokens that are exchanged
+  per request
+- **Per-task git gate** — token-authenticated HTTP mirror; agents
+  push only through the gate, optionally with a human-review
+  checkpoint before promotion to upstream
+- **Live Allow / Deny prompts** — desktop notifications on blocked
+  outbound traffic, surfaced through a varlink hub and turned into
+  immediate firewall rules
+
+#### Workflow
+
+- **Projects ⊃ Tasks** — long-lived project config, ephemeral task
+  containers; many tasks per project, each fully isolated
+- **Multi-agent presets** — `solo`, `review`, `team` ship out of
+  the box; `team` orchestrates specialised sub-agents (architect,
+  library-engineer, tests, docs…) in parallel
+- **Headless / interactive / multi-agent web** — pick the launch
+  mode per task; same agents, same hardening
+- **Layered images** — base distro · agent CLIs · per-project
+  snippet, cached and reused across projects; Ubuntu / Debian / RPM
+  out of the box, GPU passthrough for projects whose base image
+  supports it
+- **Sickbay + panic** — health checks with auto-remediation and an
+  emergency kill-switch
+- **Multi-vendor agents** — Claude Code, Codex, Copilot, Vibe, plus
+  custom LLM endpoints via OpenCode (Helmholtz, university, or your
+  own endpoint — bundled defaults included)
 
 ## Quick Start
 

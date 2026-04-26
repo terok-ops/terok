@@ -1,0 +1,36 @@
+vars: {
+  d2-config: {
+    pad: 16
+  }
+}
+
+# Transparent root so the SVG inherits the host page's
+# light/dark background; theme-aware fills handle the rest.
+style.fill: transparent
+
+direction: down
+
+terok: "terok\nProject orchestration · multi-agent presets · TUI · sickbay" {
+  style.border-radius: 12
+}
+
+executor: "terok-executor\nPer-task agent runner · image factory · authentication flows" {
+  style.border-radius: 12
+}
+
+sandbox: "terok-sandbox\nHardened Podman runtime · credential vault · git gate · setup" {
+  style.border-radius: 12
+}
+
+shield: "terok-shield\nnftables egress firewall · default-deny · per-container audit" {
+  style.border-radius: 12
+}
+
+clearance: "terok-clearance\nLive allow/deny prompts · desktop notifications · D-Bus + varlink" {
+  style.border-radius: 12
+}
+
+terok -> executor: "delegates per-task work"
+executor -> sandbox: "launches containers via"
+sandbox -> shield: "installs OCI hooks"
+sandbox -> clearance: "installs notifier daemon"
