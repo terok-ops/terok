@@ -66,7 +66,7 @@ def run_podman_args(run_mock: Mock, *, call_index: int = 0) -> list[str]:
 
 
 def _mock_container(state: str | None = None, **method_overrides: object) -> Mock:
-    """Return a Mock that quacks like a :class:`Container` handle."""
+    """Return a Mock that quacks like a [`Container`][] handle."""
     container = Mock()
     container.state = state
     container.running = state == "running"

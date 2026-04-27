@@ -88,7 +88,7 @@ class TaskActionsMixin:
         Each entry in *subagents* may be either an inline dict (already has
         ``name``, ``description``, etc.) or a ``file:`` reference whose
         ``name`` and ``description`` live inside the ``.md`` YAML frontmatter.
-        This normalises both forms into :class:`SubagentInfo` dicts so the UI
+        This normalises both forms into [`SubagentInfo`][] dicts so the UI
         screens always have ``name`` and ``description`` to display.
         """
         result: list[SubagentInfo] = []

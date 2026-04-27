@@ -82,7 +82,7 @@ Crockford chars rather than 5.
 """
 
 _TASK_ID_PREFIX_RE = re.compile(r"[ghjkmnp-tv-z](?:[0-9][0-9a-hjkmnp-tv-z]{0,3})?")
-"""Prefix-match regex for a current-format task ID (1 to :data:`_TASK_ID_LEN` chars)."""
+"""Prefix-match regex for a current-format task ID (1 to [`_TASK_ID_LEN`][] chars)."""
 
 _LEGACY_HEX_TASK_ID_PREFIX_RE = re.compile(r"[0-9a-f]{1,8}")
 """Prefix-match regex for pre-0.8.0 hex task IDs.  Deprecated in 0.8.0; removal in 0.9.0."""
@@ -99,7 +99,7 @@ widen the input surface.
 """
 
 _TASK_ID_INPUT_TRANSLATE = str.maketrans(_TASK_ID_AMBIGUOUS_LETTERS, "110")
-"""Translate table matching :data:`_TASK_ID_AMBIGUOUS_LETTERS`."""
+"""Translate table matching [`_TASK_ID_AMBIGUOUS_LETTERS`][]."""
 
 
 def normalize_task_id_input(raw: str) -> str:
@@ -107,7 +107,7 @@ def normalize_task_id_input(raw: str) -> str:
 
     Strips hyphens, lowercases, and applies the Crockford
     ``I/L → 1``, ``O → 0`` substitutions.  The result is still subject
-    to :data:`_TASK_ID_PREFIX_RE` downstream — this only widens what
+    to [`_TASK_ID_PREFIX_RE`][] downstream — this only widens what
     we accept, never what we emit.
 
     **Call-site discipline:** only call this at user-interactive CLI
@@ -178,7 +178,7 @@ def _validate_task_id_prefix(prefix: str) -> None:
 def resolve_task_id(project_id: str, prefix: str) -> str:
     """Resolve a (possibly partial) task ID to its full form.
 
-    The *prefix* is first run through :func:`normalize_task_id_input`,
+    The *prefix* is first run through [`normalize_task_id_input`][],
     so callers may pass uppercase, hyphenated, or ambiguous-letter
     variants (``K3-V8H``, ``k3v8I``) — they collapse to the canonical
     lowercase form before validation and lookup.
@@ -228,7 +228,7 @@ class TaskMeta(TaskState):
     """Lightweight metadata snapshot for a single task.
 
     Inherits lifecycle fields (``container_state``, ``exit_code``,
-    ``deleting``, ``initialized``) from :class:`~terok.lib.core.task_display.TaskState`.
+    ``deleting``, ``initialized``) from [`TaskState`][terok.lib.core.task_display.TaskState].
     """
 
     task_id: str
@@ -282,7 +282,7 @@ def validate_task_name(sanitized: str) -> str | None:
     """Return an error message if *sanitized* is not a valid task name, else ``None``.
 
     A name is invalid if it starts with a hyphen (looks like a CLI flag).
-    Callers should first check for ``None`` from :func:`sanitize_task_name`
+    Callers should first check for ``None`` from [`sanitize_task_name`][]
     (which indicates the name was empty after sanitization).
     """
     if sanitized.startswith("-"):
@@ -542,7 +542,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         name: Optional human-readable name.  Allowed characters are
             lowercase letters, digits, hyphens, and underscores.
             If ``None``, a random slug-style name is generated via
-            :func:`generate_task_name`.
+            [`generate_task_name`][].
 
     Workspace Initialization Protocol:
     ----------------------------------
@@ -776,7 +776,7 @@ def capture_task_logs(project: ProjectConfig | str, task_id: str, mode: str) -> 
     path on success, or ``None`` if the container doesn't exist or podman
     fails.
 
-    *project* may be a :class:`ProjectConfig` or a project-ID string
+    *project* may be a [`ProjectConfig`][] or a project-ID string
     (the string form loads the config internally for backward compat).
     """
     if isinstance(project, str):
@@ -946,7 +946,7 @@ def task_delete(project_id: str, task_id: str) -> TaskDeleteResult:
     Before removal, captures container logs and archives the task metadata
     and logs to ``archive/<project_id>/tasks/``.  Containers are stopped
     best-effort via podman using the ``<project.id>-<mode>-<task_id>``
-    naming scheme.  Returns a :class:`TaskDeleteResult` so the caller can
+    naming scheme.  Returns a [`TaskDeleteResult`][] so the caller can
     present any warnings from cleanup steps that failed.
     """
     return _task_delete(load_project(project_id), task_id)

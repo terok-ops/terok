@@ -3,7 +3,7 @@
 
 """Resolves where terok stores config, state, vault, and runtime data on this host.
 
-Each public function returns a :class:`pathlib.Path` for one well-known
+Each public function returns a [`pathlib.Path`][] for one well-known
 location and is the single source of truth for that location.  Callers
 import the function rather than recomputing the path so a future XDG /
 deployment shift only has to be made here.
@@ -66,7 +66,7 @@ def config_root() -> Path:
 def state_root() -> Path:
     """Namespace state root shared by every terok ecosystem package.
 
-    Single source of truth — delegates to :func:`terok_sandbox.paths.namespace_state_dir`,
+    Single source of truth — delegates to [`terok_sandbox.paths.namespace_state_dir`][],
     which resolves ``TEROK_ROOT`` → ``config.yml`` ``paths.root`` (via the
     layered config stack) → platform default (``/var/lib/terok`` or
     ``${XDG_DATA_HOME:-~/.local/share}/terok``).
@@ -151,12 +151,12 @@ def runtime_dir() -> Path:
     For short-lived sockets / pid files / FIFOs — things we'd put in
     ``$XDG_RUNTIME_DIR`` when it's available.
 
-    Delegates to :func:`terok_sandbox.paths.namespace_runtime_dir`,
+    Delegates to [`terok_sandbox.paths.namespace_runtime_dir`][],
     which resolves ``$XDG_RUNTIME_DIR/terok`` → ``$XDG_STATE_HOME/terok``
     → ``~/.local/state/terok``.  The chain deliberately avoids ``/tmp``
     so we don't land on a predictable-temp-path footprint (bandit B108).
 
-    Distinct from :func:`runtime_root`: ``runtime_root`` is terok's own
+    Distinct from [`runtime_root`][]: ``runtime_root`` is terok's own
     ``~/.cache/terok`` convention (used for non-namespace-scoped
     transient state), while this function sits under the shared terok
     namespace root for ecosystem packages to co-locate.

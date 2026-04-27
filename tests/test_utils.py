@@ -118,7 +118,7 @@ def assert_task_id(task_id: str | None) -> None:
     """Assert that *task_id* is a valid Crockford-format task ID.
 
     Format: ``[g-z minus i,l,o,u][0-9][Crockford]{3}`` — 5 chars total.
-    See :mod:`terok.lib.orchestration.tasks` for the generator.
+    See [`terok.lib.orchestration.tasks`][] for the generator.
     """
     assert isinstance(task_id, str), f"Expected task ID string, got {task_id!r}"
     assert _TASK_ID_CROCKFORD_4_5_RE.fullmatch(task_id), f"Not a valid task ID: {task_id!r}"

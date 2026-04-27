@@ -17,9 +17,9 @@ Shape:
 TUI pops one modal at a time and a second request waits for the first
 to resolve.
 
-The module has no I/O.  :func:`encode` turns a dict into the wire
-bytes, :func:`decode` turns a line of wire bytes back into a dict,
-and :func:`parse_request` / :func:`parse_reply` validate the decoded
+The module has no I/O.  [`encode`][] turns a dict into the wire
+bytes, [`decode`][] turns a line of wire bytes back into a dict,
+and [`parse_request`][] / [`parse_reply`][] validate the decoded
 dicts on the receiving side.  Callers adapt the bytes to whatever
 transport they have — a blocking ``socket.recv`` loop in the helper,
 an ``asyncio.StreamReader.readline`` in the service.
@@ -44,8 +44,8 @@ def encode(obj: dict[str, Any]) -> bytes:
 def decode(line: bytes) -> dict[str, Any]:
     """Parse a single UTF-8 JSON line; strip the trailing ``\\n`` if present.
 
-    Raises :class:`AskpassProtocolError` on malformed input rather than
-    the stdlib :class:`json.JSONDecodeError` / :class:`UnicodeDecodeError`,
+    Raises [`AskpassProtocolError`][] on malformed input rather than
+    the stdlib [`json.JSONDecodeError`][] / [`UnicodeDecodeError`][],
     so callers have one exception type to catch.
     """
     try:
@@ -93,8 +93,8 @@ def parse_reply(frame: dict[str, Any]) -> tuple[str, str | None]:
 
     Cancel and answer are mutually exclusive: a frame that carries both
     is ambiguous (which wins?) and almost certainly a sender bug, so
-    raise rather than silently picking one — the :func:`make_cancel` /
-    :func:`make_answer` factories are the only sanctioned way to build
+    raise rather than silently picking one — the [`make_cancel`][] /
+    [`make_answer`][] factories are the only sanctioned way to build
     a reply on our side.
     """
     request_id = frame.get("request_id")

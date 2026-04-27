@@ -18,7 +18,7 @@ from .paths import config_root as _config_root_base
 from .yaml_schema import RawGlobalConfig
 
 __all_public_reexports__ = ("ServicesMode",)
-"""Re-exported from :mod:`terok_sandbox.config_schema` — one SSOT for
+"""Re-exported from [`terok_sandbox.config_schema`][] — one SSOT for
 the ``services.mode`` Literal; sandbox owns the schema, terok just
 forwards the type so downstream callers can stay inside the terok
 namespace if they prefer."""
@@ -108,7 +108,7 @@ _raw_config_cache: dict[str, Any] | None = None
 
 
 def _build_config_stack():
-    """Build a :class:`ConfigStack` from all existing config layer files.
+    """Build a [`ConfigStack`][] from all existing config layer files.
 
     Loads each layer independently; unreadable or malformed files are
     skipped with a stderr warning so the remaining layers still apply.
@@ -364,7 +364,7 @@ def vault_dir() -> Path:
 
 
 def make_sandbox_config() -> "SandboxConfig":  # noqa: F821 — forward ref
-    """Construct a :class:`SandboxConfig` for sandbox operations.
+    """Construct a [`SandboxConfig`][] for sandbox operations.
 
     Bridges terok's config layer (env vars → config.yml → XDG defaults) to
     sandbox's plain dataclass.  Sandbox uses its own ``state_dir`` default
@@ -725,11 +725,11 @@ def get_codex_expose_oauth_token() -> bool:
 def is_codex_oauth_proxied() -> bool:
     """Return True when Codex OAuth traffic is routed through the proxy.
 
-    Kept in lockstep with :func:`is_claude_oauth_proxied` so shield
+    Kept in lockstep with [`is_claude_oauth_proxied`][] so shield
     rules and env overrides stay symmetrical.  The proxied path relies
     on the ``oauth_refresh`` block in ``codex.yaml`` for background
     token rotation and on the phantom ``auth.json`` written by
-    :func:`~terok_executor.credentials.auth._codex_oauth_mount_writer`
+    [`_codex_oauth_mount_writer`][terok_executor.credentials.auth._codex_oauth_mount_writer]
     for in-container auth brokering.
     """
     return is_experimental() and get_codex_allow_oauth() and not get_codex_expose_oauth_token()

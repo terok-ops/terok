@@ -18,8 +18,8 @@ VALID_GIT_AUTHORSHIP_MODES: tuple[str, ...] = (
 def normalize_git_authorship(value: object) -> str:
     """Validate and normalize a ``git.authorship`` config value.
 
-    ``None`` or an empty string fall back to :data:`DEFAULT_GIT_AUTHORSHIP`.
-    Raises :class:`SystemExit` for invalid values so project loading can fail
+    ``None`` or an empty string fall back to [`DEFAULT_GIT_AUTHORSHIP`][].
+    Raises [`SystemExit`][] for invalid values so project loading can fail
     with a clear configuration error.
     """
     if value is None:

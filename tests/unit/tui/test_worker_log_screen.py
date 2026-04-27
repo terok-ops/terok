@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for :class:`WorkerLogScreen` — the reusable subprocess-streaming modal.
+"""Tests for [`WorkerLogScreen`][] — the reusable subprocess-streaming modal.
 
 Drives the screen via Textual's ``Pilot`` harness — spawns real
 (short-lived) subprocesses rather than mocking ``asyncio.subprocess``
@@ -22,7 +22,7 @@ _SENTINEL_PENDING = object()
 
 
 class _WorkerHost(App):
-    """Minimal app that pushes a :class:`WorkerLogScreen` and stashes the result."""
+    """Minimal app that pushes a [`WorkerLogScreen`][] and stashes the result."""
 
     def __init__(self, argv: list[str]) -> None:
         super().__init__()

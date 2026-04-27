@@ -38,7 +38,7 @@ def _log(message: str, *, level: str = "DEBUG") -> None:
 def _log_debug(message: str) -> None:
     """Append a DEBUG line to the terok library log.
 
-    Convenience wrapper — see :func:`_log` for details.
+    Convenience wrapper — see [`_log`][] for details.
     """
     _log(message, level="DEBUG")
 
@@ -46,7 +46,7 @@ def _log_debug(message: str) -> None:
 def log_warning(message: str) -> None:
     """Append a WARNING line to the terok library log.
 
-    Convenience wrapper — see :func:`_log` for details.
+    Convenience wrapper — see [`_log`][] for details.
     """
     _log(message, level="WARNING")
 

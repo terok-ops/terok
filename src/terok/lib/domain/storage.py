@@ -10,9 +10,9 @@ Orchestrates queries from three layers:
 
 Two entry points mirror two levels of detail:
 
-- :func:`get_storage_overview` — fast global summary with per-project
+- [`get_storage_overview`][] — fast global summary with per-project
   one-liners (no per-container podman ``--size`` queries)
-- :func:`get_project_storage_detail` — per-task breakdown for one
+- [`get_project_storage_detail`][] — per-task breakdown for one
   project, including the expensive overlay size computation
 """
 

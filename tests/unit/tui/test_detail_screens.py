@@ -1052,7 +1052,7 @@ class TestGlobalAuthBinding:
         assert ("a", "authenticate") in bindings
 
     def test_action_authenticate_pushes_auth_actions_screen(self) -> None:
-        """``action_authenticate`` opens :class:`AuthActionsScreen`."""
+        """``action_authenticate`` opens [`AuthActionsScreen`][]."""
         _, app_class = import_app()
         # No spec — ``push_screen`` is inherited from the Textual ``App``
         # stub and isn't present on the inner ``TerokTUI`` class itself.

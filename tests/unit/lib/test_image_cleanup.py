@@ -25,7 +25,7 @@ def _mock_image(
     size: str = "1GB",
     created: str = "1 day ago",
 ) -> unittest.mock.Mock:
-    """Build a Mock that quacks like a :class:`terok_sandbox.Image`."""
+    """Build a Mock that quacks like a [`terok_sandbox.Image`][]."""
     mock_image = unittest.mock.Mock()
     mock_image.ref = ref
     mock_image.repository = repository

@@ -34,7 +34,7 @@ class ImageInfo:
 
     @classmethod
     def from_image(cls, image: Image) -> ImageInfo:
-        """Lift a sandbox :class:`Image` handle into terok's display type."""
+        """Lift a sandbox [`Image`][] handle into terok's display type."""
         return cls(
             repository=image.repository,
             tag=image.tag,
@@ -145,7 +145,7 @@ def _find_dangling_terok_images() -> list[ImageInfo]:
     """Find dangling (untagged) images that were built by terok.
 
     Walks the runtime's ``images(dangling_only=True)`` enumeration and
-    keeps only images whose ancestry matches :func:`_is_terok_built_image`
+    keeps only images whose ancestry matches [`_is_terok_built_image`][]
     (build-context-hash label or terok layer name in history).
     """
     return [

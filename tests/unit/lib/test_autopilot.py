@@ -49,7 +49,7 @@ class TaskRunnerResult:
         """Return the ``RunSpec`` reconstructed from the most recent
         ``AgentRunner.launch_prepared(...)`` call captured by the mocked
         ``_agent_runner`` factory, rebuilt via
-        :func:`tests.test_utils.captured_runspec`."""
+        [`tests.test_utils.captured_runspec`][]."""
         return captured_runspec(self.run_mock)
 
 

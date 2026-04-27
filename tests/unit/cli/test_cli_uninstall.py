@@ -4,7 +4,7 @@
 """Tests for ``terok uninstall`` — symmetric teardown of ``terok setup``.
 
 Uninstall now delegates the service stack to
-:func:`terok_sandbox.sandbox_uninstall` (the public aggregator) plus
+[`terok_sandbox.sandbox_uninstall`][] (the public aggregator) plus
 a reader-script cleanup that sandbox's shield phase doesn't cover
 today.  Terok's own phases shrink to desktop-entry removal and
 optional credential-DB purge.

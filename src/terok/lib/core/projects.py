@@ -426,9 +426,9 @@ def discover_projects() -> tuple[list[ProjectConfig], list[BrokenProject]]:
 def list_projects() -> list[ProjectConfig]:
     """Discover all projects (user + system), warning on broken configs.
 
-    Thin wrapper over :func:`discover_projects` that preserves the existing
+    Thin wrapper over [`discover_projects`][] that preserves the existing
     stderr + logger diagnostics for CLI callers.  The TUI uses
-    :func:`discover_projects` directly to render broken entries in-place.
+    [`discover_projects`][] directly to render broken entries in-place.
 
     User projects override system ones with the same id.
     """
@@ -447,8 +447,8 @@ def _discover_project_paths() -> dict[str, Path]:
     """Map each on-disk project ID to its ``project.yml`` path.
 
     User scope wins over system scope for collisions — matches how
-    :func:`load_project` resolves the effective config.  Returning the
-    path alongside the ID lets :func:`discover_projects` carry the
+    [`load_project`][] resolves the effective config.  Returning the
+    path alongside the ID lets [`discover_projects`][] carry the
     location forward to ``BrokenProject`` without re-walking.
     """
     paths: dict[str, Path] = {}
@@ -497,7 +497,7 @@ def _validated_global_git_section() -> dict[str, Any]:
 
 
 def load_project(project_id: str) -> ProjectConfig:
-    """Load and return a fully resolved :class:`ProjectConfig` from *project_id*."""
+    """Load and return a fully resolved [`ProjectConfig`][] from *project_id*."""
     root = _find_project_root(project_id)
     cfg_path = root / _PROJECT_YML
     if not cfg_path.is_file():

@@ -5,18 +5,18 @@
 
 Three screens drive the flow:
 
-1. :class:`WizardFormScreen` — one form that collects every
-   :data:`terok.lib.domain.wizards.new_project.QUESTIONS` answer at
+1. [`WizardFormScreen`][] — one form that collects every
+   [`terok.lib.domain.wizards.new_project.QUESTIONS`][] answer at
    once.  Shares vocabulary + validation with the CLI wizard.
-2. :class:`ProjectReviewScreen` — shows the rendered ``project.yml`` in
+2. [`ProjectReviewScreen`][] — shows the rendered ``project.yml`` in
    a ``TextArea`` for last-minute edits before commit.
-3. :class:`InitProgressScreen` — runs ssh-init → generate → build →
+3. [`InitProgressScreen`][] — runs ssh-init → generate → build →
    gate-sync as a background worker, updating a per-step status list
    and surfacing the public key when the user needs to register it.
 
 Each screen is its own ``ModalScreen`` and dismisses with a result;
 the orchestration lives on the main app
-(:class:`terok.tui.app.TerokTUI._launch_project_wizard`).
+([`terok.tui.app.TerokTUI._launch_project_wizard`][]).
 
 No ``app.suspend()`` — this replaces the CLI-subprocess path that
 textual-serve cannot support.
@@ -233,7 +233,7 @@ class WizardFormScreen(ModalScreen["dict[str, str] | None"]):
 # ── Step 2: review rendered YAML ──────────────────────────────────────
 
 
-#: Sentinel returned by :class:`ProjectReviewScreen` when the user clicks
+#: Sentinel returned by [`ProjectReviewScreen`][] when the user clicks
 #: "Back" — distinguishes "go back to the form, keep my answers" from
 #: "cancel the whole wizard".  A distinct object lets the caller use
 #: ``is REVIEW_BACK`` for the three-way branch without overloading the
@@ -247,7 +247,7 @@ class ProjectReviewScreen(ModalScreen["str | object | None"]):
     Dismisses with one of three results:
 
     - The (possibly edited) YAML string → user clicked "Initialize".
-    - :data:`REVIEW_BACK` → user clicked "Back"; caller should re-open
+    - [`REVIEW_BACK`][] → user clicked "Back"; caller should re-open
       the form with the previous answers as prefill.
     - ``None`` → user hit Escape; wizard is abandoned.
     """
@@ -402,7 +402,7 @@ class ShowSshKeyScreen(ModalScreen[None]):
 
 
 class InitOutcome(enum.Enum):
-    """Result of :class:`InitProgressScreen` — four distinct states.
+    """Result of [`InitProgressScreen`][] — four distinct states.
 
     ``SUCCESS`` and ``FAILED`` are the obvious outcomes; ``DECLINED``
     covers the case where the user deliberately chose not to overwrite
@@ -421,8 +421,8 @@ class InitOutcome(enum.Enum):
 class InitProgressScreen(ModalScreen[InitOutcome]):
     """Run ``cmd_project_init``'s four steps as a background worker.
 
-    Dismisses with one of the :class:`InitOutcome` values.  The SSH-key
-    registration pause in :func:`maybe_pause_for_ssh_key_registration`
+    Dismisses with one of the [`InitOutcome`][] values.  The SSH-key
+    registration pause in [`maybe_pause_for_ssh_key_registration`][]
     is replaced by a mid-wizard continue button that gates the next
     step — no blocking ``input()`` in a Textual worker.
     """
@@ -713,9 +713,9 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
           ``SSH_ASKPASS_REQUIRE=force`` so OpenSSH uses their helper
           even with a tty attached.
         - **Personal SSH, no GUI askpass.**  Start the app's
-          :class:`AskpassService` (lazily; first call binds the unix
+          [`AskpassService`][] (lazily; first call binds the unix
           socket) and build the env vars OpenSSH needs to route
-          passphrase prompts through :class:`AskpassModal`.
+          passphrase prompts through [`AskpassModal`][].
         """
         if not project.ssh_use_personal:
             return None
@@ -736,7 +736,7 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
         """Drive the four init steps, updating UI between each.
 
         Runs inside the ``@work`` context established by
-        :meth:`_run_init_with_confirm` — no extra decorator needed;
+        [`_run_init_with_confirm`][] — no extra decorator needed;
         nesting workers confuses Textual's exclusivity tracking.
         """
         import asyncio
@@ -880,7 +880,7 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
     async def _on_ssh_copy(self) -> None:
         """Copy the SSH public key to the system clipboard via the shared helper.
 
-        Runs the helper off the UI thread via :func:`asyncio.to_thread`:
+        Runs the helper off the UI thread via [`asyncio.to_thread`][]:
         the clipboard call has its own internal timeout, but the whole
         point of the async hop is that a slow helper (think a laggy
         Wayland compositor, or a misbehaving clipboard daemon) can't
@@ -931,7 +931,7 @@ class InitProgressScreen(ModalScreen[InitOutcome]):
           outcome is SUCCESS/FAILED/DECLINED; dismiss with it so the
           caller's match arms render the correct notification.
         * **Worker paused on the SSH-key "continue" gate** — the
-          worker is awaiting an :class:`asyncio.Event`; cancelling
+          worker is awaiting an [`asyncio.Event`][]; cancelling
           raises ``CancelledError`` out of that ``await`` and the
           worker unwinds cleanly.
         * **Worker actively running a step** (provision, build,
@@ -1010,14 +1010,14 @@ def _run_isolated(
     Combined, no subprocess below this call — however badly behaved —
     can prompt the user over the TUI.
 
-    *env* is passed straight through to :func:`subprocess.run`.  When
+    *env* is passed straight through to [`subprocess.run`][].  When
     ``None`` the child inherits the parent's environment (default
     behaviour); the wizard uses this parameter to inject askpass
     variables for ``use_personal_ssh`` projects so OpenSSH routes
     passphrase prompts to the TUI modal instead of failing silently.
 
     *label* is the human-friendly step name used in the error message.
-    Any non-zero exit propagates as :class:`RuntimeError` carrying the
+    Any non-zero exit propagates as [`RuntimeError`][] carrying the
     last few KiB of the child's combined output, which the wizard's
     worker already logs as the failed step's detail.
 
@@ -1044,7 +1044,7 @@ def _run_isolated(
 
 
 def _build_in_subprocess(project_id: str, *, env: dict[str, str] | None = None) -> None:
-    """Run :func:`build_images` in a child Python process."""
+    """Run [`build_images`][] in a child Python process."""
     # Literal repr keeps project_id safely escaped into the -c body.
     child_body = f"from terok.lib.domain.facade import build_images; build_images({project_id!r})"
     _run_isolated(child_body, label="build_images", env=env)

@@ -75,7 +75,7 @@ def installed_agents(image_tag: str) -> frozenset[str]:
 def installed_agents_for_project(project: ProjectConfig) -> frozenset[str]:
     """Return the agents installed in *project*'s L1 image.
 
-    Convenience over :func:`installed_agents` for the very common
+    Convenience over [`installed_agents`][] for the very common
     ``installed_agents(agent_cli_image(project.base_image))`` pattern.
     """
     return installed_agents(agent_cli_image(project.base_image))
@@ -84,7 +84,7 @@ def installed_agents_for_project(project: ProjectConfig) -> frozenset[str]:
 def is_installed(name: str, image_tag: str) -> bool:
     """Return whether *name* is baked into *image_tag*.
 
-    Treats an unknown / unlabeled image (empty :func:`installed_agents`
+    Treats an unknown / unlabeled image (empty [`installed_agents`][]
     result) as "unrestricted" — every name is considered installed —
     so legacy images keep working until the user rebuilds.
     """
@@ -98,7 +98,7 @@ def require_agent_installed(project: ProjectConfig, name: str, *, noun: str = "A
     Used at CLI / TUI / runtime entry points so the user sees a clear,
     actionable message instead of a deep ``command not found`` later.
     Unlabeled (legacy) images are treated as unrestricted via
-    :func:`is_installed`.
+    [`is_installed`][].
     """
     image = agent_cli_image(project.base_image)
     if is_installed(name, image):

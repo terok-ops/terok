@@ -19,7 +19,7 @@ from tests.testfs import NONEXISTENT_MARKDOWN_PATH
 def _bypass_setup_verdict_gate():
     """Skip the stamp-based gate in task-CLI unit tests — covered separately.
 
-    ``_cmd_task_run`` now calls :func:`terok.cli.commands.task._setup_verdict_or_exit`
+    ``_cmd_task_run`` now calls [`terok.cli.commands.task._setup_verdict_or_exit`][]
     at entry which raises exit 3 when the setup stamp is absent.  These
     tests run in a stamp-free tmp env and assert behaviour downstream
     of that gate; the gate's own behaviour is pinned by

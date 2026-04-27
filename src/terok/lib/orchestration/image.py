@@ -45,7 +45,7 @@ def image_exists(image: str) -> bool:
 
 
 def _image_exists(image: str) -> bool:
-    """Same check as :func:`image_exists`, kept as a separate symbol for tests.
+    """Same check as [`image_exists`][], kept as a separate symbol for tests.
 
     The public function resolves this name on every call, so
     ``patch("terok.lib.orchestration.image._image_exists", fake)`` reaches
@@ -100,7 +100,7 @@ def _resolve_user_snippet(project: ProjectConfig) -> str:
     When both ``image.user_snippet_file`` and ``image.user_snippet_inline``
     are set, the file is included first and the inline block is appended.
 
-    Raises :class:`SystemExit` if ``image.user_snippet_file`` is configured but
+    Raises [`SystemExit`][] if ``image.user_snippet_file`` is configured but
     the file does not exist or cannot be read.
     """
     parts: list[str] = []
@@ -207,7 +207,7 @@ def build_context_hash_from_rendered(project: ProjectConfig, rendered: dict[str,
 
     Args:
         project: The resolved project configuration.
-        rendered: name→content mapping returned by :func:`render_all_dockerfiles`.
+        rendered: name→content mapping returned by [`render_all_dockerfiles`][].
     """
     return _sha256(
         l0_content_hash(project.base_image, rendered),
@@ -258,8 +258,8 @@ def _write_build_manifest(project_id: str, manifest: dict[str, Any]) -> None:
 def generate_dockerfiles(project_id: str, *, family: str | None = None) -> None:
     """Render and write Dockerfiles and auxiliary scripts for *project_id*.
 
-    Pass *family* to skip a redundant :func:`detect_family` call when the
-    caller has already resolved it (typically from inside :func:`build_images`).
+    Pass *family* to skip a redundant [`detect_family`][] call when the
+    caller has already resolved it (typically from inside [`build_images`][]).
     """
     project = load_project(project_id)
     out_dir = build_dir() / project.id

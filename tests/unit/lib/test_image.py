@@ -354,7 +354,7 @@ def image_project_with(
     base_image: str = "ubuntu:24.04",
     family: str | None = None,
 ) -> Iterator[object]:
-    """Variant of :func:`image_project` that sets ``image.base_image`` (and ``image.family``)."""
+    """Variant of [`image_project`][] that sets ``image.base_image`` (and ``image.family``)."""
     lines = [
         f"project:\n  id: {project_id}\n",
         "git:\n",

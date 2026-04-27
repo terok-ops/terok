@@ -3,9 +3,9 @@
 
 """Agent config resolution: layered merging across global, project, preset, and CLI scopes.
 
-Builds a :class:`~terok.lib.util.config_stack.ConfigStack` from up to four
+Builds a [`ConfigStack`][terok.lib.util.config_stack.ConfigStack] from up to four
 layers and returns a single merged agent-config dict that can be fed directly
-into :func:`~terok_executor.prepare_agent_config_dir`.
+into [`prepare_agent_config_dir`][terok_executor.prepare_agent_config_dir].
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def build_agent_config_stack(
         preset: Optional preset name.
         cli_overrides: CLI-level overrides (highest priority).
 
-    Returns the :class:`ConfigStack` so callers can either ``.resolve()`` it
+    Returns the [`ConfigStack`][] so callers can either ``.resolve()`` it
     for the merged dict or inspect ``.scopes`` for provenance display.
     """
     stack = ConfigStack()
@@ -93,7 +93,7 @@ def resolve_agent_config(
 ) -> dict[str, Any]:
     """Build config stack and return the merged agent config dict.
 
-    Convenience wrapper around :func:`build_agent_config_stack` for callers
+    Convenience wrapper around [`build_agent_config_stack`][] for callers
     that only need the final resolved dict (e.g. task runners).
     """
     return build_agent_config_stack(

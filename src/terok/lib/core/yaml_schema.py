@@ -5,21 +5,21 @@
 
 These are **Tier 1** models: they validate types, enums, and unknown-key typos
 (``extra="forbid"``) but do *not* resolve paths or merge config layers.  The
-companion modules :mod:`~terok.lib.core.projects` and
-:mod:`~terok.lib.core.config` transform these into resolved runtime objects.
+companion modules [`projects`][terok.lib.core.projects] and
+[`config`][terok.lib.core.config] transform these into resolved runtime objects.
 
 Sections owned by lower-level packages live in those packages' own
 ``config_schema`` modules and are imported here for composition:
 
-- :mod:`terok_sandbox.config_schema` owns ``paths``, ``credentials``,
+- [`terok_sandbox.config_schema`][] owns ``paths``, ``credentials``,
   ``vault``, ``gate_server``, ``services``, ``shield``, ``network``,
   ``ssh`` (eight sandbox-consumed sections).
-- :mod:`terok_executor.config_schema` owns ``image``.
+- [`terok_executor.config_schema`][] owns ``image``.
 
 terok itself owns the remaining five sections (``tui``, ``logs``,
 ``tasks``-global, ``git``-global, ``hooks``-global) plus every
-``project.yml``-only section.  :class:`RawGlobalConfig` inherits from
-:class:`~terok_executor.config_schema.ExecutorConfigView` and flips
+``project.yml``-only section.  [`RawGlobalConfig`][] inherits from
+[`ExecutorConfigView`][terok_executor.config_schema.ExecutorConfigView] and flips
 back to ``extra="forbid"`` because terok knows the full ecosystem
 section set — a typo at the top level (``tuii:``) is caught here.
 """
@@ -40,7 +40,7 @@ from terok_sandbox import RawSSHSection
 def _coerce_name_categories(v: object) -> list[str] | None:
     """Normalize ``name_categories``: single string → list, empty → None.
 
-    Raises :class:`ValueError` for non-string, non-list inputs (e.g. ``42``).
+    Raises [`ValueError`][] for non-string, non-list inputs (e.g. ``42``).
     """
     if v is None:
         return None
@@ -396,10 +396,10 @@ class RawProjectYaml(BaseModel):
 # Global config section models — terok-owned only
 #
 # Sandbox-owned sections (paths, credentials, vault, gate_server, services,
-# shield, network, ssh) live in :mod:`terok_sandbox.config_schema`; the
-# executor-owned ``image`` section lives in :mod:`terok_executor.config_schema`.
-# Both are pulled in by :class:`RawGlobalConfig` via inheritance from
-# :class:`~terok_executor.config_schema.ExecutorConfigView`.
+# shield, network, ssh) live in [`terok_sandbox.config_schema`][]; the
+# executor-owned ``image`` section lives in [`terok_executor.config_schema`][].
+# Both are pulled in by [`RawGlobalConfig`][] via inheritance from
+# [`ExecutorConfigView`][terok_executor.config_schema.ExecutorConfigView].
 # ---------------------------------------------------------------------------
 
 
@@ -458,10 +458,10 @@ class RawGlobalConfig(ExecutorConfigView):
 
     - Sandbox-owned sections (``paths``, ``credentials``, ``vault``,
       ``gate_server``, ``services``, ``shield``, ``network``, ``ssh``)
-      come from :class:`~terok_sandbox.config_schema.SandboxConfigView`
-      via :class:`~terok_executor.config_schema.ExecutorConfigView`.
+      come from [`SandboxConfigView`][terok_sandbox.config_schema.SandboxConfigView]
+      via [`ExecutorConfigView`][terok_executor.config_schema.ExecutorConfigView].
     - Executor-owned ``image`` comes from
-      :class:`~terok_executor.config_schema.ExecutorConfigView`.
+      [`ExecutorConfigView`][terok_executor.config_schema.ExecutorConfigView].
     - The five terok-owned sections below are added explicitly.
 
     ``extra="forbid"`` flips back on at this top-of-stack layer because

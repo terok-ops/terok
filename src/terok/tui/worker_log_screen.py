@@ -12,10 +12,10 @@ Scope for this first cut (tracked in
 [terok-ai/terok#473](https://github.com/terok-ai/terok/issues/473)):
 
 - Run an arbitrary ``argv`` as a subprocess via
-  :func:`asyncio.create_subprocess_exec`.
+  [`asyncio.create_subprocess_exec`][].
 - Stream ``stdout`` + ``stderr`` (merged) line by line into a
   ``RichLog``.
-- Dismiss with :class:`WorkerResult` carrying the exit code; a
+- Dismiss with [`WorkerResult`][] carrying the exit code; a
   ``Close`` button enables when the process finishes and is coloured
   by success / failure.
 - ``Hide`` button and "running tasks" drawer are **not** in this
@@ -48,7 +48,7 @@ from textual.widgets import Button, Label, RichLog
 
 @dataclass(frozen=True)
 class WorkerResult:
-    """Outcome of a :class:`WorkerLogScreen` run.
+    """Outcome of a [`WorkerLogScreen`][] run.
 
     ``exit_code`` is the subprocess's exit status (0 on success,
     non-zero on failure).  A screen dismissed before the subprocess
@@ -137,7 +137,7 @@ class WorkerLogScreen(ModalScreen[WorkerResult]):
 
         Args:
             argv: The command to run.  Passed straight to
-                :func:`asyncio.create_subprocess_exec` — no shell.
+                [`asyncio.create_subprocess_exec`][] — no shell.
             title: Border-title text shown above the log pane.
             env: Optional environment override.  ``None`` inherits
                 the parent's env (the common case).

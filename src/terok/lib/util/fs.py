@@ -44,7 +44,7 @@ def unique_archive_path(root: Path, base_name: str, suffix: str = "") -> Path:
     free name is found.
 
     .. note:: This only checks existence; it does **not** create the path.
-       For atomic directory creation, use :func:`create_archive_dir`.
+       For atomic directory creation, use [`create_archive_dir`][].
     """
     candidate = root / f"{base_name}{suffix}"
     counter = 0
@@ -57,7 +57,7 @@ def unique_archive_path(root: Path, base_name: str, suffix: str = "") -> Path:
 def create_archive_dir(root: Path, base_name: str) -> Path:
     """Atomically create a uniquely-named archive directory under *root*.
 
-    Combines :func:`unique_archive_path` with ``mkdir(exist_ok=False)``
+    Combines [`unique_archive_path`][] with ``mkdir(exist_ok=False)``
     in a retry loop to guarantee the returned directory was freshly created
     by this call — safe against concurrent processes.
 

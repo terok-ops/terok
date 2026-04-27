@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for :mod:`terok.cli.commands._desktop_entry` — XDG launcher + icon install."""
+"""Tests for [`terok.cli.commands._desktop_entry`][] — XDG launcher + icon install."""
 
 from __future__ import annotations
 

@@ -3,8 +3,8 @@
 
 """Install the XDG desktop entry + icon theme PNG for ``terok-tui``.
 
-``terok setup`` calls :func:`install_desktop_entry` (or the matching
-:func:`uninstall_desktop_entry`) as a default-on phase, so the TUI
+``terok setup`` calls [`install_desktop_entry`][] (or the matching
+[`uninstall_desktop_entry`][]) as a default-on phase, so the TUI
 appears as *Terok* in GNOME / KDE / XFCE application menus without the
 operator knowing the template layout.  Every step soft-fails so a
 headless host without ``.local/share`` or without ``xdg-utils`` never
@@ -24,8 +24,8 @@ runners) we fall back to writing the XDG tree ourselves and firing the
 cache-refresh binaries directly.  This is *best-effort*: the files end
 up in the right place on hosts that match the spec, but there's no
 ``desktop-file-install`` validation and no cover for DE-specific
-layout drift.  :func:`install_desktop_entry` returns a
-:class:`DesktopBackend` so the caller can surface a gentle warning
+layout drift.  [`install_desktop_entry`][] returns a
+[`DesktopBackend`][] so the caller can surface a gentle warning
 when the fallback kicks in.
 
 The passive assets (``.desktop`` template, logo PNG) live under
@@ -81,7 +81,7 @@ _SUBPROCESS_TIMEOUT_S = 10
 
 
 class DesktopBackend(StrEnum):
-    """Which install path :func:`install_desktop_entry` actually took."""
+    """Which install path [`install_desktop_entry`][] actually took."""
 
     XDG_UTILS = "xdg-utils"
     FALLBACK = "fallback"
@@ -91,7 +91,7 @@ def _resource_dir() -> Traversable:
     """Return a ``Traversable`` rooted at the passive ``resources/desktop/`` assets.
 
     Uses the namespace-package idiom already used by
-    :func:`terok.lib.core.config.bundled_presets_dir`: walk the top-level
+    [`terok.lib.core.config.bundled_presets_dir`][]: walk the top-level
     ``terok`` package into the ``resources`` + ``desktop`` subdirs (no
     ``__init__.py`` anywhere under ``resources/``, matching the project's
     "resources hold only data files" convention).
@@ -110,7 +110,7 @@ def install_desktop_entry(bin_path: str | Path) -> DesktopBackend:
             over the short name.
 
     Returns:
-        The :class:`DesktopBackend` actually used.  Callers wire this to
+        The [`DesktopBackend`][] actually used.  Callers wire this to
         a status-line warning when the fallback kicks in so the operator
         knows ``xdg-utils`` is missing.
     """
@@ -132,8 +132,8 @@ def uninstall_desktop_entry() -> DesktopBackend:
     """Remove the launcher + icon, via xdg-utils when available.
 
     Returns:
-        The :class:`DesktopBackend` actually used — symmetric with
-        :func:`install_desktop_entry`.  XDG_UTILS only when both
+        The [`DesktopBackend`][] actually used — symmetric with
+        [`install_desktop_entry`][].  XDG_UTILS only when both
         front-ends reported rc 0; on failure (or xdg-utils absent) we
         retry via manual unlinks and report FALLBACK so the teardown
         leaves no stragglers even when xdg-utils misbehaves.
@@ -236,7 +236,7 @@ def _run_xdg(binary: str, *args: str) -> bool:
     Never raises — a hung / missing / broken front-end lands in DEBUG
     so an operator chasing a weird install state can grep
     ``journalctl --user`` without ``terok setup`` exploding.  The
-    return value lets :func:`_install_via_xdg_utils` decide whether to
+    return value lets [`_install_via_xdg_utils`][] decide whether to
     hand off to the manual fallback.
     """
     found = shutil.which(binary)

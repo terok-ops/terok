@@ -229,7 +229,7 @@ def _terok_doctor_checks(
 def _read_desired_shield_state(task_dir: Path) -> str | None:
     """Read the ``shield_desired_state`` file, or ``None`` if absent.
 
-    Raises :class:`OSError` if the file exists but cannot be read so
+    Raises [`OSError`][] if the file exists but cannot be read so
     callers can distinguish "absent" from "unreadable".
     """
     path = task_dir / _SHIELD_STATE_FILENAME

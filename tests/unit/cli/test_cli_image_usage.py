@@ -3,9 +3,9 @@
 
 """Tests for ``terok image usage`` (argparse + dispatch + render).
 
-Parsing and dispatch live in :mod:`terok.cli.commands.image`; the
+Parsing and dispatch live in [`terok.cli.commands.image`][]; the
 overview/detail rendering lives in
-:mod:`terok.cli.commands._storage_view`.  This test module covers
+[`terok.cli.commands._storage_view`][].  This test module covers
 both layers.
 """
 

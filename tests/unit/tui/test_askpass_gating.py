@@ -3,7 +3,7 @@
 
 """Gating tests for the askpass integration — zero cost when opted out.
 
-The :class:`InitProgressScreen._askpass_subprocess_env` helper is the
+The [`InitProgressScreen._askpass_subprocess_env`][] helper is the
 single choke point that decides whether a subprocess gets askpass env
 plumbing.  These tests verify:
 
@@ -28,13 +28,13 @@ from terok.tui.wizard_screens import InitProgressScreen
 
 @dataclass
 class _FakeProject:
-    """Stand-in for :class:`ProjectConfig` — only the one attribute we read."""
+    """Stand-in for [`ProjectConfig`][] — only the one attribute we read."""
 
     ssh_use_personal: bool
 
 
 class _FakeService:
-    """Stand-in for :class:`AskpassService` exposing the two properties the env builder reads."""
+    """Stand-in for [`AskpassService`][] exposing the two properties the env builder reads."""
 
     def __init__(self, socket_path: Path, helper_bin: Path) -> None:
         self.socket_path = socket_path
@@ -42,7 +42,7 @@ class _FakeService:
 
 
 class _FakeApp:
-    """Stand-in for :class:`TerokTUI` that counts ``ensure_askpass_service`` calls."""
+    """Stand-in for [`TerokTUI`][] that counts ``ensure_askpass_service`` calls."""
 
     def __init__(self, service: _FakeService | None = None) -> None:
         self._service = service or _FakeService(Path("/run/x.sock"), Path("/usr/bin/terok-askpass"))
@@ -54,7 +54,7 @@ class _FakeApp:
 
 
 def _new_screen() -> InitProgressScreen:
-    """Construct a bare :class:`InitProgressScreen` without Textual's setup machinery."""
+    """Construct a bare [`InitProgressScreen`][] without Textual's setup machinery."""
     screen = InitProgressScreen.__new__(InitProgressScreen)
     screen._project_id = "demo"
     return screen

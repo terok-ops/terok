@@ -3,11 +3,11 @@
 
 """Rich Task domain object — DDD Entity.
 
-Wraps a :class:`~terok.lib.orchestration.tasks.TaskMeta` value object with
+Wraps a [`TaskMeta`][terok.lib.orchestration.tasks.TaskMeta] value object with
 lifecycle behavior (run, stop, delete, rename) and observation methods
 (logs, login, workspace diff).
 
-Tasks are always obtained through a :class:`~terok.lib.domain.project.Project`::
+Tasks are always obtained through a [`Project`][terok.lib.domain.project.Project]::
 
     project = get_project("myproj")
     task = project.create_task(name="fix-bug")
@@ -16,7 +16,7 @@ Tasks are always obtained through a :class:`~terok.lib.domain.project.Project`::
     task.stop()
 
 **Snapshot semantics:** a ``Task`` captures a point-in-time snapshot of
-:class:`TaskMeta` at construction.  Mutations (``rename()``, ``run_cli()``,
+[`TaskMeta`][] at construction.  Mutations (``rename()``, ``run_cli()``,
 ``stop()``) modify the underlying storage but do *not* update the in-memory
 snapshot.  To observe the new state after a mutation, obtain a fresh
 ``Task`` via ``project.get_task(id)``.  This keeps the entity free of
@@ -24,8 +24,8 @@ implicit I/O and consistent with how ``TaskMeta`` is used throughout the
 codebase.
 
 See Also:
-    :mod:`terok.lib.domain.project` — the ``Project`` aggregate that contains tasks
-    :mod:`terok.lib.orchestration.tasks` — ``TaskMeta`` value object and
+    [`terok.lib.domain.project`][] — the ``Project`` aggregate that contains tasks
+    [`terok.lib.orchestration.tasks`][] — ``TaskMeta`` value object and
         low-level task functions
 """
 
@@ -60,12 +60,12 @@ class Task:
     ``(project_id, task_id)``.  Two ``Task`` instances are equal iff they
     share this identity, regardless of metadata differences.
 
-    Obtained via :meth:`~terok.lib.domain.project.Project.get_task`,
-    :meth:`~terok.lib.domain.project.Project.create_task`, or
-    :meth:`~terok.lib.domain.project.Project.list_tasks`.  Delegates lifecycle
+    Obtained via [`get_task`][terok.lib.domain.project.Project.get_task],
+    [`create_task`][terok.lib.domain.project.Project.create_task], or
+    [`list_tasks`][terok.lib.domain.project.Project.list_tasks].  Delegates lifecycle
     operations to the underlying task service functions in
-    :mod:`~terok.lib.orchestration.tasks` and
-    :mod:`~terok.lib.orchestration.task_runners`.
+    [`tasks`][terok.lib.orchestration.tasks] and
+    [`task_runners`][terok.lib.orchestration.task_runners].
     """
 
     __slots__ = ("_config", "_meta")

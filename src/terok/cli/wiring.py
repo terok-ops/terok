@@ -118,7 +118,7 @@ def wire_group(
     so callers can attach additional locally-dispatched subparsers alongside
     the wired sibling commands.  Local subparsers must ``set_defaults`` a
     sentinel attribute for their own dispatcher to recognise them, and set
-    ``_wired_cmd=None`` so :func:`wire_dispatch` doesn't short-circuit with
+    ``_wired_cmd=None`` so [`wire_dispatch`][] doesn't short-circuit with
     group help.
     """
     group = sub.add_parser(name, help=help)

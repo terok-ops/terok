@@ -6,8 +6,8 @@
 ``vault serve`` is terok-packaging plumbing (systemd unit + daemon launcher)
 rather than a credential-broker management verb, so it lives here instead
 of in ``terok_executor.VAULT_COMMANDS``.  Attached via the hybrid extension
-pattern in :mod:`terok.cli.main` — argparse routes ``vault serve`` to this
-module's :func:`dispatch`, which strips the group prefix and delegates to
+pattern in [`terok.cli.main`][] — argparse routes ``vault serve`` to this
+module's [`dispatch`][], which strips the group prefix and delegates to
 the token broker's own ``main()``.
 """
 
@@ -22,9 +22,9 @@ def register(group_sub: argparse._SubParsersAction) -> None:  # type: ignore[typ
     """Attach ``serve`` under the sibling-wired ``vault`` group.
 
     Must be called with the ``group_sub`` returned by
-    :func:`wire_group` when ``return_action=True``.  Sets both a sentinel
+    [`wire_group`][] when ``return_action=True``.  Sets both a sentinel
     attribute for local dispatch and ``_wired_cmd=None`` so
-    :func:`wire_dispatch` falls through instead of printing group help.
+    [`wire_dispatch`][] falls through instead of printing group help.
     """
     p_serve = group_sub.add_parser(
         "serve",

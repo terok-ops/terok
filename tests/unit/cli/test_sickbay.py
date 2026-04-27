@@ -384,9 +384,9 @@ class TestCheckSelinuxPolicy:
     """Verify the five branches of the SELinux policy sickbay check.
 
     The decision tree itself lives in
-    :func:`terok_sandbox.check_selinux_status` (exercised separately in
+    [`terok_sandbox.check_selinux_status`][] (exercised separately in
     terok-sandbox's ``test_selinux.py``).  Here we patch that helper
-    with pre-built :class:`SelinuxCheckResult` values and verify the
+    with pre-built [`SelinuxCheckResult`][] values and verify the
     sickbay-side *rendering* — tuple severity, label, detail text.
     """
 

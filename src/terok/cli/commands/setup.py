@@ -3,7 +3,7 @@
 
 """Global bootstrap: ``terok setup`` installs host services.
 
-Thin wrapper over :func:`terok_executor.ensure_sandbox_ready` — the
+Thin wrapper over [`terok_executor.ensure_sandbox_ready`][] — the
 executor-level composer that generates vault routes from the agent
 roster and then runs the sandbox aggregator (shield hooks + reader +
 vault + gate + clearance hub/verdict/notifier with a full
@@ -21,7 +21,7 @@ expert escape hatch for operators who *know* a fleet-wide base
 image and want to pay the build cost once up front.
 
 Per-project operations live under the ``project`` group in
-:mod:`project.py`; :func:`cmd_project_init` stays here because
+[`project.py`][]; [`cmd_project_init`][] stays here because
 ``project.py`` (and its tests) import it.
 """
 
@@ -198,7 +198,7 @@ def cmd_setup(
 def _run_image_build(*, base: str, family: str | None) -> bool:
     """Build L0 + L1 base images via the executor's public factory.
 
-    Returns ``False`` on :class:`BuildError` so ``cmd_setup`` can
+    Returns ``False`` on [`BuildError`][] so ``cmd_setup`` can
     surface a single aggregate "setup failed" line instead of the
     factory crashing the whole command halfway through.  Non-build
     ``SystemExit`` from deeper code paths (e.g. a missing Dockerfile

@@ -4,19 +4,19 @@
 """Declarative wizard schema shared by the CLI prompt loop and the TUI modal.
 
 The wizard asks a fixed set of questions to build a new project config.
-Declaring them as :class:`Question` records keeps two presenters — the
+Declaring them as [`Question`][] records keeps two presenters — the
 CLI's sequential prompts and the TUI's multi-field form — using one
 source of truth: same labels, same validation, same transforms.
 
 A presenter's only job is to elicit a raw string per question.  The
-shared :func:`validate_answer` then normalises it, runs the question's
+shared [`validate_answer`][] then normalises it, runs the question's
 validator, and returns either the accepted value or an error the
 presenter can display.  When every question has an accepted answer, the
-collected values go to :func:`generate_config`, which writes the
+collected values go to [`generate_config`][], which writes the
 ``project.yml`` template and returns the path.
 
-:func:`collect_wizard_inputs` is the CLI presenter (uses ``input()``);
-the TUI presenter lives in :mod:`terok.tui.wizard_screens`.
+[`collect_wizard_inputs`][] is the CLI presenter (uses ``input()``);
+the TUI presenter lives in [`terok.tui.wizard_screens`][].
 """
 
 from __future__ import annotations
@@ -291,7 +291,7 @@ def _trim_snippet_preamble(content: str) -> str:
 
     The earlier implementation pruned every leading comment line, which
     would eat user-intended ``# TODO`` or copyright notices.  We instead
-    match :data:`_SNIPPET_PREAMBLE` verbatim — if the user didn't
+    match [`_SNIPPET_PREAMBLE`][] verbatim — if the user didn't
     remove it, drop it; if they did, leave the rest alone.
     """
     if content.startswith(_SNIPPET_PREAMBLE):
@@ -322,7 +322,7 @@ def _ask_cli(question: Question) -> str | None:
 
 
 def collect_wizard_inputs() -> dict | None:
-    """Drive the CLI prompt loop for every question in :data:`QUESTIONS`.
+    """Drive the CLI prompt loop for every question in [`QUESTIONS`][].
 
     Returns a dict keyed by ``Question.key`` when all answers are
     accepted, or ``None`` if the user cancels (Ctrl+C, EOF, or an
@@ -359,7 +359,7 @@ def collect_wizard_inputs() -> dict | None:
 def generate_config(values: dict) -> Path:
     """Render the chosen template and write ``project.yml``.
 
-    *values* is the dict returned by :func:`collect_wizard_inputs`.
+    *values* is the dict returned by [`collect_wizard_inputs`][].
     Returns the path to the created ``project.yml`` file.
     """
     filename = f"{values['security_class']}-{values['base']}.yml"
@@ -426,7 +426,7 @@ def write_project_yaml(project_id: str, rendered: str, *, overwrite: bool = Fals
     """Write *rendered* YAML to ``<user_projects_dir>/<project_id>/project.yml``.
 
     The TUI reviews YAML in a ``TextArea`` before writing, so this is the
-    write half of :func:`generate_config` — kept separate so the TUI can
+    write half of [`generate_config`][] — kept separate so the TUI can
     pass tweaked content without re-rendering the template.
     """
     project_dir = user_projects_dir() / project_id

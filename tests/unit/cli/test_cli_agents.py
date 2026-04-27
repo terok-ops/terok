@@ -25,7 +25,7 @@ def _fake_roster(
     all_names: tuple[str, ...] = ("claude", "codex", "gh"),
     labels: dict[str, str] | None = None,
 ) -> SimpleNamespace:
-    """Stand-in for :class:`terok_executor.AgentRoster` with the bits the dispatcher reads."""
+    """Stand-in for [`terok_executor.AgentRoster`][] with the bits the dispatcher reads."""
     if labels is None:
         labels = {"claude": "Anthropic Claude", "codex": "OpenAI Codex", "gh": "GitHub CLI"}
     providers = {name: SimpleNamespace(label=labels.get(name, name)) for name in all_names}

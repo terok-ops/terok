@@ -38,7 +38,7 @@ class TestEncodeDecode:
         assert proto.decode(raw) == {"k": "v"}
 
     def test_decode_rejects_non_json(self) -> None:
-        """Garbage on the wire raises :class:`AskpassProtocolError`."""
+        """Garbage on the wire raises [`AskpassProtocolError`][]."""
         with pytest.raises(proto.AskpassProtocolError):
             proto.decode(b"not json at all\n")
 

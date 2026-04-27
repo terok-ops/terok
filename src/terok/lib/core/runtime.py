@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Process-wide :class:`ContainerRuntime` accessor.
+"""Process-wide [`ContainerRuntime`][] accessor.
 
 Centralises backend construction so the sandbox-boundary
 import-linter ratchet stays tight: every call site asks this module
@@ -9,8 +9,8 @@ for its runtime handle instead of instantiating ``PodmanRuntime``
 locally.  Selection is env-driven — ``TEROK_RUNTIME=podman`` (default)
 or ``TEROK_RUNTIME=null`` for dry-run / test use.
 
-Tests that need a specific backend should call :func:`set_runtime`
-in setup and :func:`reset_runtime` in teardown.
+Tests that need a specific backend should call [`set_runtime`][]
+in setup and [`reset_runtime`][] in teardown.
 """
 
 from __future__ import annotations
@@ -23,12 +23,12 @@ _runtime: ContainerRuntime | None = None
 
 
 def get_runtime() -> ContainerRuntime:
-    """Return the cached process-wide :class:`ContainerRuntime`.
+    """Return the cached process-wide [`ContainerRuntime`][].
 
     On first call, inspects ``TEROK_RUNTIME`` and constructs the
     matching backend.  Supported values are ``"podman"`` (the default)
     and ``"null"`` (an in-memory stub useful for CI).  Any other value
-    raises :class:`SystemExit` at startup rather than quietly falling
+    raises [`SystemExit`][] at startup rather than quietly falling
     back — a misspelled env var should be loud.
     """
     global _runtime

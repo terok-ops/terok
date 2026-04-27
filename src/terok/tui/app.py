@@ -490,7 +490,7 @@ if _HAS_TEXTUAL:
             return False
 
         async def _run_setup_subprocess(self) -> bool:
-            """Stream ``terok setup`` through :class:`WorkerLogScreen`; True on exit 0."""
+            """Stream ``terok setup`` through [`WorkerLogScreen`][]; True on exit 0."""
             result = await self.push_screen_wait(
                 WorkerLogScreen(["terok", "setup"], title="Running terok setup…")
             )
@@ -1265,7 +1265,7 @@ if _HAS_TEXTUAL:
             self.exit()
 
         async def ensure_askpass_service(self) -> AskpassService:
-            """Return the running :class:`AskpassService`, starting it on first use.
+            """Return the running [`AskpassService`][], starting it on first use.
 
             Idempotent.  The first call from a ``use_personal_ssh`` project
             binds the socket; subsequent calls reuse the same service for
@@ -1398,7 +1398,7 @@ if _HAS_TEXTUAL:
         async def action_authenticate(self) -> None:
             """Open the host-wide ``Authenticate agents and tools`` modal.
 
-            Reuses :class:`AuthActionsScreen`, but the result handler
+            Reuses [`AuthActionsScreen`][], but the result handler
             forces a host-wide auth flow (``project_id=None``) regardless
             of what's selected in the main pane — the per-project entry
             lives on the project-details screen.
@@ -1410,7 +1410,7 @@ if _HAS_TEXTUAL:
         async def _on_authenticate_result(self, result: str | None) -> None:
             """Route the host-wide auth modal's selection.
 
-            ``auth_<provider>`` lands in :meth:`_action_auth_host_wide`
+            ``auth_<provider>`` lands in [`_action_auth_host_wide`][]
             (forced ``project_id=None``); ``import_opencode_config``
             shares the project-screen handler since the import is
             project-agnostic anyway.

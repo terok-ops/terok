@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for :mod:`terok.lib.util.check_reporter`.
+"""Tests for [`terok.lib.util.check_reporter`][].
 
 Covers the three things this helper actually has to get right for
 ``terok sickbay`` to behave: each line streams (no buffering until the

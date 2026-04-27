@@ -73,10 +73,10 @@ def _mock_infrastructure() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def mock_runtime() -> Iterator[MagicMock]:
-    """Install a fresh :class:`MagicMock` as the process-wide ``ContainerRuntime``.
+    """Install a fresh [`MagicMock`][] as the process-wide ``ContainerRuntime``.
 
     Every unit test gets an isolated mock runtime patched into
-    :func:`terok.lib.core.runtime.get_runtime`.  Tests that care about
+    [`terok.lib.core.runtime.get_runtime`][].  Tests that care about
     specific container-level behaviour configure the mock directly
     (``mock_runtime.container.return_value.state = "running"``); tests
     that don't care pay no cost beyond the patch overhead.

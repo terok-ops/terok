@@ -227,7 +227,7 @@ class ProjectActionsMixin:
     def _invalidate_image_caches() -> None:
         """Drop cached image-label lookups after an in-TUI rebuild.
 
-        The :func:`installed_agents` lru_cache is keyed on the L1 tag,
+        The [`installed_agents`][] lru_cache is keyed on the L1 tag,
         which a rebuild reuses — so without this, the picker would keep
         showing the previous agent set until the TUI restarts.
         """
@@ -278,7 +278,7 @@ class ProjectActionsMixin:
 
         Reached from the project-details screen, where a project is
         always selected.  The top-level "Authenticate agents and tools"
-        entry uses :meth:`_action_auth_host_wide` instead — it bypasses
+        entry uses [`_action_auth_host_wide`][] instead — it bypasses
         ``current_project_id`` so a stray selection in the main pane
         doesn't silently scope a host-wide intent to one project.
         """

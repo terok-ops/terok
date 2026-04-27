@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""D-Bus subcommands (sibling-wired from :mod:`terok_clearance`).
+"""D-Bus subcommands (sibling-wired from [`terok_clearance`][]).
 
-Wires terok-clearance's :data:`COMMANDS` registry into terok's CLI under
+Wires terok-clearance's [`COMMANDS`][] registry into terok's CLI under
 ``terok dbus``.  Handlers are async coroutines dispatched via
-:func:`asyncio.run`.  The group hosts both end-user tools (the
+[`asyncio.run`][].  The group hosts both end-user tools (the
 ``clearance`` shortcut mirrors the top-level one) and debug utilities
 (``notify``, ``subscribe``).
 """
@@ -20,7 +20,7 @@ from terok_clearance.cli.registry import COMMANDS, ArgDef
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
-    """Register an :class:`ArgDef` with an argparse parser."""
+    """Register an [`ArgDef`][] with an argparse parser."""
     kwargs: dict = {}
     if arg.help:
         kwargs["help"] = arg.help

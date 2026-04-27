@@ -4,7 +4,7 @@
 """Web port allocation for task containers.
 
 All port allocation flows through the shared port registry in
-:mod:`terok_sandbox.port_registry` to prevent collisions between
+[`terok_sandbox.port_registry`][] to prevent collisions between
 users on shared hosts.
 """
 

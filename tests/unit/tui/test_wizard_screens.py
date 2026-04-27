@@ -482,10 +482,10 @@ async def test_init_screen_esc_cancels_mid_run() -> None:
 
     Drives the worker to the SSH-key ``continue`` gate — where it
     parks on ``await self._ssh_continue.wait()`` — then presses Esc
-    to trigger :meth:`InitProgressScreen.action_cancel`.  Two things
+    to trigger [`InitProgressScreen.action_cancel`][].  Two things
     must hold:
 
-    * The outcome is :attr:`InitOutcome.CANCELLED`, not FAILED — a
+    * The outcome is [`InitOutcome.CANCELLED`][], not FAILED — a
       deliberate cancel is not a failure.
     * No teardown exception is raised.  The worker's ``finally``
       runs after the screen has been dismissed; the cleanup path

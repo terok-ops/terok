@@ -43,7 +43,7 @@ def complete_task_ids(
     argcomplete uses the partially-parsed namespace, which is exactly
     what we want to scope task-ID suggestions.
 
-    The prefix is run through :func:`normalize_task_id_input`, so
+    The prefix is run through [`normalize_task_id_input`][], so
     ``K3V<TAB>`` or ``k3-v<TAB>`` rewrite to the canonical lowercase
     form — the same surface-form tolerance ``resolve_task_id`` gives
     at dispatch time.
@@ -103,7 +103,7 @@ def add_task_id(parser: argparse.ArgumentParser, **kwargs: object) -> argparse.A
     """Add a ``task_id`` positional with the task-ID completer attached.
 
     Returns the argparse action.  Callers should typically precede this
-    with :func:`add_project_id` so argcomplete has a project scope to
+    with [`add_project_id`][] so argcomplete has a project scope to
     look up tasks under.
     """
     action = parser.add_argument("task_id", **kwargs)

@@ -27,7 +27,7 @@ from .log_format import auto_detect_formatter
 def _build_raw_logs_cmd(cname: str, *, follow: bool, tail: int | None) -> list[str]:
     """Build the ``podman logs`` argv for terok's raw mode.
 
-    "Raw" is a terok concept — the :class:`LogViewOptions` ``raw=True`` path
+    "Raw" is a terok concept — the [`LogViewOptions`][] ``raw=True`` path
     asks us to bypass our formatter pipeline and hand podman's byte stream
     straight to the user's terminal.  It is not a podman flag.  The caller
     uses ``os.execvp`` to replace the current process with ``podman logs``

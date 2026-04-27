@@ -7,9 +7,9 @@ Pure data types with no filesystem or subprocess I/O.  These are the
 **value objects** in the domain model: they carry configuration data but
 have no behavior beyond computed paths.
 
-:class:`ProjectConfig` is loaded from ``project.yml`` by the companion
-:mod:`~terok.lib.core.projects` module and wrapped by the rich
-:class:`~terok.lib.domain.project.Project` aggregate to provide behavior.
+[`ProjectConfig`][] is loaded from ``project.yml`` by the companion
+[`projects`][terok.lib.core.projects] module and wrapped by the rich
+[`Project`][terok.lib.domain.project.Project] aggregate to provide behavior.
 """
 
 import re
@@ -24,7 +24,7 @@ class ProjectConfig(BaseModel):
     """Resolved project configuration loaded from ``project.yml``.
 
     Pure value object — holds configuration fields with no behavior beyond
-    computed paths.  The rich domain object :class:`~terok.lib.domain.project.Project`
+    computed paths.  The rich domain object [`Project`][terok.lib.domain.project.Project]
     wraps this and provides behavior.
     """
 

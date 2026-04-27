@@ -23,7 +23,7 @@ from ...lib.orchestration.tasks import resolve_task_id
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
-    """Register an :class:`ArgDef` with an argparse parser."""
+    """Register an [`ArgDef`][] with an argparse parser."""
     kwargs: dict = {}
     if arg.help:
         kwargs["help"] = arg.help

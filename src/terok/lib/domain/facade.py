@@ -17,9 +17,9 @@ reaching into internal subpackages.
 
 Factory functions:
 
-- :func:`get_project` — load a single project by ID
-- :func:`list_projects` — return all known projects
-- :func:`derive_project` — create a new project from an existing one
+- [`get_project`][] — load a single project by ID
+- [`list_projects`][] — return all known projects
+- [`derive_project`][] — create a new project from an existing one
 
 The facade also re-exports low-level service functions (``task_new``,
 ``task_run_cli``, ``build_images``, etc.) for callers that need direct
@@ -86,7 +86,7 @@ from .vault import vault_db  # noqa: F401 — re-exported public API
 
 
 def get_project(project_id: str) -> Project:
-    """Load a project by ID and return a rich :class:`Project` aggregate."""
+    """Load a project by ID and return a rich [`Project`][] aggregate."""
     return Project(load_project(project_id))
 
 
@@ -96,7 +96,7 @@ def project_image_exists(project_id: str) -> bool:
 
 
 def list_projects() -> list[Project]:
-    """Return all known projects as rich :class:`Project` aggregates."""
+    """Return all known projects as rich [`Project`][] aggregates."""
     from ..core.projects import list_projects as _list_projects
 
     return [Project(cfg) for cfg in _list_projects()]
@@ -134,7 +134,7 @@ def provision_ssh_key(
     """Mint a vault-backed keypair for *project_id* and bind it to the project (scope).
 
     Single entry point for both the CLI and the TUI.  Rendering the
-    result for the user is the caller's job — see :func:`summarize_ssh_init`.
+    result for the user is the caller's job — see [`summarize_ssh_init`][].
     """
     from .project import make_ssh_manager
 

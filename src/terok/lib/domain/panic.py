@@ -43,7 +43,7 @@ type _Target = tuple[str, str, str, str, object]
 
 @dataclass
 class PanicResult:
-    """Outcome of an :func:`execute_panic` invocation."""
+    """Outcome of an [`execute_panic`][] invocation."""
 
     shields_raised: list[str] = field(default_factory=list)
     shield_errors: list[tuple[str, str]] = field(default_factory=list)

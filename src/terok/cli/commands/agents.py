@@ -3,7 +3,7 @@
 
 """``terok agents`` — list AI coding agents the project can pick from.
 
-Thin wrapper over :func:`terok_executor.get_roster`.  Lives in terok
+Thin wrapper over [`terok_executor.get_roster`][].  Lives in terok
 so users discover the catalogue without having to know that
 ``terok-executor`` is a separately-installable package or call it
 directly from the command line.

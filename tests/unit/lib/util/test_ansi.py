@@ -4,7 +4,7 @@
 """Unit tests for ANSI helpers — focused on the OSC 8 hyperlink escape.
 
 The colour helpers (``blue``, ``green`` …) are trivial wrappers around
-:func:`color`; their only logic is the on/off gate.  The hyperlink
+[`color`][]; their only logic is the on/off gate.  The hyperlink
 helper is the new, less-obvious one — it produces an OSC 8 sequence
 with a stable ``id=`` so terminals stitch wrapped link segments back
 into one clickable hyperlink.

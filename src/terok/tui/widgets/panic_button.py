@@ -72,7 +72,7 @@ class PanicButton(Static):
             self._disarm_timer = None
 
     def fire(self) -> None:
-        """Complete the arm-then-fire sequence: disarm and emit :class:`Fired`."""
+        """Complete the arm-then-fire sequence: disarm and emit [`Fired`][]."""
         self.disarm()
         self.post_message(self.Fired())
 

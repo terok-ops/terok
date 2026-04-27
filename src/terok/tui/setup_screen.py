@@ -3,16 +3,16 @@
 
 """Verdict + decision modal for the first-run / re-run host setup flow.
 
-Renders the current :class:`terok_sandbox.SetupVerdict` with a
+Renders the current [`terok_sandbox.SetupVerdict`][] with a
 contextual blurb and a Run / Skip choice — no subprocess plumbing here.
 The actual ``terok setup`` invocation rides on top of
-:class:`~terok.tui.worker_log_screen.WorkerLogScreen`, pushed by the
+[`WorkerLogScreen`][terok.tui.worker_log_screen.WorkerLogScreen], pushed by the
 TUI's first-run flow worker after this screen dismisses with
-:data:`SetupOutcome.SHOULD_RUN`.
+[`SetupOutcome.SHOULD_RUN`][].
 
 The verdict probe (``terok_sandbox.needs_setup``) is the same one
 ``terok task run`` enforces in
-:func:`terok.cli.commands.task._setup_verdict_or_exit` — so a verdict
+[`terok.cli.commands.task._setup_verdict_or_exit`][] — so a verdict
 of ``OK`` short-circuits with a banner instead of nudging the user
 toward a slow re-run, and a ``STALE_AFTER_DOWNGRADE`` refuses outright
 with the same wording the CLI uses.
@@ -32,13 +32,13 @@ from textual.widgets import Button, Label, Static
 
 
 class SetupOutcome(enum.Enum):
-    """User's decision on :class:`SetupScreen`.
+    """User's decision on [`SetupScreen`][].
 
     The screen does *not* run setup itself; it only collects intent.
     Translating the outcome to host-state changes is the caller's job:
 
     - ``SHOULD_RUN`` — user clicked Run; caller should push
-      :class:`~terok.tui.worker_log_screen.WorkerLogScreen` with
+      [`WorkerLogScreen`][terok.tui.worker_log_screen.WorkerLogScreen] with
       ``["terok", "setup"]``.
     - ``SKIPPED`` — user dismissed before running; the caller leaves
       the host alone.
@@ -73,11 +73,11 @@ class SetupScreen(ModalScreen[SetupOutcome]):
     Two button layouts:
 
     1. *Healthy / non-OK verdict* — Skip + Run buttons.  Clicking Run
-       dismisses with :data:`SetupOutcome.SHOULD_RUN` so the parent
-       can push the :class:`WorkerLogScreen` that owns the actual
+       dismisses with [`SetupOutcome.SHOULD_RUN`][] so the parent
+       can push the [`WorkerLogScreen`][] that owns the actual
        subprocess streaming.
     2. *Downgrade verdict* — Run is hidden; the only exit dismisses
-       with :data:`SetupOutcome.REFUSED`.  The CLI refuses with exit
+       with [`SetupOutcome.REFUSED`][].  The CLI refuses with exit
        code 4 here; this mirrors that contract by *not* offering an
        option that would make the contract meaningless.
     """
@@ -175,7 +175,7 @@ class SetupScreen(ModalScreen[SetupOutcome]):
     # ── Actions ─────────────────────────────────────────────────────────
 
     def action_close(self) -> None:
-        """Esc dismisses with :data:`SetupOutcome.CANCELLED` (or REFUSED on a downgrade)."""
+        """Esc dismisses with [`SetupOutcome.CANCELLED`][] (or REFUSED on a downgrade)."""
         self.dismiss(self._cancel_outcome())
 
     def _cancel_outcome(self) -> SetupOutcome:

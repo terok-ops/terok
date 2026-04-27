@@ -145,7 +145,7 @@ class TestProject:
         Order (lowest → highest, applied at load time):
         global ``config.yml`` ssh section → ``project.yml`` ssh section.
         The CLI override ``--use-personal-ssh`` sits one tier above
-        this and is applied in :func:`make_git_gate`, not here.
+        this and is applied in [`make_git_gate`][], not here.
 
         Sandbox owns both the schema (``RawSSHSection``) and the
         global-tier reader (``gate_use_personal_ssh_default``); terok

@@ -214,7 +214,7 @@ class ClearanceScreen(screen.Screen[None]):
         The footer is *not* composed here: when this screen is pushed
         inside the host ``terok-tui`` app its parent ``Footer`` already
         renders the active screen's bindings, and doubling up would
-        produce two footer bars.  The standalone :class:`ClearanceApp`
+        produce two footer bars.  The standalone [`ClearanceApp`][]
         composes its own ``Footer`` so the bindings still show.
         """
         yield Static(" Shield Clearance", id="clearance-header")

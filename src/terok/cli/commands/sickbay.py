@@ -506,7 +506,7 @@ def _check_selinux_policy() -> _CheckResult:
 
     The decision tree (tcp vs socket, enforcing vs permissive, policy
     installed, libselinux loadable) lives in
-    :func:`terok_sandbox.check_selinux_status` so sickbay and
+    [`terok_sandbox.check_selinux_status`][] so sickbay and
     ``terok setup`` share one source of truth; this function only
     translates the structured result into sickbay's output shape.
     """

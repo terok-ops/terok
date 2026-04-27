@@ -471,7 +471,7 @@ def _run_container(
     fresh label in the next popup.
 
     Podman command assembly (userns, shield/bypass, GPU, env redaction,
-    CDI detection) is delegated to :meth:`AgentRunner.launch_prepared`.
+    CDI detection) is delegated to [`AgentRunner.launch_prepared`][].
     In sealed isolation mode (``project.is_sealed``) the sandbox splits
     into create → copy → start instead of a single ``podman run -d``.
 
@@ -480,7 +480,7 @@ def _run_container(
         image: Container image to run.
         env: Environment variables to pass via ``-e``.
         volumes: Typed volume specs (sandbox decides mount vs inject).
-        project: The resolved :class:`ProjectConfig` (used for GPU flag).
+        project: The resolved [`ProjectConfig`][] (used for GPU flag).
         task_id: Task identifier — the second component of the clearance
             annotation triple.
         task_dir: Per-task directory (used for per-task shield state).
@@ -529,7 +529,7 @@ def _run_container(
 
 
 def _agent_runner() -> AgentRunner:
-    """Return an :class:`AgentRunner` bound to terok's bridged sandbox config."""
+    """Return an [`AgentRunner`][] bound to terok's bridged sandbox config."""
     return AgentRunner(sandbox=Sandbox(make_sandbox_config()))
 
 
@@ -706,7 +706,7 @@ def task_run_toad(
     ``terok-toad-entry``: it starts Caddy on the published port, toad on
     an internal loopback port, and emits ``TEROK_READY`` once both are
     listening.  Caddy enforces the per-task token (see
-    :func:`_ensure_toad_token`) on every request.
+    [`_ensure_toad_token`][]) on every request.
     """
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id, "toad")
@@ -883,7 +883,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     that runs init-ssh-and-repo.sh followed by the agent command.
 
     Args:
-        request: All per-run options bundled in a :class:`HeadlessRunRequest`.
+        request: All per-run options bundled in a [`HeadlessRunRequest`][].
 
     Returns the task_id.
     """

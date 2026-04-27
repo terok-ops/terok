@@ -4,7 +4,7 @@
 """Tests for ``terok setup`` — global bootstrap command.
 
 Setup now delegates the service stack (shield + vault + gate + clearance)
-to :func:`terok_executor.ensure_sandbox_ready`; terok's own phases
+to [`terok_executor.ensure_sandbox_ready`][]; terok's own phases
 shrink to desktop-entry install.  Every service-level assertion now
 lives in the executor / sandbox test suites.
 """

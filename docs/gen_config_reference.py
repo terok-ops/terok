@@ -4,8 +4,8 @@
 """Generate a config reference page from the Pydantic YAML schema models.
 
 Runs during ``mkdocs build`` via the mkdocs-gen-files plugin.  Introspects
-:class:`~terok.lib.core.yaml_schema.RawProjectYaml` and
-:class:`~terok.lib.core.yaml_schema.RawGlobalConfig` to produce:
+[`RawProjectYaml`][terok.lib.core.yaml_schema.RawProjectYaml] and
+[`RawGlobalConfig`][terok.lib.core.yaml_schema.RawGlobalConfig] to produce:
 
 - Per-section Markdown tables with field name, type, default, and description
 - A full annotated YAML example for each config file

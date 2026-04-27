@@ -7,7 +7,7 @@
 Translates project configuration and security mode into the environment
 variables and volume mounts that ``podman run`` needs when launching a
 task container.  Shared config mounts and base env vars are delegated to
-:func:`terok_executor.assemble_container_env`; this module adds terok-specific
+[`terok_executor.assemble_container_env`][]; this module adds terok-specific
 concerns (gate server, vault with OAuth/socket/SSH support).
 """
 
@@ -32,7 +32,7 @@ from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 _logger = logging.getLogger(__name__)
 
 _CONTAINER_RUNTIME_DIR = "/run/terok"
-"""Container-side mount point — must match :data:`terok_sandbox.CONTAINER_RUNTIME_DIR`."""
+"""Container-side mount point — must match [`terok_sandbox.CONTAINER_RUNTIME_DIR`][]."""
 
 _CONTAINER_GATE_PORT = 9418
 """Loopback TCP port the container-side socat bridge listens on in socket mode.
@@ -380,7 +380,7 @@ def build_task_env_and_volumes(
 
     Delegates shared config mounts, base env vars, workspace volume, git
     identity, and OpenCode provider env to
-    :func:`terok_executor.assemble_container_env`, then layers terok-specific
+    [`terok_executor.assemble_container_env`][], then layers terok-specific
     concerns: ``PROJECT_ID``, gate server URLs, and the full vault
     (OAuth, socket transport, SSH agent).
 

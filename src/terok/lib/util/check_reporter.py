@@ -48,10 +48,10 @@ def _worse(a: str, b: str) -> str:
 class CheckReporter:
     """Print check progress line-by-line with aligned ``ok``/``WARN``/``ERROR`` markers.
 
-    Use :meth:`emit` for one-shot checks whose label is known up front.
-    Use :meth:`begin` + :meth:`end` when the detail is computed between
+    Use [`emit`][] for one-shot checks whose label is known up front.
+    Use [`begin`][] + [`end`][] when the detail is computed between
     showing the label and showing the verdict — the two halves land on
-    the same terminal line.  Use :meth:`group` to batch a category of
+    the same terminal line.  Use [`group`][] to batch a category of
     checks under a single heading.
 
     Writes go through an injectable *stream* so tests can capture output
@@ -75,7 +75,7 @@ class CheckReporter:
     def begin(self, label: str) -> None:
         """Emit ``  <label> ....`` without a trailing newline and flush.
 
-        The caller is expected to follow with :meth:`end` on the same
+        The caller is expected to follow with [`end`][] on the same
         logical check — the status marker and detail land on the same
         visible line.
         """
@@ -83,9 +83,9 @@ class CheckReporter:
         self._stream.flush()
 
     def end(self, status: str, detail: str) -> None:
-        """Close the currently-open line started by :meth:`begin`.
+        """Close the currently-open line started by [`begin`][].
 
-        Updates :attr:`worst_status`.  ``detail`` is wrapped in
+        Updates [`worst_status`][].  ``detail`` is wrapped in
         parentheses — leave it empty for a bare marker.
         """
         self._worst = _worse(self._worst, status)
@@ -180,7 +180,7 @@ class CheckReporter:
 
 
 class _GroupContext:
-    """Collector handed to the caller inside :meth:`CheckReporter.group`.
+    """Collector handed to the caller inside [`CheckReporter.group`][].
 
     Not part of the public API — callers receive it via the context
     manager and only use ``add`` / ``track``.

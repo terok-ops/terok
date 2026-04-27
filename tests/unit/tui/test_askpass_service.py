@@ -1,16 +1,16 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for :mod:`terok.tui.askpass_service`.
+"""Tests for [`terok.tui.askpass_service`][].
 
 Split into three groups:
 
-- :class:`TestBuildEnv` — pure-function checks on the env builder
+- [`TestBuildEnv`][] — pure-function checks on the env builder
   (respect pre-existing GUI askpass, inject ours otherwise, always set
   ``SSH_ASKPASS_REQUIRE=force``).
-- :class:`TestServiceLifecycle` — :class:`AskpassService` start / stop
+- [`TestServiceLifecycle`][] — [`AskpassService`][] start / stop
   / idempotency and socket permissions.
-- :class:`TestServiceRoundTrip` — end-to-end helper → service → modal
+- [`TestServiceRoundTrip`][] — end-to-end helper → service → modal
   round trip driven through ``App.run_test()``.
 """
 
@@ -113,7 +113,7 @@ class TestBuildEnv:
 class TestSocketPath:
     """Per-process socket path under terok's namespace runtime dir.
 
-    We delegate to :func:`terok_sandbox.paths.namespace_runtime_dir`
+    We delegate to [`terok_sandbox.paths.namespace_runtime_dir`][]
     for the XDG resolution order — patching it out lets us pin the
     path regardless of the host's env and ensures no ``/tmp`` fallback
     leaks back in.
@@ -236,7 +236,7 @@ class TestServiceLifecycle:
 
 
 class _ModalAnsweringApp(App):
-    """App that auto-dismisses any :class:`AskpassModal` that gets pushed.
+    """App that auto-dismisses any [`AskpassModal`][] that gets pushed.
 
     ``canned_answer`` is the value it dismisses with: a string means
     "user typed this passphrase"; ``None`` means "user clicked Cancel".
@@ -253,7 +253,7 @@ class _ModalAnsweringApp(App):
         self.install_screen = None  # placeholder — real work in client code
 
     async def _auto_answer(self) -> None:
-        """Wait for an :class:`AskpassModal` and dismiss it after a short pause."""
+        """Wait for an [`AskpassModal`][] and dismiss it after a short pause."""
         # Busy-wait briefly until the modal lands on top of the stack.
         for _ in range(50):
             if isinstance(self.screen, AskpassModal):
@@ -324,7 +324,7 @@ class TestServiceRoundTrip:
 
 
 class TestHelperMain:
-    """Cover the :func:`terok.tui.askpass.main` code paths via direct calls.
+    """Cover the [`terok.tui.askpass.main`][] code paths via direct calls.
 
     These use a tiny blocking-socket stand-in for the service so we don't
     have to drag asyncio in — the protocol layer is identical.

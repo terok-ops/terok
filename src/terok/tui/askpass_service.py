@@ -7,20 +7,20 @@ Four pieces that together let ``use_personal_ssh: true`` projects
 prompt for passphrases through the TUI instead of corrupting the
 terminal frame or silently failing:
 
-- :class:`AskpassService` — the asyncio-based unix-socket server.
-  Bound lazily from :meth:`start`, torn down by :meth:`stop`; exposes
+- [`AskpassService`][] — the asyncio-based unix-socket server.
+  Bound lazily from [`start`][], torn down by [`stop`][]; exposes
   the socket path so callers can inject it into subprocess env.
-- :class:`AskpassModal` — one-line passphrase prompt as a Textual
-  :class:`ModalScreen`.  Dismisses with the passphrase, or ``None`` on
+- [`AskpassModal`][] — one-line passphrase prompt as a Textual
+  [`ModalScreen`][].  Dismisses with the passphrase, or ``None`` on
   cancel.
-- :func:`gui_askpass_usable` — predicate used by callers to decide
+- [`gui_askpass_usable`][] — predicate used by callers to decide
   whether to start the service at all.  When a user's desktop askpass
   is reachable, we'd rather use it than our modal.
-- :func:`build_askpass_env` — pure function that injects the helper
+- [`build_askpass_env`][] — pure function that injects the helper
   env vars when we *do* want our own askpass to run.
 
 The service is reachable only via a unix socket under terok's runtime
-namespace (:func:`terok.lib.core.paths.runtime_dir`) with mode
+namespace ([`terok.lib.core.paths.runtime_dir`][]) with mode
 ``0600`` — the filesystem is the auth boundary.  No socket is ever
 bound until a project with ``use_personal_ssh=true`` actually spawns
 a subprocess *and* lacks a usable GUI askpass, so users who don't opt
@@ -67,7 +67,7 @@ def gui_askpass_usable(env: Mapping[str, str]) -> bool:
     take over instead.
 
     Callers use this to short-circuit before spinning up an
-    :class:`AskpassService` whose socket would never be consulted.
+    [`AskpassService`][] whose socket would never be consulted.
     """
     return bool(env.get("SSH_ASKPASS") and (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")))
 
@@ -108,7 +108,7 @@ def build_askpass_env(
 def default_socket_path(*, pid: int | None = None) -> Path:
     """Return a per-process socket path under terok's runtime namespace.
 
-    Delegates to :func:`terok.lib.core.paths.runtime_dir` — the
+    Delegates to [`terok.lib.core.paths.runtime_dir`][] — the
     boundary-respecting wrapper around the sandbox's namespace
     resolver (``$XDG_RUNTIME_DIR/terok/`` → ``$XDG_STATE_HOME/terok/``
     → ``~/.local/state/terok/``).  No ``/tmp`` fallback means no
@@ -220,13 +220,13 @@ class AskpassModal(ModalScreen["str | None"]):
 class AskpassService:
     """Asyncio unix-socket server that dispatches passphrase modals on the TUI.
 
-    One instance per :class:`~textual.app.App`.  Started lazily by the
+    One instance per [`App`][textual.app.App].  Started lazily by the
     wizard / subprocess layer only when a project with
     ``use_personal_ssh=true`` is about to spawn a child — users who
     don't opt in never trigger a socket bind.
 
     Concurrency: the listener serialises modal pushes with an
-    :class:`asyncio.Lock`, so if two helpers connect at once they queue
+    [`asyncio.Lock`][], so if two helpers connect at once they queue
     up naturally.  This is deliberate — Textual only renders one modal
     at a time anyway.
     """
@@ -241,7 +241,7 @@ class AskpassService:
         """Construct the service — does not bind the socket or locate the helper.
 
         Both *socket_path* and *helper_bin* are resolved lazily at
-        :meth:`start` / :attr:`helper_bin` access — the service is
+        [`start`][] / [`helper_bin`][] access — the service is
         created at TUI mount but often never started, so we shouldn't
         fail the whole TUI if the helper happens to be missing.
         """
@@ -253,7 +253,7 @@ class AskpassService:
 
     @property
     def socket_path(self) -> Path:
-        """Filesystem path of the unix socket (bound iff :meth:`start` has run)."""
+        """Filesystem path of the unix socket (bound iff [`start`][] has run)."""
         return self._socket_path
 
     @property

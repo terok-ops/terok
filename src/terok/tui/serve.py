@@ -132,7 +132,7 @@ def _print_first_run_banner(password: str) -> None:
 def _build_server(
     command: str, host: str, port: int, public_url: str | None, stored_hash: str
 ) -> Server:
-    """A textual-serve :class:`Server` with Basic-auth middleware already attached.
+    """A textual-serve [`Server`][] with Basic-auth middleware already attached.
 
     We monkey-patch ``_make_app`` on the instance rather than subclassing
     so the upstream call shape stays unchanged.  Breaks only if
