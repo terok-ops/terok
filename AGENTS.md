@@ -105,17 +105,22 @@ make spdx NAME="Real Human Name" FILES="src/terok/new_file.py"  # Add SPDX heade
 
 ## External Package Dependencies
 
-terok depends on three sibling packages, each pinned to a GitHub release wheel:
+terok depends on four sibling packages, each pinned to a GitHub release wheel:
 
 ```text
-terok → terok-executor → terok-sandbox → terok-shield
+terok ──┬─> terok-executor ──> terok-sandbox ─┬─> terok-shield     (egress firewall)
+        ├─> terok-sandbox     (also direct)   └─> terok-clearance  (operator prompts)
+        └─> terok-clearance   (also direct)
 ```
 
-Both `terok-executor` and `terok-sandbox` are listed as **explicit** dependencies in `pyproject.toml` — even though sandbox is pulled transitively via executor. This is intentional: terok imports directly from both packages, so the dependency must be declared, not just inherited.
+`terok-shield` and `terok-clearance` are leaf packages with no terok-* dependencies of their own.
+
+All three of `terok-executor`, `terok-sandbox`, and `terok-clearance` are listed as **explicit** dependencies in `pyproject.toml` — even though sandbox is pulled transitively via executor, and clearance is also pulled by sandbox. This is intentional: terok imports directly from each, so the dependency must be declared, not just inherited.
 
 **Version sync rules:**
 
 - When bumping `terok-sandbox` in terok, the same version must be pinned in `terok-executor`. Otherwise Poetry will reject conflicting URL pins. Bump terok-executor first, release it, then bump both in terok.
+- When bumping `terok-clearance` in terok, the same version must be pinned in `terok-sandbox` (for the same reason). Bump terok-sandbox first, release it, then bump both in terok.
 - When bumping `terok-shield` in terok-sandbox, no direct impact on terok (transitive). But if terok-sandbox re-exports shield types that terok uses, the shield version must be compatible.
 - After any version bump: run `poetry lock` and commit both `pyproject.toml` and `poetry.lock`.
 
