@@ -111,10 +111,7 @@ nav:
     - Agent Compatibility Matrix: agent-compat-matrix.md
     - Integration Test Map: test_map.md
     - CI Workflow Map: ci_map.md
-    - Code Quality Report: quality-report.md
-    - Brainstorming:
-      - Agent Helpers: brainstorming/todo-agent-helpers.md
-      - Per-Task Context Isolation: brainstorming/per-task-context-isolation.md
+    - Code Metrics: quality-report.md
   - API Reference: reference/
 
 extra:

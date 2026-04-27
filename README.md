@@ -58,22 +58,6 @@ Python packages.
 | [terok-shield](https://github.com/terok-ai/terok-shield) | nftables egress firewall + audit |
 | [terok-clearance](https://github.com/terok-ai/terok-clearance) | Live allow/deny prompts via D-Bus + varlink |
 
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Concepts](docs/concepts.md) | Architecture, security model, design rationale |
-| [Full Usage Guide](docs/usage.md) | Complete user documentation |
-| [Developer Guide](docs/developer.md) | Internal architecture and contributor docs |
-| [Container Layers](docs/container-layers.md) | Container image architecture |
-| [Container Lifecycle](docs/container-lifecycle.md) | Container and image lifecycle |
-| [Shared Directories](docs/shared-dirs.md) | Volume mounts and vault |
-| [Security Modes](docs/git-gate-and-security-modes.md) | Online vs gatekeeping modes |
-| [Shield](docs/shield-security.md) | Egress firewall (terok-shield) |
-| [Agent Compatibility](docs/agent-compat-matrix.md) | Per-agent feature support matrix |
-| [Login Design](docs/login-design.md) | Login session architecture |
-| [Docker](docs/docker.md) | Running terok inside Docker (experimental) |
-
 ## Quick Start
 
 ### Prerequisites
