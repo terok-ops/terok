@@ -1,7 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""``config`` subcommand group — paths overview, resolved agent config, imports."""
+"""Inspect terok configuration: resolution paths, the resolved agent stack, and OpenCode imports.
+
+Exposes the ``terok config`` subcommand group:
+
+- ``config paths`` — list every directory terok reads from or writes to,
+  with existence flags and any active environment-variable overrides.
+- ``config resolved`` — render the per-project agent config with the
+  scope provenance that produced each key (optionally under a preset).
+- ``config import-opencode`` — copy a user's ``opencode.json`` into the
+  shared vault mount so plain ``opencode`` works inside task containers.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +21,7 @@ import os
 import shutil
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from ...lib.core.config import (
     build_dir as _build_dir,
@@ -80,14 +91,177 @@ def dispatch(args: argparse.Namespace) -> bool:
     return True
 
 
+# ── config paths ───────────────────────────────────────────────────────
+
+
+def _print_config() -> None:
+    """Display every configuration, template and output path terok touches."""
+    color = _supports_color()
+    _print_read_paths(color)
+    _print_package_resources(color)
+    _print_writable_paths(color)
+    _print_environment_overrides(color)
+    _print_completion_status(color)
+
+
+def _print_read_paths(color: bool) -> None:
+    """Configuration sources: global config search order, vault, projects, presets."""
+    print("Configuration (read):")
+
+    gcfg = _global_config_path()
+    print(
+        f"- Global config file: {_gray(str(gcfg), color)} "
+        f"(exists: {_yes_no(Path(gcfg).is_file(), color)})"
+    )
+    paths = _global_config_search_paths()
+    if paths:
+        print("- Config merge order (lowest → highest priority):")
+        for p in paths:
+            print(f"  • {_gray(str(p), color)} (exists: {_yes_no(Path(p).is_file(), color)})")
+
+    try:
+        print(f"- Vault dir: {_gray(str(_vault_dir()), color)}")
+    except OSError as e:
+        print(f"- Vault dir: error: {e}")
+
+    uproj = _user_projects_dir()
+    sproj = _projects_dir()
+    print(
+        f"- Projects (user): {_gray(str(uproj), color)} "
+        f"(exists: {_yes_no(Path(uproj).is_dir(), color)})"
+    )
+    print(
+        f"- Projects (system): {_gray(str(sproj), color)} "
+        f"(exists: {_yes_no(Path(sproj).is_dir(), color)})"
+    )
+
+    gpresets = _user_presets_dir()
+    print(
+        f"- Presets (user): {_gray(str(gpresets), color)} "
+        f"(exists: {_yes_no(Path(gpresets).is_dir(), color)})"
+    )
+    bpresets = _bundled_presets_dir()
+    print(f"- Presets (bundled): {_gray(str(bpresets), color)}")
+    for name in _list_bundled_preset_names(bpresets):
+        print(f"  • {name}")
+
+    projs = list_projects()
+    if projs:
+        print("- Project configs:")
+        for p in projs:
+            print(f"  • {_violet(str(p.id), color)}: {_gray(str(p.root / 'project.yml'), color)}")
+    else:
+        print("- Project configs: none found")
+
+
+def _print_package_resources(color: bool) -> None:
+    """Bundled package resources: project Dockerfile templates and helper scripts."""
+    print("Templates (read):")
+    tmpl_pkg = resources.files("terok") / "resources" / "templates"
+    print(f"- Package templates dir: {_gray(str(tmpl_pkg), color)}")
+    for name in _list_resource_names(tmpl_pkg, suffix=".template", warn_label="templates"):
+        print(f"  • {_gray(str(name), color)}")
+
+    scr_pkg = resources.files("terok") / "resources" / "scripts"
+    print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color)}")
+    for name in _list_resource_names(scr_pkg, suffix=None, warn_label="scripts"):
+        print(f"  • {_gray(str(name), color)}")
+
+
+def _print_writable_paths(color: bool) -> None:
+    """Locations terok creates or modifies: state dir, gate repos, build outputs."""
+    print("Writable locations (write):")
+    sdir = _core_state_dir()
+    print(f"- State dir: {_gray(str(sdir), color)} (exists: {_yes_no(Path(sdir).is_dir(), color)})")
+    gbase = _gate_repos_dir()
+    print(
+        f"- Gate repos dir: {_gray(str(gbase), color)} (exists: {_yes_no(gbase.is_dir(), color)})"
+    )
+    bdir = _build_dir()
+    print(f"- Build dir: {_gray(str(bdir), color)}")
+
+    projs = list_projects()
+    if not projs:
+        return
+    print("- Expected generated files per project:")
+    for p in projs:
+        base = bdir / p.id
+        for fname in (
+            "L0.Dockerfile",
+            "L1.cli.Dockerfile",
+            "L1.ui.Dockerfile",
+            "L2.Dockerfile",
+        ):
+            path = base / fname
+            print(
+                f"  • {_violet(str(p.id), color)}: "
+                f"{_gray(str(path), color)} "
+                f"(exists: {_yes_no(path.is_file(), color)})"
+            )
+
+
+def _print_environment_overrides(color: bool) -> None:
+    """Active environment-variable overrides for path resolution, if any."""
+    print("Environment overrides (if set):")
+    for var in (
+        "TEROK_CONFIG_FILE",
+        "TEROK_CONFIG_DIR",
+        "TEROK_VAULT_DIR",
+        "TEROK_STATE_DIR",
+        "TEROK_RUNTIME_DIR",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+    ):
+        val = os.environ.get(var)
+        if val is not None:
+            print(f"- {var}={_gray(val, color)}")
+
+
+def _print_completion_status(color: bool) -> None:
+    """Whether shell completions are installed, with a hint to enable them."""
+    installed = _is_completion_installed()
+    suffix = "" if installed else "  (run: terok completions install)"
+    print(f"Shell completions: {_yes_no(installed, color)}{suffix}")
+
+
+def _list_bundled_preset_names(bpresets: Path) -> list[str]:
+    """YAML file stems under the bundled presets directory."""
+    try:
+        return sorted(
+            p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
+        )
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        print(f"  Warning: could not list bundled presets: {e}")
+        return []
+
+
+def _list_resource_names(pkg: Any, *, suffix: str | None, warn_label: str) -> list[str]:
+    """Sorted file names under a package resource directory, filtered by *suffix*."""
+    try:
+        names = [
+            child.name
+            for child in pkg.iterdir()
+            if child.is_file() and (suffix is None or child.name.endswith(suffix))
+        ]
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        print(f"  Warning: could not list {warn_label}: {e}")
+        return []
+    return sorted(names)
+
+
+# ── config resolved ────────────────────────────────────────────────────
+
+
 def _cmd_config_resolved(project_id: str, preset: str | None) -> None:
     """Show resolved agent config with provenance annotations."""
-    import json
-
     from ...lib.core.projects import load_project
     from ...lib.orchestration.agent_config import build_agent_config_stack
 
-    color_enabled = _supports_color()
+    color = _supports_color()
 
     project = load_project(project_id)
     stack = build_agent_config_stack(
@@ -99,7 +273,6 @@ def _cmd_config_resolved(project_id: str, preset: str | None) -> None:
     resolved = stack.resolve()
     scopes = stack.scopes
 
-    # Print provenance per level
     if not scopes and not resolved:
         print(f"No agent config defined for project '{project_id}'")
         return
@@ -111,14 +284,17 @@ def _cmd_config_resolved(project_id: str, preset: str | None) -> None:
 
     for scope in scopes:
         keys = ", ".join(sorted(scope.data.keys()))
-        print(f"  [{_gray(scope.level, color_enabled)}] keys: {keys}")
+        print(f"  [{_gray(scope.level, color)}] keys: {keys}")
 
     print()
     print(json.dumps(resolved, indent=2, default=str))
 
 
+# ── config import-opencode ─────────────────────────────────────────────
+
+
 def _cmd_import_opencode(file_path: str) -> None:
-    """Import an OpenCode config file into the shared opencode mount."""
+    """Copy an ``opencode.json`` into the shared vault mount used by task containers."""
     src = Path(file_path)
     if not src.is_file():
         raise SystemExit(f"File not found: {src}")
@@ -137,154 +313,3 @@ def _cmd_import_opencode(file_path: str) -> None:
     print(f"Imported OpenCode config to: {dest}")
     print("This config will be used by plain 'opencode' inside task containers.")
     print(f"To edit further: $EDITOR {dest}")
-
-
-def _print_config() -> None:
-    """Display all configuration, template and output paths."""
-    color_enabled = _supports_color()
-    # READ PATHS
-    print("Configuration (read):")
-    gcfg = _global_config_path()
-    gcfg_exists = Path(gcfg).is_file()
-    print(
-        f"- Global config file: {_gray(str(gcfg), color_enabled)} "
-        f"(exists: {_yes_no(gcfg_exists, color_enabled)})"
-    )
-    paths = _global_config_search_paths()
-    if paths:
-        print("- Config merge order (lowest → highest priority):")
-        for p in paths:
-            exists = Path(p).is_file()
-            print(f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})")
-    # Vault dir
-    try:
-        print(f"- Vault dir: {_gray(str(_vault_dir()), color_enabled)}")
-    except OSError as e:
-        print(f"- Vault dir: error: {e}")
-
-    uproj = _user_projects_dir()
-    sproj = _projects_dir()
-    uproj_exists = Path(uproj).is_dir()
-    print(
-        f"- Projects (user): {_gray(str(uproj), color_enabled)} "
-        f"(exists: {_yes_no(uproj_exists, color_enabled)})"
-    )
-    print(
-        f"- Projects (system): {_gray(str(sproj), color_enabled)} "
-        f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
-    )
-    gpresets = _user_presets_dir()
-    print(
-        f"- Presets (user): {_gray(str(gpresets), color_enabled)} "
-        f"(exists: {_yes_no(Path(gpresets).is_dir(), color_enabled)})"
-    )
-    bpresets = _bundled_presets_dir()
-    bpresets_names: list[str] = []
-    try:
-        bpresets_names = sorted(
-            p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
-        )
-    except FileNotFoundError:
-        pass  # Directory may not exist in some installations
-    except OSError as e:
-        print(f"  Warning: could not list bundled presets: {e}")
-    print(f"- Presets (bundled): {_gray(str(bpresets), color_enabled)}")
-    if bpresets_names:
-        for n in bpresets_names:
-            print(f"  • {n}")
-
-    # Project configs discovered
-    projs = list_projects()
-    if projs:
-        print("- Project configs:")
-        for p in projs:
-            print(
-                f"  • {_violet(str(p.id), color_enabled)}: "
-                f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
-            )
-    else:
-        print("- Project configs: none found")
-
-    # Templates (package resources)
-    print("Templates (read):")
-    tmpl_pkg = resources.files("terok") / "resources" / "templates"
-    try:
-        names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
-    except FileNotFoundError:
-        names = []
-    except OSError as e:
-        names = []
-        print(f"  Warning: could not list templates: {e}")
-    print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
-    if names:
-        for n in sorted(names):
-            print(f"  • {_gray(str(n), color_enabled)}")
-
-    # Scripts (package resources)
-    scr_pkg = resources.files("terok") / "resources" / "scripts"
-    try:
-        scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
-    except FileNotFoundError:
-        scr_names = []
-    except OSError as e:
-        scr_names = []
-        print(f"  Warning: could not list scripts: {e}")
-    print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
-    if scr_names:
-        for n in sorted(scr_names):
-            print(f"  • {_gray(str(n), color_enabled)}")
-
-    # WRITE PATHS
-    print("Writable locations (write):")
-    sdir = _core_state_dir()
-    sdir_exists = Path(sdir).is_dir()
-    print(
-        f"- State dir: {_gray(str(sdir), color_enabled)} "
-        f"(exists: {_yes_no(sdir_exists, color_enabled)})"
-    )
-    gbase = _gate_repos_dir()
-    gbase_exists = gbase.is_dir()
-    print(
-        f"- Gate repos dir: {_gray(str(gbase), color_enabled)} "
-        f"(exists: {_yes_no(gbase_exists, color_enabled)})"
-    )
-    bdir = _build_dir()
-    print(f"- Build dir: {_gray(str(bdir), color_enabled)}")
-    if projs:
-        print("- Expected generated files per project:")
-        for p in projs:
-            base = bdir / p.id
-            for fname in (
-                "L0.Dockerfile",
-                "L1.cli.Dockerfile",
-                "L1.ui.Dockerfile",
-                "L2.Dockerfile",
-            ):
-                path = base / fname
-                print(
-                    f"  • {_violet(str(p.id), color_enabled)}: "
-                    f"{_gray(str(path), color_enabled)} "
-                    f"(exists: {_yes_no(path.is_file(), color_enabled)})"
-                )
-
-    # ENVIRONMENT
-    print("Environment overrides (if set):")
-    for var in (
-        "TEROK_CONFIG_FILE",
-        "TEROK_CONFIG_DIR",
-        "TEROK_VAULT_DIR",
-        "TEROK_STATE_DIR",
-        "TEROK_RUNTIME_DIR",
-        "XDG_DATA_HOME",
-        "XDG_CONFIG_HOME",
-    ):
-        val = os.environ.get(var)
-        if val is not None:
-            print(f"- {var}={_gray(val, color_enabled)}")
-
-    # Shell completions
-    comp_installed = _is_completion_installed()
-    print(
-        f"Shell completions: {_yes_no(comp_installed, color_enabled)}"
-        + ("" if comp_installed else "  (run: terok completions install)")
-    )

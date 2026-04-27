@@ -1,7 +1,22 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Platform-aware path resolution for config, state, and runtime directories."""
+"""Resolves where terok stores config, state, vault, and runtime data on this host.
+
+Each public function returns a :class:`pathlib.Path` for one well-known
+location and is the single source of truth for that location.  Callers
+import the function rather than recomputing the path so a future XDG /
+deployment shift only has to be made here.
+
+The four families:
+
+- **Configuration** — read by terok at startup (project files, presets).
+- **State** — long-lived data terok writes (build artefacts, task
+  metadata, panic lock, log).
+- **Vault** — long-lived sensitive data (token broker DB, signer keys,
+  agent config mounts), shared across the terok ecosystem.
+- **Runtime** — transient runtime artefacts (sockets, pid files, FIFOs).
+"""
 
 import getpass
 import os
@@ -21,12 +36,7 @@ APP_NAME = "terok"
 _VAULT_SUBDIR = "vault"
 
 
-def _is_root() -> bool:
-    """Return True if the current process is running as root."""
-    try:
-        return os.geteuid() == 0  # type: ignore[attr-defined]
-    except AttributeError:
-        return getpass.getuser() == "root"
+# ── Configuration ──────────────────────────────────────────────────────
 
 
 def config_root() -> Path:
@@ -48,6 +58,9 @@ def config_root() -> Path:
     if _user_config_dir is not None:
         return Path(_user_config_dir(APP_NAME))
     return Path.home() / ".config" / APP_NAME
+
+
+# ── State ──────────────────────────────────────────────────────────────
 
 
 def state_root() -> Path:
@@ -74,6 +87,43 @@ def core_state_dir() -> Path:
     if env:
         return Path(env).expanduser().resolve()
     return (state_root() / "core").resolve()
+
+
+# ── Vault ──────────────────────────────────────────────────────────────
+
+
+def vault_root() -> Path:
+    """Shared vault directory used by all terok ecosystem packages.
+
+    Houses token broker DB, SSH signer keys, and agent config mounts.
+    Lives under the ``terok/`` namespace so a single ``rm -rf`` or backup
+    captures everything.
+
+    Priority: ``TEROK_VAULT_DIR`` → ``TEROK_CREDENTIALS_DIR`` (deprecated
+    fallback) → ``/var/lib/terok/vault`` (root) → XDG data dir.
+    """
+    env = os.getenv("TEROK_VAULT_DIR")
+    if env:
+        return Path(env).expanduser()
+    legacy_env = os.getenv("TEROK_CREDENTIALS_DIR")
+    if legacy_env:
+        warnings.warn(
+            "TEROK_CREDENTIALS_DIR is deprecated; use TEROK_VAULT_DIR instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Path(legacy_env).expanduser()
+    if _is_root():
+        return Path("/var/lib") / APP_NAME / _VAULT_SUBDIR
+    if _user_data_dir is not None:
+        return Path(_user_data_dir(APP_NAME)) / _VAULT_SUBDIR
+    xdg = os.getenv("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / APP_NAME / _VAULT_SUBDIR
+    return Path.home() / ".local" / "share" / APP_NAME / _VAULT_SUBDIR
+
+
+# ── Runtime ────────────────────────────────────────────────────────────
 
 
 def runtime_root() -> Path:
@@ -116,32 +166,12 @@ def runtime_dir() -> Path:
     return namespace_runtime_dir()
 
 
-def vault_root() -> Path:
-    """Shared vault directory used by all terok ecosystem packages.
+# ── Helpers ────────────────────────────────────────────────────────────
 
-    Houses token broker DB, SSH signer keys, and agent config mounts.
-    Lives under the ``terok/`` namespace so a single ``rm -rf`` or backup
-    captures everything.
 
-    Priority: ``TEROK_VAULT_DIR`` → ``TEROK_CREDENTIALS_DIR`` (deprecated
-    fallback) → ``/var/lib/terok/vault`` (root) → XDG data dir.
-    """
-    env = os.getenv("TEROK_VAULT_DIR")
-    if env:
-        return Path(env).expanduser()
-    legacy_env = os.getenv("TEROK_CREDENTIALS_DIR")
-    if legacy_env:
-        warnings.warn(
-            "TEROK_CREDENTIALS_DIR is deprecated; use TEROK_VAULT_DIR instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return Path(legacy_env).expanduser()
-    if _is_root():
-        return Path("/var/lib") / APP_NAME / _VAULT_SUBDIR
-    if _user_data_dir is not None:
-        return Path(_user_data_dir(APP_NAME)) / _VAULT_SUBDIR
-    xdg = os.getenv("XDG_DATA_HOME")
-    if xdg:
-        return Path(xdg) / APP_NAME / _VAULT_SUBDIR
-    return Path.home() / ".local" / "share" / APP_NAME / _VAULT_SUBDIR
+def _is_root() -> bool:
+    """Return True if the current process is running as root."""
+    try:
+        return os.geteuid() == 0  # type: ignore[attr-defined]
+    except AttributeError:
+        return getpass.getuser() == "root"

@@ -1,14 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Task display types, lifecycle state, and status computation.
+"""Render task lifecycle, mode, and project badges as labels and emoji.
 
-Provides display-oriented dataclasses (``StatusInfo``, ``ModeInfo``),
-status/mode lookup tables, ``TaskState`` (the lifecycle fields needed
-for display), and functions for computing the effective status of a task.
+Houses the dataclasses and lookup tables that turn raw container state
+into display strings, plus the small bit of logic that computes the
+"effective" status from a task's lifecycle fields.
 
-Split from ``tasks.py`` to decouple presentation data from task
-lifecycle and metadata I/O.
+Split from ``tasks.py`` so presentation data does not pull in task
+metadata I/O.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..util.yaml import YAMLError, load as _yaml_load
+
+# ── Display value objects ──────────────────────────────────────────────
 
 
 @dataclass
@@ -50,6 +52,17 @@ class ModeInfo:
     label: str
 
 
+@dataclass(frozen=True)
+class ProjectBadge:
+    """Display attributes for a project-level badge (security class, GPU, etc.)."""
+
+    emoji: str
+    label: str
+
+
+# ── Lookup tables ──────────────────────────────────────────────────────
+
+
 STATUS_DISPLAY: dict[str, StatusInfo] = {
     "running": StatusInfo(label="running", emoji="\U0001f7e2", color="green"),
     "init": StatusInfo(label="init", emoji="\U0001f7e1", color="yellow"),
@@ -68,15 +81,6 @@ MODE_DISPLAY: dict[str | None, ModeInfo] = {
     None: ModeInfo(emoji="\U0001f997", label=""),
 }
 
-
-@dataclass(frozen=True)
-class ProjectBadge:
-    """Display attributes for a project-level badge (security class, GPU, etc.)."""
-
-    emoji: str
-    label: str
-
-
 SECURITY_CLASS_DISPLAY: dict[str, ProjectBadge] = {
     "gatekeeping": ProjectBadge(emoji="\U0001f6aa", label="gate"),
     "online": ProjectBadge(emoji="\U0001f310", label="online"),
@@ -93,33 +97,7 @@ GPU_DISPLAY: dict[bool, ProjectBadge] = {
 }
 
 
-def has_gpu(project: Any) -> bool:
-    """Check whether a project has GPU enabled in its ``project.yml``.
-
-    Accepts any object with a ``root`` attribute pointing to the project
-    directory (typically a ``Project`` instance).  Returns ``False`` on
-    any I/O or parse error.
-    """
-    root = getattr(project, "root", None)
-    if root is None:
-        return False
-    try:
-        cfg = _yaml_load((root / "project.yml").read_text()) or {}
-    except (OSError, TypeError, AttributeError, YAMLError):
-        return False
-    gpus = (cfg.get("run") or {}).get("gpus")
-    if isinstance(gpus, str):
-        return gpus.lower() == "all"
-    if isinstance(gpus, bool):
-        return gpus
-    return False
-
-
-def _exit_code_status(exit_code: int | None) -> str | None:
-    """Map an exit code to a terminal status, or ``None`` if not terminal."""
-    if exit_code is None:
-        return None
-    return "completed" if exit_code == 0 else "failed"
+# ── Effective status ───────────────────────────────────────────────────
 
 
 def effective_status(task: TaskState) -> str:
@@ -147,10 +125,16 @@ def effective_status(task: TaskState) -> str:
     if cs is not None:
         return _exit_code_status(task.exit_code) or "stopped"
 
-    # No container found
     if not task.initialized:
         return "created"
     return _exit_code_status(task.exit_code) or "not found"
+
+
+def _exit_code_status(exit_code: int | None) -> str | None:
+    """Map an exit code to a terminal status, or ``None`` if not terminal."""
+    if exit_code is None:
+        return None
+    return "completed" if exit_code == 0 else "failed"
 
 
 def mode_info(mode: str | None) -> ModeInfo:
@@ -159,7 +143,32 @@ def mode_info(mode: str | None) -> ModeInfo:
     return info if info else MODE_DISPLAY[None]
 
 
-# ---------- Container naming ----------
+# ── Project queries ────────────────────────────────────────────────────
+
+
+def has_gpu(project: Any) -> bool:
+    """True when the project's ``project.yml`` opts into GPU passthrough.
+
+    Accepts any object with a ``root`` attribute pointing to the project
+    directory (typically a ``Project`` instance).  Returns ``False`` on
+    any I/O or parse error.
+    """
+    root = getattr(project, "root", None)
+    if root is None:
+        return False
+    try:
+        cfg = _yaml_load((root / "project.yml").read_text()) or {}
+    except (OSError, TypeError, AttributeError, YAMLError):
+        return False
+    gpus = (cfg.get("run") or {}).get("gpus")
+    if isinstance(gpus, str):
+        return gpus.lower() == "all"
+    if isinstance(gpus, bool):
+        return gpus
+    return False
+
+
+# ── Container naming ───────────────────────────────────────────────────
 
 CONTAINER_MODES = ("cli", "web", "run", "toad")
 """All valid container mode suffixes used in container naming."""
