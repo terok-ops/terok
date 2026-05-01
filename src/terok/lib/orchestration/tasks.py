@@ -4,7 +4,12 @@
 
 """Task metadata, lifecycle, and query operations.
 
-Provides module-level functions for CRUD over YAML-backed task metadata.
+Provides module-level functions for CRUD over JSON-backed task metadata.
+The shield reader reads the same files at every event emit (see the
+``dossier.meta_path`` OCI annotation contract), so the on-disk format
+is JSON: stdlib-only on the consumer side, no PyYAML dependency on the
+hot path.  Files written by older terok versions are migrated to JSON
+on first read.
 
 Container runner functions (``task_run_cli``,
 ``task_run_headless``, ``task_restart``) live in the companion
@@ -12,12 +17,14 @@ Container runner functions (``task_run_cli``,
 ``task_display``.  Log viewing lives in ``task_logs``.
 """
 
+import json
 import os
 import re
 import secrets
 import shutil
 import string
 import warnings
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,14 +54,97 @@ from ..util.emoji import render_emoji
 from ..util.fs import archive_timestamp, create_archive_dir, ensure_dir
 from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 from ..util.logging_utils import _log_debug
-from ..util.yaml import dump as _yaml_dump, load as _yaml_load
+from ..util.yaml import load as _yaml_load
 from .container_exec import container_git_diff
 
+# ---------- Task meta file format ----------
+
+
+def _meta_path(meta_dir: Path, task_id: str) -> Path:
+    """Canonical task-meta file path — JSON since the dossier-on-the-wire refactor.
+
+    The shield reader reads this file from inside the container's user
+    namespace using nothing but the stdlib (no PyYAML, no terok package);
+    JSON keeps the consumer side trivial.  YAML files from earlier installs
+    are migrated on first read by ``_read_task_meta``.
+    """
+    return meta_dir / f"{task_id}.json"
+
+
+def _read_task_meta(meta_dir: Path, task_id: str) -> dict | None:
+    """Load task meta as a plain dict — migrating ``.yml`` → ``.json`` on encounter.
+
+    Returns ``None`` when neither shape is on disk.  When only the legacy YAML
+    file exists, this performs a one-shot migration: parses with ruamel, writes
+    the JSON form atomically, deletes the YAML.  Subsequent reads find the
+    JSON directly with zero YAML dependency on the hot path.
+    """
+    json_path = _meta_path(meta_dir, task_id)
+    if json_path.is_file():
+        text = json_path.read_text(encoding="utf-8")
+        return json.loads(text) if text.strip() else {}
+    yml_path = meta_dir / f"{task_id}.yml"
+    if not yml_path.is_file():
+        return None
+    meta = _to_plain(_yaml_load(yml_path.read_text(encoding="utf-8")) or {})
+    _write_task_meta(json_path, meta)
+    yml_path.unlink(missing_ok=True)
+    return meta
+
+
+def _write_task_meta(json_path: Path, meta: dict) -> None:
+    """Atomic JSON write: stage as ``.tmp``, ``os.replace`` over the canonical path.
+
+    The shield reader and the orchestrator both read this file; a partial
+    write under EINTR / power loss could otherwise feed JSON-decode errors
+    to either side.  ``os.replace`` is the rename(2) primitive POSIX
+    requires to be atomic on the same filesystem.
+    """
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = json_path.with_suffix(json_path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8"
+    )
+    os.replace(tmp, json_path)
+
+
+def _to_plain(obj: object) -> object:
+    """Recursively unwrap ruamel ``CommentedMap`` / ``CommentedSeq`` to plain types.
+
+    Round-trip-mode YAML hands back commented containers that are dict/list
+    subclasses.  ``json.dumps`` accepts them but the migration result should
+    be fully plain so downstream readers don't accidentally inherit metadata
+    that no longer applies.
+    """
+    if isinstance(obj, dict):
+        return {str(k): _to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_plain(v) for v in obj]
+    return obj
+
+
+def _iter_task_ids(meta_dir: Path) -> Iterator[str]:
+    """Yield every task ID with a meta file in *meta_dir* — JSON first, YAML fallback.
+
+    Mid-migration the directory may contain both shapes; the iterator
+    deduplicates so a freshly migrated entry isn't double-counted.
+    """
+    if not meta_dir.is_dir():
+        return
+    seen: set[str] = set()
+    for ext in ("json", "yml"):
+        for path in meta_dir.glob(f"*.{ext}"):
+            if path.stem not in seen:
+                seen.add(path.stem)
+                yield path.stem
+
+
+def _has_task_meta(meta_dir: Path, prefix: str) -> bool:
+    """``True`` if a meta file exists for *prefix* — either JSON or legacy YAML."""
+    return (meta_dir / f"{prefix}.json").is_file() or (meta_dir / f"{prefix}.yml").is_file()
+
+
 # ---------- Task IDs ----------
-
-
-_META_GLOB = "*.yml"
-"""Glob pattern for task metadata YAML files."""
 
 _TASK_ID_HEAD_CHARS = "ghjkmnpqrstvwxyz"
 """Crockford-legal lowercase letters outside hex (``g-z`` minus ``i l o u``, 16 chars).
@@ -201,12 +291,10 @@ def resolve_task_id(project_id: str, prefix: str) -> str:
     meta_dir = tasks_meta_dir(project_id)
     if not meta_dir.is_dir():
         raise SystemExit(f"No tasks found for project {project_id}")
-    if (meta_dir / f"{prefix}.yml").is_file():
+    if _has_task_meta(meta_dir, prefix):
         return prefix
     matches = [
-        p.stem
-        for p in meta_dir.glob(_META_GLOB)
-        if is_task_id(p.stem) and p.stem.startswith(prefix)
+        tid for tid in _iter_task_ids(meta_dir) if is_task_id(tid) and tid.startswith(prefix)
     ]
     if len(matches) == 1:
         return matches[0]
@@ -345,10 +433,9 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
     Raises ``SystemExit`` if the task metadata file is not found.
     """
     meta_dir = tasks_meta_dir(project_id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    raw = _read_task_meta(meta_dir, task_id)
+    if raw is None:
         raise SystemExit(f"Unknown task {task_id}")
-    raw = _yaml_load(meta_path.read_text()) or {}
     mode = raw.get("mode")
     tid = str(raw.get("task_id", ""))
     # Hydrate live container state only for tasks that have actually been started
@@ -409,10 +496,9 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
     try:
         load_project(project_id)  # validate project exists
         meta_dir = tasks_meta_dir(project_id)
-        meta_path = meta_dir / f"{task_id}.yml"
-        if not meta_path.is_file():
+        meta = _read_task_meta(meta_dir, task_id)
+        if meta is None:
             return None
-        meta = _yaml_load(meta_path.read_text()) or {}
         mode = meta.get("mode")
         if not mode:
             return None
@@ -429,7 +515,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 
 def tasks_meta_dir(project_id: str) -> Path:
-    """Return the directory containing task metadata YAML files for *project_id*."""
+    """Return the directory containing task metadata files for *project_id*."""
     return core_state_dir() / "projects" / project_id / "tasks"
 
 
@@ -462,12 +548,11 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
         exit_code: The exit code from the task, or None if unknown/failed
     """
     meta_dir = tasks_meta_dir(project_id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         return
-    meta = _yaml_load(meta_path.read_text()) or {}
     meta["exit_code"] = exit_code
-    meta_path.write_text(_yaml_dump(meta))
+    _write_task_meta(_meta_path(meta_dir, task_id), meta)
 
 
 def _write_task_readme(task_dir: Path) -> None:
@@ -510,7 +595,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
     meta_dir = tasks_meta_dir(project.id)
     ensure_dir(meta_dir)
 
-    existing = {p.stem for p in meta_dir.glob(_META_GLOB)}
+    existing = set(_iter_task_ids(meta_dir))
     next_id = _generate_unique_id(existing)
 
     ws = tasks_root / next_id
@@ -538,7 +623,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
         "web_port": None,
         "created_at": datetime.now(tz=UTC).isoformat(),
     }
-    (meta_dir / f"{next_id}.yml").write_text(_yaml_dump(meta))
+    _write_task_meta(_meta_path(meta_dir, next_id), meta)
     print(f"Created task {next_id} ({task_name}) in {ws}")
     return next_id
 
@@ -579,12 +664,11 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
 
 
 def _task_rename(project: ProjectConfig, task_id: str, new_name: str) -> None:
-    """Rename a task by updating its metadata YAML."""
+    """Rename a task by updating its metadata file."""
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text()) or {}
     sanitized = sanitize_task_name(new_name)
     if sanitized is None:
         raise SystemExit(f"Invalid task name: {new_name!r}")
@@ -592,12 +676,12 @@ def _task_rename(project: ProjectConfig, task_id: str, new_name: str) -> None:
     if err:
         raise SystemExit(f"Invalid task name: {err}")
     meta["name"] = sanitized
-    meta_path.write_text(_yaml_dump(meta))
+    _write_task_meta(_meta_path(meta_dir, task_id), meta)
     print(f"Renamed task {task_id} to {sanitized}")
 
 
 def task_rename(project_id: str, task_id: str, new_name: str) -> None:
-    """Rename a task by updating its metadata YAML.
+    """Rename a task by updating its metadata file.
 
     Sanitizes *new_name* and writes the result to the task's metadata file.
     Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
@@ -616,11 +700,13 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
         tasks_root = project.tasks_root
     except SystemExit:
         tasks_root = None
-    for f in meta_dir.glob(_META_GLOB):
-        if not is_task_id(f.stem):
+    for tid_stem in _iter_task_ids(meta_dir):
+        if not is_task_id(tid_stem):
             continue
         try:
-            meta = _yaml_load(f.read_text()) or {}
+            meta = _read_task_meta(meta_dir, tid_stem)
+            if meta is None:
+                continue
             tid = str(meta.get("task_id", ""))
             ws_status = None
             ws_message = None
@@ -653,7 +739,7 @@ def _get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
         except Exception as exc:
             from ..util.logging_utils import log_warning
 
-            log_warning(f"Skipping malformed task metadata file: {f}: {exc}")
+            log_warning(f"Skipping malformed task metadata file for {tid_stem}: {exc}")
             continue
 
     tasks.sort(key=lambda t: t.task_id or "", reverse=reverse)
@@ -751,28 +837,27 @@ def load_task_meta(
     """Load task metadata and optionally validate mode.
 
     Returns (meta, meta_path). Raises SystemExit if task is unknown or mode
-    conflicts with *expected_mode*.
+    conflicts with *expected_mode*.  ``meta_path`` is always the canonical
+    JSON path even when the on-disk file was migrated from YAML on this read.
     """
     meta_dir = tasks_meta_dir(project_id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text()) or {}
     if expected_mode is not None:
         _check_mode(meta, expected_mode)
-    return meta, meta_path
+    return meta, _meta_path(meta_dir, task_id)
 
 
 def mark_task_deleting(project_id: str, task_id: str) -> None:
-    """Persist ``deleting: true`` to the task's YAML metadata file."""
+    """Persist ``deleting: true`` to the task's metadata file."""
     try:
         meta_dir = tasks_meta_dir(project_id)
-        meta_path = meta_dir / f"{task_id}.yml"
-        if not meta_path.is_file():
+        meta = _read_task_meta(meta_dir, task_id)
+        if meta is None:
             return
-        meta = _yaml_load(meta_path.read_text()) or {}
         meta["deleting"] = True
-        meta_path.write_text(_yaml_dump(meta))
+        _write_task_meta(_meta_path(meta_dir, task_id), meta)
     except Exception as e:
         _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
@@ -822,8 +907,9 @@ def _archive_task(project: ProjectConfig, task_id: str, meta: dict) -> Path | No
         archive_root = tasks_archive_dir(project.id)
         archive_dir = create_archive_dir(archive_root, dir_name)
 
-        # Save metadata snapshot
-        (archive_dir / "task.yml").write_text(_yaml_dump(meta))
+        # Save metadata snapshot — JSON matches the live-task format so
+        # archived entries remain readable with the same loader.
+        _write_task_meta(archive_dir / "task.json", _to_plain(meta))
 
         # Copy logs if they exist
         task_dir = project.tasks_root / str(task_id)
@@ -860,12 +946,11 @@ def _task_delete(project: ProjectConfig, task_id: str) -> TaskDeleteResult:
 
     workspace = project.tasks_root / str(task_id)
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
+    meta_path = _meta_path(meta_dir, task_id)
+    legacy_yml = meta_dir / f"{task_id}.yml"
     _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
 
-    meta = {}
-    if meta_path.is_file():
-        meta = _yaml_load(meta_path.read_text()) or {}
+    meta = _read_task_meta(meta_dir, task_id) or {}
 
     mode = meta.get("mode")
     if mode:
@@ -925,10 +1010,13 @@ def _task_delete(project: ProjectConfig, task_id: str) -> TaskDeleteResult:
             _log_debug(f"task_delete: workspace removal failed: {exc}")
             warnings.append(f"Workspace removal failed: {exc}")
 
-    if meta_path.is_file():
+    # Both shapes might be present mid-migration (the read above migrates
+    # YAML→JSON, but a sibling reader could lose the race); clean both.
+    if meta_path.is_file() or legacy_yml.is_file():
         _log_debug("task_delete: removing metadata file")
         try:
-            meta_path.unlink()
+            meta_path.unlink(missing_ok=True)
+            legacy_yml.unlink(missing_ok=True)
             _log_debug("task_delete: metadata file removed")
         except Exception as exc:
             _log_debug(f"task_delete: metadata removal failed: {exc}")
@@ -968,10 +1056,9 @@ def _validate_login(project: ProjectConfig, task_id: str) -> tuple[str, str]:
     Raises ``SystemExit`` with actionable messages on failure.
     """
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     if not mode:
@@ -1017,10 +1104,10 @@ def _task_stop(project: ProjectConfig, task_id: str, *, timeout: int | None = No
     """Gracefully stop a running task container."""
     effective_timeout = timeout if timeout is not None else project.shutdown_timeout
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text()) or {}
+    meta_path = _meta_path(meta_dir, task_id)
 
     mode = meta.get("mode")
     if not mode:
@@ -1090,10 +1177,9 @@ def task_status(project_id: str, task_id: str) -> None:
     """Show live task status with container state diagnostics."""
     project = load_project(project_id)
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
     web_port = meta.get("web_port")
@@ -1175,6 +1261,30 @@ class ArchivedTask:
     exit_code: int | None
 
 
+def _load_archived_task_meta(entry: Path) -> dict | None:
+    """Load an archived task's snapshot — JSON or legacy YAML — or ``None`` on miss.
+
+    Older archives wrote ``task.yml``; new ones write ``task.json``.  Both
+    are tolerated indefinitely on the read path because archives are
+    immutable once written and there's no operator action that would
+    rewrite them.
+    """
+    json_path = entry / "task.json"
+    if json_path.is_file():
+        try:
+            text = json_path.read_text(encoding="utf-8")
+            return json.loads(text) if text.strip() else {}
+        except (OSError, ValueError):
+            return None
+    yml_path = entry / "task.yml"
+    if not yml_path.is_file():
+        return None
+    try:
+        return _to_plain(_yaml_load(yml_path.read_text(encoding="utf-8")) or {})
+    except Exception:
+        return None
+
+
 def list_archived_tasks(project_id: str) -> list[ArchivedTask]:
     """Return archived tasks for *project_id*, sorted newest-first."""
     archive_root = tasks_archive_dir(project_id)
@@ -1184,12 +1294,8 @@ def list_archived_tasks(project_id: str) -> list[ArchivedTask]:
     for entry in sorted(archive_root.iterdir(), reverse=True):
         if not entry.is_dir():
             continue
-        meta_path = entry / "task.yml"
-        if not meta_path.is_file():
-            continue
-        try:
-            meta = _yaml_load(meta_path.read_text()) or {}
-        except Exception:
+        meta = _load_archived_task_meta(entry)
+        if meta is None:
             continue
         # Parse archive timestamp from directory name: <timestamp>_<task_id>[_<name>]
         parts = entry.name.split("_", 2)

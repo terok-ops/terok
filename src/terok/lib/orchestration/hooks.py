@@ -11,12 +11,11 @@ reconcile missed hooks (e.g. post_stop after an unclean shutdown).
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess  # nosec B404 — hooks execute user-configured commands by design
 from pathlib import Path
-
-from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +53,58 @@ def _build_hook_env(
 
 
 def _record_hook(meta_path: Path, hook_name: str) -> None:
-    """Append *hook_name* to the ``hooks_fired`` list in task metadata."""
+    """Append *hook_name* to the ``hooks_fired`` list in task metadata.
+
+    The path may be the canonical JSON file (post-migration) or a
+    leftover YAML file from an older install that no read has touched
+    yet — both shapes are tolerated so the post-stop hook can record
+    itself even when the task was created before the JSON migration
+    landed.  After a YAML record, the file rotates to JSON.
+    """
     if not meta_path.is_file():
         return
     try:
-        meta = _yaml_load(meta_path.read_text()) or {}
+        text = meta_path.read_text(encoding="utf-8")
+        meta = _decode_meta(text, meta_path.suffix)
         fired = meta.get("hooks_fired") or []
         if hook_name not in fired:
             fired.append(hook_name)
         meta["hooks_fired"] = fired
-        meta_path.write_text(_yaml_dump(meta))
+        json_path = meta_path.with_suffix(".json")
+        json_path.write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False, default=str) + "\n",
+            encoding="utf-8",
+        )
+        if meta_path.suffix == ".yml":
+            meta_path.unlink(missing_ok=True)
     except Exception:
         logger.warning("failed to record hook %s in %s", hook_name, meta_path, exc_info=True)
+
+
+def _decode_meta(text: str, suffix: str) -> dict:
+    """Parse task meta text — JSON for ``.json``, ruamel for legacy ``.yml``.
+
+    Kept inline (rather than importing the canonical reader from
+    ``tasks.py``) so this module stays at its tach layer; ``tasks.py``
+    imports ``run_hook`` from here, so the reverse import would build a
+    cycle and tach correctly rejects it.
+    """
+    if suffix == ".yml":
+        from ..util.yaml import load as _yaml_load
+
+        raw = _yaml_load(text) or {}
+        # Ruamel hands back ``CommentedMap``; convert to a plain dict.
+        return _plain(raw)
+    return json.loads(text) if text.strip() else {}
+
+
+def _plain(obj: object) -> object:
+    """Recursively unwrap commented containers to plain dict/list."""
+    if isinstance(obj, dict):
+        return {str(k): _plain(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_plain(v) for v in obj]
+    return obj
 
 
 def run_hook(

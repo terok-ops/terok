@@ -19,8 +19,7 @@ from terok_executor import AgentRunner
 
 from ..core import runtime as _rt
 from ..core.projects import load_project
-from ..orchestration.tasks import container_name, tasks_meta_dir
-from ..util.yaml import load as _yaml_load
+from ..orchestration.tasks import _read_task_meta, container_name, tasks_meta_dir
 from .log_format import auto_detect_formatter
 
 
@@ -80,10 +79,9 @@ def task_logs(
 
     project = load_project(project_id)
     meta_dir = tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
+    meta = _read_task_meta(meta_dir, task_id)
+    if meta is None:
         raise SystemExit(f"Unknown task {task_id}")
-    meta = _yaml_load(meta_path.read_text(encoding="utf-8")) or {}
 
     mode = meta.get("mode")
     if not mode:

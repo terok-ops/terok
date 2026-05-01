@@ -605,6 +605,15 @@ expose = [
     "normalize_task_id_input",
     "CONTAINER_TEROK_CONFIG",
     "agent_config_dir",
+    # Migration helpers — exported so the few writers outside tasks.py
+    # (task_runners, sickbay) can land JSON via the same atomic-rename
+    # path tasks.py uses.  Underscore-prefixed because the on-disk
+    # shape isn't a public contract.
+    "_meta_path",
+    "_read_task_meta",
+    "_write_task_meta",
+    "_iter_task_ids",
+    "_has_task_meta",
 ]
 from = ["terok.lib.orchestration.tasks"]
 

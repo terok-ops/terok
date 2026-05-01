@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest.mock
 
 import pytest
@@ -19,7 +20,6 @@ from terok.lib.orchestration.tasks import (
     resolve_task_id,
     tasks_meta_dir,
 )
-from terok.lib.util.yaml import dump as yaml_dump
 from tests.test_utils import assert_task_id, project_env
 
 MINIMAL_PROJECT = """
@@ -112,7 +112,7 @@ class TestResolveTaskId:
         meta_dir = tasks_meta_dir(project_id)
         meta_dir.mkdir(parents=True, exist_ok=True)
         meta = {"task_id": task_id, "name": "test-task", "mode": None, "workspace": "/tmp/ws"}
-        (meta_dir / f"{task_id}.yml").write_text(yaml_dump(meta))
+        (meta_dir / f"{task_id}.json").write_text(json.dumps(meta, indent=2))
 
     def test_exact_match(self) -> None:
         """Full task ID should resolve immediately."""
@@ -212,7 +212,7 @@ class TestLegacyHexCompat:
         meta_dir = tasks_meta_dir(project_id)
         meta_dir.mkdir(parents=True, exist_ok=True)
         meta = {"task_id": task_id, "name": "legacy", "mode": None, "workspace": "/tmp/ws"}
-        (meta_dir / f"{task_id}.yml").write_text(yaml_dump(meta))
+        (meta_dir / f"{task_id}.json").write_text(json.dumps(meta, indent=2))
 
     def test_legacy_hex_resolves_with_deprecation(self) -> None:
         """A legacy 8-char hex task on disk should still resolve, with a DeprecationWarning."""
@@ -235,8 +235,10 @@ class TestLegacyHexCompat:
         with project_env(MINIMAL_PROJECT) as _ctx:
             meta_dir = tasks_meta_dir("test-proj")
             meta_dir.mkdir(parents=True, exist_ok=True)
-            (meta_dir / f"{ID_A}.yml").write_text(
-                yaml_dump({"task_id": ID_A, "name": "n", "mode": None, "workspace": "/tmp/ws"})
+            (meta_dir / f"{ID_A}.json").write_text(
+                json.dumps(
+                    {"task_id": ID_A, "name": "n", "mode": None, "workspace": "/tmp/ws"}, indent=2
+                )
             )
             with warnings.catch_warnings():
                 warnings.simplefilter("error", DeprecationWarning)

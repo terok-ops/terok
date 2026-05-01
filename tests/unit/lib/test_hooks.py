@@ -49,32 +49,32 @@ class TestRecordHook:
 
     def test_record_hook_writes_to_metadata(self, tmp_path: Path) -> None:
         """Verify _record_hook appends hook_name to hooks_fired list."""
-        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+        import json
 
-        meta_path = tmp_path / "1.yml"
-        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+        meta_path = tmp_path / "1.json"
+        meta_path.write_text(json.dumps({"task_id": "1", "mode": "cli"}, indent=2))
 
         _record_hook(meta_path, "post_start")
 
-        meta = _yaml_load(meta_path.read_text())
+        meta = json.loads(meta_path.read_text() or "{}")
         assert meta["hooks_fired"] == ["post_start"]
 
     def test_record_hook_appends_without_duplicates(self, tmp_path: Path) -> None:
         """Verify _record_hook doesn't duplicate existing entries."""
-        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+        import json
 
-        meta_path = tmp_path / "1.yml"
-        meta_path.write_text(_yaml_dump({"task_id": "1", "hooks_fired": ["post_start"]}))
+        meta_path = tmp_path / "1.json"
+        meta_path.write_text(json.dumps({"task_id": "1", "hooks_fired": ["post_start"]}, indent=2))
 
         _record_hook(meta_path, "post_start")
         _record_hook(meta_path, "post_ready")
 
-        meta = _yaml_load(meta_path.read_text())
+        meta = json.loads(meta_path.read_text() or "{}")
         assert meta["hooks_fired"] == ["post_start", "post_ready"]
 
     def test_record_hook_skips_missing_file(self, tmp_path: Path) -> None:
         """Verify _record_hook is a no-op when the metadata file doesn't exist."""
-        meta_path = tmp_path / "nonexistent.yml"
+        meta_path = tmp_path / "nonexistent.json"
         _record_hook(meta_path, "post_start")  # should not raise
 
 
@@ -208,10 +208,10 @@ class TestRunHook:
 
     def test_run_hook_with_meta_path_records(self, tmp_path: Path) -> None:
         """Verify run_hook records the hook name in metadata when meta_path is given."""
-        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+        import json
 
-        meta_path = tmp_path / "1.yml"
-        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+        meta_path = tmp_path / "1.json"
+        meta_path.write_text(json.dumps({"task_id": "1", "mode": "cli"}, indent=2))
 
         with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run"):
             run_hook(
@@ -224,15 +224,15 @@ class TestRunHook:
                 meta_path=meta_path,
             )
 
-        meta = _yaml_load(meta_path.read_text())
+        meta = json.loads(meta_path.read_text() or "{}")
         assert "post_start" in meta["hooks_fired"]
 
     def test_run_hook_records_even_without_command(self, tmp_path: Path) -> None:
         """Verify run_hook records even when command is None (hook point reached)."""
-        from terok.lib.util.yaml import dump as _yaml_dump, load as _yaml_load
+        import json
 
-        meta_path = tmp_path / "1.yml"
-        meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
+        meta_path = tmp_path / "1.json"
+        meta_path.write_text(json.dumps({"task_id": "1", "mode": "cli"}, indent=2))
 
         run_hook(
             "post_ready",
@@ -244,5 +244,5 @@ class TestRunHook:
             meta_path=meta_path,
         )
 
-        meta = _yaml_load(meta_path.read_text())
+        meta = json.loads(meta_path.read_text() or "{}")
         assert "post_ready" in meta["hooks_fired"]

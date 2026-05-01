@@ -32,7 +32,7 @@ from ..core.config import make_sandbox_config
 from ..core.projects import load_project
 from ..util.check_reporter import CheckReporter
 from ..util.logging_utils import _log_debug
-from .tasks import container_name, load_task_meta, tasks_meta_dir
+from .tasks import _has_task_meta, container_name, load_task_meta, tasks_meta_dir
 
 # Type alias matching sickbay.py convention
 _CheckResult = tuple[str, str, str]
@@ -329,7 +329,7 @@ def _resolve_running_container(
     """
     label = f"Task {project_id}/{task_id}"
     meta_dir = tasks_meta_dir(project_id)
-    if not (meta_dir / f"{task_id}.yml").is_file():
+    if not _has_task_meta(meta_dir, task_id):
         return ("", Path(), [("warn", label, "metadata not found")])
 
     meta, _ = load_task_meta(project_id, task_id)

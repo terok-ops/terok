@@ -467,20 +467,20 @@ class TestRunContainer:
             )
 
         spec = captured_runspec(sandbox_factory)
-        # _run_container prepends three annotations
-        # (``ai.terok.{project,task,task_meta_path}``) so the clearance
-        # IdentityResolver can map container → task metadata; the
-        # caller-supplied extras come after.
+        # _run_container prepends three annotations under the
+        # ``dossier.*`` namespace so the shield reader can resolve a
+        # task-aware identity at emit time; the caller-supplied extras
+        # come after.
         from terok.lib.orchestration.tasks import tasks_meta_dir
 
-        expected_meta_path = tasks_meta_dir("p1") / "t1.yml"
+        expected_meta_path = tasks_meta_dir("p1") / "t1.json"
         assert spec.extra_args == (
             "--annotation",
-            "ai.terok.project=p1",
+            "dossier.project=p1",
             "--annotation",
-            "ai.terok.task=t1",
+            "dossier.task=t1",
             "--annotation",
-            f"ai.terok.task_meta_path={expected_meta_path}",
+            f"dossier.meta_path={expected_meta_path}",
             "-p",
             "8080:80",
         )

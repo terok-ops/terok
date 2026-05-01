@@ -48,10 +48,12 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.125/terok_executor-0.0.125-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.104/terok_sandbox-0.0.104-py3-none-any.whl"}
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.34/terok_shield-0.6.34-py3-none-any.whl"}
-terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.6/terok_clearance-0.6.6-py3-none-any.whl"}
+# DEV-TIME BRANCH PINS — track the dossier-in-events chain end-to-end.
+# Release script flips back to wheel URLs once the four siblings ship.
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "feat/dossier-chain"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/drop-bridge-phase"}
+terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = "feat/dossier-in-events"}
+terok-clearance = {git = "https://github.com/sliwowitz/terok-clearance.git", branch = "feat/dossier-in-events"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"

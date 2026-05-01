@@ -5,13 +5,13 @@
 
 from __future__ import annotations
 
+import json
 import types
 import unittest.mock
 
 import pytest
 
 from terok.lib.orchestration.tasks import get_login_command, task_login, task_new
-from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
 
@@ -32,10 +32,10 @@ def setup_task_with_mode(
     """
     task_id = task_new(project_id)
     if mode:
-        meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml"
-        meta = yaml_load(meta_path.read_text())
+        meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.json"
+        meta = json.loads(meta_path.read_text() or "{}")
         meta["mode"] = mode
-        meta_path.write_text(yaml_dump(meta), encoding="utf-8")
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return task_id
 
 

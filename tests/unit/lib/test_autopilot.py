@@ -18,8 +18,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
-
 if TYPE_CHECKING:
     from terok_sandbox import RunSpec
 
@@ -103,7 +101,7 @@ def task_paths(base: Path, project_id: str, task_id: str = "1") -> tuple[Path, P
     state = base / "state"
     return (
         sandbox_live / "tasks" / project_id / task_id / "agent-config",
-        state / "projects" / project_id / "tasks" / f"{task_id}.yml",
+        state / "projects" / project_id / "tasks" / f"{task_id}.json",
     )
 
 
@@ -141,8 +139,8 @@ def read_task_agents(base: Path, project_id: str, task_id: str = "1") -> dict[st
 
 
 def read_task_meta(base: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
-    """Load task metadata YAML for a task."""
-    return yaml_load(task_paths(base, project_id, task_id)[1].read_text())
+    """Load task metadata JSON for a task."""
+    return json.loads(task_paths(base, project_id, task_id)[1].read_text() or "{}")
 
 
 def prepare_agent_config(
@@ -594,9 +592,9 @@ class TestTaskFollowupHeadless:
                 with mock_git_config():
                     task_id = task_new("proj_mode")
                     _agent_cfg, meta_path = task_paths(base, "proj_mode", task_id)
-                    meta = yaml_load(meta_path.read_text())
+                    meta = json.loads(meta_path.read_text() or "{}")
                     meta["mode"] = "cli"
-                    meta_path.write_text(yaml_dump(meta))
+                    meta_path.write_text(json.dumps(meta, indent=2))
 
                     with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_mode", task_id, "test")
@@ -617,9 +615,9 @@ class TestTaskFollowupHeadless:
                 with mock_git_config():
                     task_id = task_new("proj_run")
                     _agent_cfg, meta_path = task_paths(base, "proj_run", task_id)
-                    meta = yaml_load(meta_path.read_text())
+                    meta = json.loads(meta_path.read_text() or "{}")
                     meta["mode"] = "run"
-                    meta_path.write_text(yaml_dump(meta))
+                    meta_path.write_text(json.dumps(meta, indent=2))
 
                     mock_runtime.container.return_value.state = "running"
                     with pytest.raises(SystemExit) as ctx:

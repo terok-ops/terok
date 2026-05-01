@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from contextlib import redirect_stdout
 from io import StringIO
@@ -15,6 +16,7 @@ import pytest
 from terok.lib.orchestration.tasks import (
     TASK_NAME_MAX_LEN,
     _default_categories_for_project,
+    _iter_task_ids,  # noqa: F401 — used in renamed assert
     _resolve_name_categories,
     generate_task_name,
     get_tasks,
@@ -23,7 +25,6 @@ from terok.lib.orchestration.tasks import (
     task_rename,
     validate_task_name,
 )
-from terok.lib.util.yaml import load as yaml_load
 from tests.test_utils import project_env
 
 SLUG_PATTERN = r"^[a-z]+-[a-z0-9]+$"
@@ -40,8 +41,8 @@ def project_yaml(project_id: str, *, name_categories: list[str] | None = None) -
 
 def task_meta_name(ctx, project_id: str, task_id: str) -> str:
     """Return the persisted task name from task metadata."""
-    meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml"
-    return yaml_load(meta_path.read_text())["name"]
+    meta_path = ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.json"
+    return json.loads(meta_path.read_text() or "{}")["name"]
 
 
 def create_task_and_get_name(project_id: str, *, explicit_name: str | None = None) -> str:
@@ -136,7 +137,7 @@ def test_task_new_rejects_invalid_names(bad_name: str) -> None:
         with pytest.raises(SystemExit):
             task_new(project_id, name=bad_name)
         tasks_dir = ctx.state_dir / "projects" / project_id / "tasks"
-        assert not tasks_dir.exists() or not list(tasks_dir.glob("*.yml"))
+        assert not tasks_dir.exists() or not list(_iter_task_ids(tasks_dir))
 
 
 def test_task_new_prints_name() -> None:

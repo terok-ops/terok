@@ -49,14 +49,7 @@ class TestUninstallDesktopEntry:
 
 
 class TestUninstallSandboxStack:
-    """Sandbox aggregator owns the full teardown — bridge + clearance + gate + vault + shield.
-
-    The earlier reader-cleanup workaround (``uninstall_shield_bridge``
-    called from terok directly) was removed once sandbox grew the
-    bridge teardown phase as a first-class integration step
-    (``run_bridge_uninstall_phase``).  Tests here cover the thin
-    delegating wrapper that's left.
-    """
+    """Sandbox aggregator owns the full teardown — bridge + clearance + gate + vault + shield."""
 
     def test_happy_path_delegates_to_aggregator(self, capsys: pytest.CaptureFixture[str]) -> None:
         with patch("terok_sandbox.sandbox_uninstall") as aggregator:
@@ -64,13 +57,6 @@ class TestUninstallSandboxStack:
         aggregator.assert_called_once_with(root=False)
         out = capsys.readouterr().out
         assert "Sandbox stack" in out
-        # The success-line wording is a deliberate operator-visible
-        # contract: the word "bridge" appearing here documents that
-        # the integration wire is part of what got torn down (sandbox
-        # owns the bridge phase as of v0.7.7).  Asserting "removed"
-        # alone wouldn't catch a regression that drops "bridge" from
-        # the success phrase.
-        assert "bridge" in out
         assert "removed" in out
 
     def test_aggregator_failure_reports_fail(self, capsys: pytest.CaptureFixture[str]) -> None:

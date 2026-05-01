@@ -227,18 +227,17 @@ class ClearanceScreen(screen.Screen[None]):
         """Connect to the clearance hub and start the event subscriber."""
         log = self.query_one(_ID_EVENT_LOG, RichLog)
         try:
-            from terok_clearance import CallbackNotifier, EventSubscriber, IdentityResolver
-            from terok_sandbox import create_container_inspector
+            from terok_clearance import CallbackNotifier, EventSubscriber
 
             self._notifier = CallbackNotifier(
                 on_notify=self._on_notify,
                 on_container_started=self._on_container_started,
                 on_container_exited=self._on_container_exited,
             )
-            self._subscriber = EventSubscriber(
-                self._notifier,
-                identity_resolver=IdentityResolver(inspector=create_container_inspector()),
-            )
+            # Identity resolution is no longer a TUI concern: the shield
+            # reader resolves the orchestrator dossier at emit time and
+            # ships it on every event, so the subscriber just reads it.
+            self._subscriber = EventSubscriber(self._notifier)
             await self._subscriber.start()
             log.write(Text("Connected to clearance hub...", style=_STYLE_INFO))
         except Exception as exc:

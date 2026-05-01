@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -18,7 +19,6 @@ from terok_sandbox import PodmanRuntime
 
 from terok.lib.orchestration.task_runners import task_restart
 from terok.lib.orchestration.tasks import get_task_container_state, task_new, task_status, task_stop
-from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
 
@@ -32,7 +32,7 @@ def project_config(project_id: str, *, shutdown_timeout: int | None = None) -> s
 
 def task_meta_path(ctx: SimpleNamespace, project_id: str, task_id: str) -> Path:
     """Return the metadata path for *task_id* inside the temporary project env."""
-    return ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml"
+    return ctx.state_dir / "projects" / project_id / "tasks" / f"{task_id}.json"
 
 
 def update_task_meta(
@@ -40,9 +40,9 @@ def update_task_meta(
 ) -> None:
     """Patch selected metadata keys for a generated task."""
     meta_path = task_meta_path(ctx, project_id, task_id)
-    meta = yaml_load(meta_path.read_text()) or {}
+    meta = json.loads(meta_path.read_text() or "{}") or {}
     meta.update(changes)
-    meta_path.write_text(yaml_dump(meta), encoding="utf-8")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def create_task_with_mode(ctx: SimpleNamespace, project_id: str, *, mode: str = "cli") -> str:

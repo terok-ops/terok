@@ -131,13 +131,12 @@ def _uninstall_desktop_entry() -> bool:
 def _uninstall_sandbox_stack(*, root: bool) -> bool:
     """Delegate the full teardown to the sandbox aggregator.
 
-    The aggregator now owns the bridge teardown phase as a first-class
-    integration step (``run_bridge_uninstall_phase`` in
-    ``terok_sandbox._setup``) — runs first in the uninstall sequence
-    so the wire goes down before its endpoints.  The earlier
-    workaround that called ``uninstall_shield_bridge`` here directly
-    is no longer needed; the explicit call has been removed and the
-    aggregator's own stage line covers the same teardown.
+    The sandbox aggregator now teardowns both hook pairs (nft + bridge)
+    in one shot — shield's ``setup_global_hooks`` installs them
+    together since the dossier-in-events refactor — so terok's wrapper
+    is a thin delegating call.  The standalone NFLOG reader script
+    survives an uninstall on purpose: it's harmless without the hooks
+    that feed it, and the reinstall path overwrites it.
     """
     from terok_sandbox import sandbox_uninstall
 
@@ -147,7 +146,7 @@ def _uninstall_sandbox_stack(*, root: bool) -> bool:
         except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
             s.fail(str(exc))
             return False
-        s.ok("clearance + bridge + gate + vault + shield removed")
+        s.ok("clearance + gate + vault + shield removed")
         return True
 
 
