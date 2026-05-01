@@ -48,10 +48,10 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
-terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.123/terok_executor-0.0.123-py3-none-any.whl"}
-terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.103/terok_sandbox-0.0.103-py3-none-any.whl"}
-terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.33/terok_shield-0.6.33-py3-none-any.whl"}
-terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.5/terok_clearance-0.6.5-py3-none-any.whl"}
+terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "deps/sandbox-bridge-phase"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/bridge-phase"}
+terok-shield = {git = "https://github.com/sliwowitz/terok-shield.git", branch = "feat/audit-blocks"}
+terok-clearance = {git = "https://github.com/sliwowitz/terok-clearance.git", branch = "docs/clarify-pluggability"}
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "261.23567.80"

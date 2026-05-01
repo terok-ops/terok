@@ -125,47 +125,25 @@ def _uninstall_desktop_entry() -> bool:
 
 
 def _uninstall_sandbox_stack(*, root: bool) -> bool:
-    """Remove the NFLOG reader script, then delegate the rest to the aggregator.
+    """Delegate the full teardown to the sandbox aggregator.
 
-    The aggregator's shield-hooks teardown doesn't touch the reader
-    script today — a shield-side bug that's filed as deferred work.
-    Handle it here until shield's ``run_uninstall`` subsumes it; the
-    reader is harmless without the hooks that feed it, but leaving
-    orphans on disk is the wrong default.
-
-    Reader cleanup is a soft-fail: a reader-bridge failure does not
-    short-circuit the aggregator, since leftover script bits are
-    harmless without the hooks that feed them and the caller almost
-    always wants the rest of the stack torn down even if that one step
-    misbehaves.  The function still returns ``False`` whenever any
-    step failed, so the caller's "uninstall complete" banner only
-    fires when both halves succeeded.
+    The aggregator now owns the bridge teardown phase as a first-class
+    integration step (``run_bridge_uninstall_phase`` in
+    ``terok_sandbox._setup``) — runs first in the uninstall sequence
+    so the wire goes down before its endpoints.  The earlier
+    workaround that called ``uninstall_shield_bridge`` here directly
+    is no longer needed; the explicit call has been removed and the
+    aggregator's own stage line covers the same teardown.
     """
-    from terok_sandbox import sandbox_uninstall, uninstall_shield_bridge
+    from terok_sandbox import sandbox_uninstall
 
     with stage_line("Sandbox stack") as s:
-        reader_failed = False
-        try:
-            uninstall_shield_bridge()
-        except Exception as exc:  # noqa: BLE001 — soft-fail; aggregator still runs below
-            s.fail(f"reader: {exc}")
-            reader_failed = True
         try:
             sandbox_uninstall(root=root)
         except (SystemExit, Exception) as exc:  # noqa: BLE001 — aggregator may raise
-            # An aggregator failure dominates the stage line — the
-            # reader's earlier ``s.fail`` (if any) is overwritten because
-            # the more authoritative teardown is the one that didn't
-            # complete.  Either way the function reports failure.
             s.fail(str(exc))
             return False
-        if reader_failed:
-            # Aggregator succeeded but reader didn't; keep the reader's
-            # FAIL marker on the line (set above) so the operator sees
-            # which half tripped, and report the partial failure to the
-            # caller.
-            return False
-        s.ok("clearance + gate + vault + shield removed")
+        s.ok("clearance + bridge + gate + vault + shield removed")
         return True
 
 

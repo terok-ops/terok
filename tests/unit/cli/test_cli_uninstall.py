@@ -47,89 +47,37 @@ class TestUninstallDesktopEntry:
 
 
 class TestUninstallSandboxStack:
-    """Reader script then sandbox aggregator; both must run in the happy path."""
+    """Sandbox aggregator owns the full teardown — bridge + clearance + gate + vault + shield.
 
-    def test_happy_path_runs_reader_then_aggregator(
+    The earlier reader-cleanup workaround (``uninstall_shield_bridge``
+    called from terok directly) was removed once sandbox grew the
+    bridge teardown phase as a first-class integration step
+    (``run_bridge_uninstall_phase``).  Tests here cover the thin
+    delegating wrapper that's left.
+    """
+
+    def test_happy_path_delegates_to_aggregator(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        order: list[str] = []
-        with (
-            patch(
-                "terok_sandbox.uninstall_shield_bridge",
-                side_effect=lambda: order.append("reader"),
-            ),
-            patch(
-                "terok_sandbox.sandbox_uninstall",
-                side_effect=lambda **_: order.append("sandbox"),
-            ),
-        ):
+        with patch("terok_sandbox.sandbox_uninstall") as aggregator:
             assert _uninstall_sandbox_stack(root=False) is True
-        assert order == ["reader", "sandbox"]
-
-    def test_reader_failure_does_not_short_circuit_aggregator(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """A reader failure is a soft-fail — the aggregator still runs to tear down the rest.
-
-        The reader script is harmless without the hooks that feed it,
-        so a stuck reader cleanup must not block the authoritative
-        teardown the caller actually asked for.  The function still
-        returns ``False`` so the operator sees the partial failure.
-        """
-        with (
-            patch(
-                "terok_sandbox.uninstall_shield_bridge",
-                side_effect=RuntimeError("permission denied"),
-            ),
-            patch("terok_sandbox.sandbox_uninstall") as aggregator,
-        ):
-            assert _uninstall_sandbox_stack(root=False) is False
         aggregator.assert_called_once_with(root=False)
         out = capsys.readouterr().out
-        assert "FAIL" in out and "reader" in out
+        assert "Sandbox stack" in out
+        assert "removed" in out
 
-    def test_reader_failure_overridden_by_aggregator_failure(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """When both halves fail, the aggregator's error wins the stage line.
-
-        The aggregator is the authoritative teardown; its failure
-        message is what the operator needs to act on, so it overwrites
-        any earlier ``s.fail`` from the reader half.
-        """
-        with (
-            patch(
-                "terok_sandbox.uninstall_shield_bridge",
-                side_effect=RuntimeError("permission denied"),
-            ),
-            patch(
-                "terok_sandbox.sandbox_uninstall",
-                side_effect=SystemExit("aggregator reported one or more failed phases"),
-            ),
+    def test_aggregator_failure_reports_fail(self, capsys: pytest.CaptureFixture[str]) -> None:
+        with patch(
+            "terok_sandbox.sandbox_uninstall",
+            side_effect=SystemExit("aggregator reported one or more failed phases"),
         ):
             assert _uninstall_sandbox_stack(root=False) is False
         out = capsys.readouterr().out
+        assert "FAIL" in out
         assert "aggregator reported one or more failed phases" in out
-        # The reader's prefix should NOT be the visible detail — the
-        # aggregator's message dominates.
-        assert "reader: permission denied" not in out
-
-    def test_aggregator_failure_reports_fail(self, capsys: pytest.CaptureFixture[str]) -> None:
-        with (
-            patch("terok_sandbox.uninstall_shield_bridge"),
-            patch(
-                "terok_sandbox.sandbox_uninstall",
-                side_effect=SystemExit("aggregator reported one or more failed phases"),
-            ),
-        ):
-            assert _uninstall_sandbox_stack(root=False) is False
-        assert "FAIL" in capsys.readouterr().out
 
     def test_root_flag_threaded_to_aggregator(self) -> None:
-        with (
-            patch("terok_sandbox.uninstall_shield_bridge"),
-            patch("terok_sandbox.sandbox_uninstall") as aggregator,
-        ):
+        with patch("terok_sandbox.sandbox_uninstall") as aggregator:
             _uninstall_sandbox_stack(root=True)
         aggregator.assert_called_once_with(root=True)
 
