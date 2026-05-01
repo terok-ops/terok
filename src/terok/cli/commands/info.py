@@ -9,6 +9,9 @@ Exposes the ``terok config`` subcommand group:
   with existence flags and any active environment-variable overrides.
 - ``config resolved`` — render the per-project agent config with the
   scope provenance that produced each key (optionally under a preset).
+- ``config schema`` — render every available key for ``global`` (config.yml)
+  or ``project`` (project.yml), introspected directly from the Pydantic
+  models, with types/defaults/descriptions.  ``--json`` emits raw JSON Schema.
 - ``config import-opencode`` — copy a user's ``opencode.json`` into the
   shared vault mount so plain ``opencode`` works inside task containers.
 """
@@ -67,6 +70,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         complete_preset_names,
     )
 
+    # config schema — available keys for global / project YAML
+    p_schema = config_sub.add_parser(
+        "schema",
+        help="Show every available config key (with types, defaults, descriptions)",
+    )
+    p_schema.add_argument(
+        "scope",
+        choices=("global", "project"),
+        help="``global`` (config.yml) or ``project`` (project.yml)",
+    )
+    p_schema.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Emit raw JSON Schema instead of the human-readable tree",
+    )
+
     # config import-opencode — unchanged semantics, now under the group
     p_import_oc = config_sub.add_parser(
         "import-opencode",
@@ -84,6 +104,8 @@ def dispatch(args: argparse.Namespace) -> bool:
             _print_config()
         case "resolved":
             _cmd_config_resolved(args.project_id, getattr(args, "preset", None))
+        case "schema":
+            _cmd_config_schema(args.scope, args.as_json)
         case "import-opencode":
             _cmd_import_opencode(args.file)
         case _:  # pragma: no cover — required=True makes argparse enforce this
@@ -288,6 +310,125 @@ def _cmd_config_resolved(project_id: str, preset: str | None) -> None:
 
     print()
     print(json.dumps(resolved, indent=2, default=str))
+
+
+# ── config schema ──────────────────────────────────────────────────────
+
+
+def _cmd_config_schema(scope: str, as_json: bool) -> None:
+    """Render every available key of the chosen YAML config surface.
+
+    Pydantic's [`model_json_schema()`][pydantic.BaseModel.model_json_schema] does the
+    introspection; this command only formats the result.  ``--json`` is the
+    machine-readable escape hatch for jq / docs pipelines; the default human
+    rendering is a [`rich.tree.Tree`][rich.tree.Tree] keyed by field path.
+    """
+    from ...lib.core.yaml_schema import RawGlobalConfig, RawProjectYaml
+
+    model = RawGlobalConfig if scope == "global" else RawProjectYaml
+    schema = model.model_json_schema()
+
+    if as_json:
+        print(json.dumps(schema, indent=2, default=str))
+        return
+
+    from rich.console import Console
+    from rich.tree import Tree
+
+    title = f"{scope} config — {model.__name__}"
+    tree = Tree(f"[bold]{title}[/]")
+    _walk_schema(tree, schema, schema.get("$defs", {}), frozenset())
+    # ``soft_wrap`` keeps long descriptions on one line so a wide terminal
+    # can show them without rich re-wrapping into the tree gutter.
+    Console(soft_wrap=True).print(tree)
+
+
+def _walk_schema(
+    tree: Any,
+    node: dict[str, Any],
+    defs: dict[str, Any],
+    stack: frozenset[str],
+) -> None:
+    """Add every property of *node* as a child of *tree*, recursing into nested objects."""
+    required = set(node.get("required", []))
+    for key, prop in node.get("properties", {}).items():
+        _add_field(tree, key, prop, defs, stack, key in required)
+
+
+def _add_field(
+    tree: Any,
+    key: str,
+    prop: dict[str, Any],
+    defs: dict[str, Any],
+    stack: frozenset[str],
+    is_required: bool,
+) -> None:
+    """Render one ``key: type [= default] — description`` row and recurse if it's an object."""
+    from rich.markup import escape
+
+    inner = prop["allOf"][0] if prop.get("allOf") and len(prop["allOf"]) == 1 else prop
+    ref_name = inner["$ref"].rsplit("/", 1)[-1] if "$ref" in inner else None
+    resolved = defs.get(ref_name, inner) if ref_name else inner
+
+    type_str = escape(_format_type(prop, defs))
+    default = _format_default(prop, is_required)
+    raw_desc = prop.get("description") or resolved.get("description") or ""
+    # Collapse multi-paragraph docstrings to a single line so the tree gutter
+    # stays aligned; the JSON Schema export preserves the original formatting.
+    desc = " ".join(raw_desc.split())
+
+    label = f"[cyan]{escape(key)}[/]: [yellow]{type_str}[/]{default}"
+    if desc:
+        label += f"  [dim]— {escape(desc)}[/]"
+    sub = tree.add(label)
+
+    if "properties" in resolved:
+        if ref_name and ref_name in stack:
+            sub.add("[dim](recursive)[/]")
+            return
+        new_stack = stack | {ref_name} if ref_name else stack
+        _walk_schema(sub, resolved, defs, new_stack)
+
+
+def _format_type(prop: dict[str, Any], defs: dict[str, Any]) -> str:
+    """Render a JSON-Schema fragment as a Python-ish type string."""
+    if prop.get("allOf") and len(prop["allOf"]) == 1:
+        return _format_type(prop["allOf"][0], defs)
+    if "$ref" in prop:
+        return prop["$ref"].rsplit("/", 1)[-1]
+    if "anyOf" in prop:
+        return " | ".join(_format_type(p, defs) for p in prop["anyOf"])
+    if "enum" in prop:
+        return " | ".join(repr(v) for v in prop["enum"])
+    if "const" in prop:
+        return repr(prop["const"])
+    t = prop.get("type")
+    if t == "array":
+        return f"list[{_format_type(prop.get('items', {}), defs)}]"
+    if t == "object":
+        ap = prop.get("additionalProperties")
+        if isinstance(ap, dict):
+            return f"dict[str, {_format_type(ap, defs)}]"
+        if ap is True:
+            return "dict[str, Any]"
+        return "dict"
+    if t == "null":
+        return "None"
+    return t or "Any"
+
+
+def _format_default(prop: dict[str, Any], is_required: bool) -> str:
+    """Render the ``= <default>`` suffix, suppressing noise (None / empty container)."""
+    from rich.markup import escape
+
+    if "default" in prop:
+        d = prop["default"]
+        if d is None or d == {} or d == []:
+            return ""
+        return f" = [magenta]{escape(repr(d))}[/]"
+    if is_required:
+        return " [red](required)[/]"
+    return ""
 
 
 # ── config import-opencode ─────────────────────────────────────────────

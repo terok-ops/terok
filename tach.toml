@@ -52,6 +52,7 @@ depends_on = [
     "terok.lib.core.projects",
     "terok.lib.core.runtime",
     "terok.lib.core.version",
+    "terok.lib.core.yaml_schema",
     "terok.lib.domain.facade",
     "terok.lib.domain.storage",
     "terok.lib.util.ansi",
