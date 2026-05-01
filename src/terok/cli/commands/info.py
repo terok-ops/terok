@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import shutil
+import textwrap
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -333,14 +334,13 @@ def _cmd_config_schema(scope: str, as_json: bool) -> None:
         return
 
     from rich.console import Console
+    from rich.text import Text
     from rich.tree import Tree
 
-    title = f"{scope} config — {model.__name__}"
-    tree = Tree(f"[bold]{title}[/]")
-    _walk_schema(tree, schema, schema.get("$defs", {}), frozenset())
-    # ``soft_wrap`` keeps long descriptions on one line so a wide terminal
-    # can show them without rich re-wrapping into the tree gutter.
-    Console(soft_wrap=True).print(tree)
+    console = Console()
+    tree = Tree(Text(f"{scope} config — {model.__name__}", style="bold"))
+    _walk_schema(tree, schema, schema.get("$defs", {}), frozenset(), console.width, depth=1)
+    console.print(tree)
 
 
 def _walk_schema(
@@ -348,11 +348,13 @@ def _walk_schema(
     node: dict[str, Any],
     defs: dict[str, Any],
     stack: frozenset[str],
+    console_width: int,
+    depth: int,
 ) -> None:
     """Add every property of *node* as a child of *tree*, recursing into nested objects."""
     required = set(node.get("required", []))
     for key, prop in node.get("properties", {}).items():
-        _add_field(tree, key, prop, defs, stack, key in required)
+        _add_field(tree, key, prop, defs, stack, key in required, console_width, depth)
 
 
 def _add_field(
@@ -362,32 +364,56 @@ def _add_field(
     defs: dict[str, Any],
     stack: frozenset[str],
     is_required: bool,
+    console_width: int,
+    depth: int,
 ) -> None:
-    """Render one ``key: type [= default] — description`` row and recurse if it's an object."""
-    from rich.markup import escape
+    """Render one ``key: type [= default]  # description`` row, recursing into nested objects.
+
+    Long descriptions are word-wrapped with a hanging indent so continuation
+    lines line up under the ``#`` of the first line — readable at any depth
+    without spilling past the terminal edge.
+    """
+    from rich.text import Text
 
     inner = prop["allOf"][0] if prop.get("allOf") and len(prop["allOf"]) == 1 else prop
     ref_name = inner["$ref"].rsplit("/", 1)[-1] if "$ref" in inner else None
     resolved = defs.get(ref_name, inner) if ref_name else inner
 
-    type_str = escape(_format_type(prop, defs))
-    default = _format_default(prop, is_required)
+    type_str = _format_type(prop, defs)
     raw_desc = prop.get("description") or resolved.get("description") or ""
-    # Collapse multi-paragraph docstrings to a single line so the tree gutter
-    # stays aligned; the JSON Schema export preserves the original formatting.
     desc = " ".join(raw_desc.split())
 
-    label = f"[cyan]{escape(key)}[/]: [yellow]{type_str}[/]{default}"
+    text = Text()
+    text.append(key, style="cyan")
+    text.append(": ")
+    text.append(type_str, style="yellow")
+    default_style, default_str = _default_pieces(prop, is_required)
+    if default_str:
+        text.append(default_str, style=default_style)
+
     if desc:
-        label += f"  [dim]— {escape(desc)}[/]"
-    sub = tree.add(label)
+        text.append("  ")
+        prefix_cols = text.cell_len
+        # Tree gutter is roughly 4 chars per level (``│   `` / ``├── ``); reserve
+        # an extra 2 for ``# ``.  Floor at 20 so pathological narrow terminals
+        # still produce *some* readable output.
+        wrap_width = max(20, console_width - 4 * depth - prefix_cols - 2)
+        lines = textwrap.wrap(desc, width=wrap_width) or [desc]
+        text.append(f"# {lines[0]}", style="dim")
+        pad = " " * prefix_cols
+        for line in lines[1:]:
+            text.append("\n")
+            text.append(pad)
+            text.append(f"# {line}", style="dim")
+
+    sub = tree.add(text)
 
     if "properties" in resolved:
         if ref_name and ref_name in stack:
-            sub.add("[dim](recursive)[/]")
+            sub.add(Text("(recursive)", style="dim"))
             return
         new_stack = stack | {ref_name} if ref_name else stack
-        _walk_schema(sub, resolved, defs, new_stack)
+        _walk_schema(sub, resolved, defs, new_stack, console_width, depth + 1)
 
 
 def _format_type(prop: dict[str, Any], defs: dict[str, Any]) -> str:
@@ -417,18 +443,16 @@ def _format_type(prop: dict[str, Any], defs: dict[str, Any]) -> str:
     return t or "Any"
 
 
-def _format_default(prop: dict[str, Any], is_required: bool) -> str:
-    """Render the ``= <default>`` suffix, suppressing noise (None / empty container)."""
-    from rich.markup import escape
-
+def _default_pieces(prop: dict[str, Any], is_required: bool) -> tuple[str, str]:
+    """Return ``(style, text)`` for the default suffix; ``("", "")`` for none."""
     if "default" in prop:
         d = prop["default"]
         if d is None or d == {} or d == []:
-            return ""
-        return f" = [magenta]{escape(repr(d))}[/]"
+            return "", ""
+        return "magenta", f" = {d!r}"
     if is_required:
-        return " [red](required)[/]"
-    return ""
+        return "red", " (required)"
+    return "", ""
 
 
 # ── config import-opencode ─────────────────────────────────────────────
