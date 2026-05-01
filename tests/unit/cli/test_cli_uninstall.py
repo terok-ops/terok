@@ -62,6 +62,13 @@ class TestUninstallSandboxStack:
         aggregator.assert_called_once_with(root=False)
         out = capsys.readouterr().out
         assert "Sandbox stack" in out
+        # The success-line wording is a deliberate operator-visible
+        # contract: the word "bridge" appearing here documents that
+        # the integration wire is part of what got torn down (sandbox
+        # owns the bridge phase as of v0.7.7).  Asserting "removed"
+        # alone wouldn't catch a regression that drops "bridge" from
+        # the success phrase.
+        assert "bridge" in out
         assert "removed" in out
 
     def test_aggregator_failure_reports_fail(self, capsys: pytest.CaptureFixture[str]) -> None:

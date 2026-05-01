@@ -4,10 +4,14 @@
 """Mirror of ``terok setup``: tears down everything the bootstrap installs.
 
 Reverse install order: desktop entry first (most user-visible), then
-the sandbox aggregator's symmetric uninstall (clearance hub/verdict/
-notifier → gate → vault → shield hooks).  The NFLOG reader script is
-a shield artefact that the sandbox aggregator's shield phase doesn't
-clean up today, so we tear it down alongside the aggregator call.
+the sandbox aggregator's symmetric uninstall.  The aggregator now
+owns every piece of the service stack, including the shield→clearance
+event bridge — its ``run_bridge_uninstall_phase`` runs first in the
+teardown sequence so the wire goes down before its endpoints
+(clearance hub/verdict/notifier → gate → vault → shield hooks).
+Terok's wrapper is a thin delegating call into the aggregator; this
+module no longer performs any direct reader/bridge cleanup of its
+own.
 
 The vault credential DB is left on disk so a re-install picks up the
 operator's tokens and SSH keys without a fresh auth cycle;
