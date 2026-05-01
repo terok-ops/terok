@@ -33,6 +33,11 @@ class TaskState:
     exit_code: int | None = None
     deleting: bool = False
     initialized: bool = False
+    # UI-only flag the TUI flips while a launch worker is in flight but
+    # podman has not yet created the container.  Bridges the gap between
+    # "task created" and "container running (init)" so users see ⏳
+    # instead of an ambiguous 🆕.
+    starting: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,6 +71,7 @@ class ProjectBadge:
 STATUS_DISPLAY: dict[str, StatusInfo] = {
     "running": StatusInfo(label="running", emoji="\U0001f7e2", color="green"),
     "init": StatusInfo(label="init", emoji="\U0001f7e1", color="yellow"),
+    "starting": StatusInfo(label="starting", emoji="\u23f3", color="yellow"),
     "stopped": StatusInfo(label="stopped", emoji="\U0001f534", color="red"),
     "completed": StatusInfo(label="completed", emoji="\u2705", color="green"),
     "failed": StatusInfo(label="failed", emoji="\u274c", color="red"),
@@ -111,8 +117,8 @@ def effective_status(task: TaskState) -> str:
     - ``initialized`` (bool): True once ``ready_at`` is persisted to YAML
 
     Returns one of: ``"deleting"``, ``"running"``, ``"init"``,
-    ``"stopped"``, ``"completed"``, ``"failed"``, ``"created"``,
-    ``"not found"``.
+    ``"starting"``, ``"stopped"``, ``"completed"``, ``"failed"``,
+    ``"created"``, ``"not found"``.
     """
     if task.deleting:
         return "deleting"
@@ -125,6 +131,11 @@ def effective_status(task: TaskState) -> str:
     if cs is not None:
         return _exit_code_status(task.exit_code) or "stopped"
 
+    # No container yet — ``starting`` fills the launch-worker gap
+    # before podman has created the container.  Once it's up, the
+    # ``cs == "running"`` branch above takes over with ``init``.
+    if task.starting:
+        return "starting"
     if not task.initialized:
         return "created"
     return _exit_code_status(task.exit_code) or "not found"

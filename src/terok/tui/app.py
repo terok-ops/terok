@@ -319,6 +319,9 @@ if _HAS_TEXTUAL:
             # project actually spawns a subprocess.  Users who don't opt in
             # never bind the socket.
             self._askpass_service: AskpassService | None = None
+            # Tasks whose CLI/Toad launch worker is in flight; drives the
+            # ⏳ badge via ``TaskMeta.starting``.
+            self._launching_tasks: set[tuple[str, str]] = set()
 
         def _update_title(self):
             """Update the TUI title with version and branch information."""
@@ -702,9 +705,15 @@ if _HAS_TEXTUAL:
             """Reload tasks for the current project and update the task list."""
             if not self.current_project_id:
                 return
-            tasks_meta = get_tasks(self.current_project_id, reverse=True)
+            pid = self.current_project_id
+            tasks_meta = get_tasks(pid, reverse=True)
+            # Set the launching flag before ``set_tasks`` so the first
+            # label render is already correct — avoids reformatting every
+            # row a second time.
+            for tm in tasks_meta:
+                tm.starting = (pid, tm.task_id) in self._launching_tasks
             task_list = self.query_one("#task-list", TaskList)
-            task_list.set_tasks(self.current_project_id, tasks_meta)
+            task_list.set_tasks(pid, tasks_meta)
 
             if task_list.tasks:
                 # Try to restore last selected task for this project
@@ -749,6 +758,44 @@ if _HAS_TEXTUAL:
             details.set_task(self.current_task)
             if not self.current_task.deleting:
                 self._queue_task_image_status(self.current_project_id, self.current_task)
+
+        # ---------- Launch tracking ----------
+
+        def _apply_launching_to_tasks(self) -> None:
+            """Mirror ``_launching_tasks`` onto current ``TaskMeta`` instances and repaint."""
+            pid = self.current_project_id
+            if pid is None:
+                return
+            task_list = self.query_one("#task-list", TaskList)
+            for tm in task_list.tasks:
+                tm.starting = (pid, tm.task_id) in self._launching_tasks
+            for item in task_list.query(TaskListItem):
+                label = task_list._format_task_label(item.task_meta)
+                item.query_one(Static).update(label)
+            if self.current_task is not None:
+                self.current_task.starting = (
+                    pid,
+                    self.current_task.task_id,
+                ) in self._launching_tasks
+                self.query_one("#task-details", TaskDetails).set_task(self.current_task)
+
+        def _mark_launching(self, project_id: str, task_id: str) -> None:
+            """Flag a task as currently being launched.  Triggers a repaint."""
+            key = (project_id, task_id)
+            if key in self._launching_tasks:
+                return
+            self._launching_tasks.add(key)
+            if project_id == self.current_project_id:
+                self._apply_launching_to_tasks()
+
+        def _unmark_launching(self, project_id: str, task_id: str) -> None:
+            """Clear the launching flag once the worker has reached a terminal state."""
+            key = (project_id, task_id)
+            if key not in self._launching_tasks:
+                return
+            self._launching_tasks.discard(key)
+            if project_id == self.current_project_id:
+                self._apply_launching_to_tasks()
 
         # ---------- Status / notifications ----------
 
@@ -923,6 +970,16 @@ if _HAS_TEXTUAL:
         async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
             """Dispatch completed worker results to the appropriate UI panel."""
             worker = event.worker
+            # ERROR/CANCELLED need ⏳ cleanup too or the badge gets stuck.
+            if event.state in (
+                WorkerState.SUCCESS,
+                WorkerState.ERROR,
+                WorkerState.CANCELLED,
+            ) and worker.group in ("cli-launch", "toad-launch"):
+                name = worker.name if isinstance(worker.name, str) else ""
+                parts = name.split(":")
+                if len(parts) == 3:
+                    self._unmark_launching(parts[1], parts[2])
             if event.state != WorkerState.SUCCESS:
                 if worker.group == "project-state" and event.state == WorkerState.ERROR:
                     state_widget = self.query_one("#project-state", ProjectState)

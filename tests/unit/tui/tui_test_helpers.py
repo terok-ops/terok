@@ -271,6 +271,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     class WorkerState:
         SUCCESS = "success"
         ERROR = "error"
+        CANCELLED = "cancelled"
 
     worker_mod.Worker = Worker
     worker_mod.WorkerState = WorkerState

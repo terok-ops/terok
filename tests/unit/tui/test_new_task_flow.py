@@ -681,6 +681,7 @@ class TestStartCliTaskBackgroundPassesName:
         instance.run_worker = mock.Mock()
         instance.push_screen = mock.AsyncMock()
         instance.refresh_tasks = mock.AsyncMock()
+        instance._mark_launching = mock.Mock()
 
         fake_project = mock.Mock()
         fake_project.default_login = "claude"

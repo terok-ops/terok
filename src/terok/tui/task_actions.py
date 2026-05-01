@@ -202,6 +202,7 @@ class TaskActionsMixin:
         self._focus_task_after_creation(pid, task_id)
         cname = container_name(pid, "cli", task_id)
 
+        self._mark_launching(pid, task_id)
         self.run_worker(
             lambda: self._start_cli_container_quiet(pid, task_id),
             name=f"cli-launch:{pid}:{task_id}",
@@ -307,6 +308,7 @@ class TaskActionsMixin:
             return
         self._focus_task_after_creation(pid, task_id)
 
+        self._mark_launching(pid, task_id)
         self.run_worker(
             lambda: self._start_toad_container_quiet(pid, task_id),
             name=f"toad-launch:{pid}:{task_id}",

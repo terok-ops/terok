@@ -55,7 +55,10 @@ def render_task_details(
 
     m_info = mode_info(task.mode)
     m_emoji = render_emoji(m_info)
-    mode_display = m_info.label or "Not assigned (choose CLI or Web mode)"
+    # Empty label for an unset mode lets the cricket emoji speak for
+    # itself — modes are picked via the Start CLI/Toad/Autopilot menu,
+    # not from this panel.
+    mode_display = m_info.label
 
     s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
 
@@ -63,9 +66,10 @@ def render_task_details(
         Text(f"Task ID:   {task.task_id}"),
     ]
     lines.append(Text(f"Name:      {task.name}"))
+    type_line = f"Type:      {m_emoji} {mode_display}".rstrip()
     lines += [
         Text(f"Status:    {render_emoji(s_info)} {s_info.label}"),
-        Text(f"Type:      {m_emoji} {mode_display}"),
+        Text(type_line),
     ]
     if task.work_status:
         work_text = task.work_status

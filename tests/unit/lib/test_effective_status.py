@@ -45,6 +45,9 @@ EFFECTIVE_STATUS_CASES = [
     ({"container_state": None, "mode": "run", "exit_code": 2}, "failed"),
     ({"container_state": "running", "mode": "cli", "deleting": True}, "deleting"),
     ({"container_state": "running", "mode": "cli", "deleting": False}, "running"),
+    ({"container_state": None, "mode": None, "starting": True}, "starting"),
+    ({"container_state": "running", "mode": None, "starting": True}, "init"),
+    ({"container_state": None, "mode": None, "starting": True, "deleting": True}, "deleting"),
     ({}, "created"),
 ]
 
@@ -70,6 +73,9 @@ MODE_INFO_CASES = [
         "no-container-failure",
         "deleting-overrides-all",
         "deleting-false-ignored",
+        "starting-fills-pre-container-gap",
+        "starting-yields-to-init-once-container-running",
+        "deleting-overrides-starting",
         "minimal-defaults",
     ],
 )
