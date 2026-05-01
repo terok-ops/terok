@@ -490,6 +490,13 @@ layer = "core"
 depends_on = []
 utility = true
 
+# Hanging-indent text wrapping (TUI label rendering)
+[[modules]]
+path = "terok.lib.util.text_wrap"
+layer = "core"
+depends_on = []
+utility = true
+
 
 # ── Interfaces ────────────────────────────────────────────────────
 

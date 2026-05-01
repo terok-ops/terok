@@ -1556,16 +1556,30 @@ class TaskDetailsScreen(screen.Screen[str | None]):
 
     def on_mount(self) -> None:
         """Render task details and focus the action list."""
+        self._last_render_width = -1
+        self._render_details()
+        actions = self.query_one("#actions-list", OptionList)
+        actions.focus()
+
+    def _render_details(self) -> None:
+        """Render the cached task into the detail pane at its current width."""
         detail_widget = self.query_one("#detail-content", Static)
+        width = detail_widget.size.width
+        if width == self._last_render_width:
+            return
+        self._last_render_width = width
         rendered = render_task_details(
             self._task_meta,
             project_id=self._project_id,
             image_old=self._image_old,
             empty_message="No task selected.",
+            width=width,
         )
         detail_widget.update(rendered)
-        actions = self.query_one("#actions-list", OptionList)
-        actions.focus()
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-render so the Name line wraps to the new screen width."""
+        self._render_details()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Dismiss with the chosen action ID."""

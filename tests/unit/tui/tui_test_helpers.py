@@ -54,7 +54,11 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     class Key:
         pass
 
+    class Resize:
+        pass
+
     events_mod.Key = Key
+    events_mod.Resize = Resize
 
     screen_mod = types.ModuleType("textual.screen")
 

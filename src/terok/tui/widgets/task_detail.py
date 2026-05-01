@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.style import Style
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.widgets import Static
 
@@ -15,6 +16,7 @@ from ...lib.core.task_display import STATUS_DISPLAY, mode_info
 from ...lib.orchestration.tasks import TaskMeta
 from ...lib.util.emoji import render_emoji
 from ...lib.util.net import url_host
+from ...lib.util.text_wrap import wrap_with_hanging_indent
 
 
 def _get_css_variables(widget: Static) -> dict[str, str]:
@@ -36,6 +38,7 @@ def render_task_details(
     show_workspace: bool = True,
     shield_hooks_ok: bool | None = None,
     is_web: bool = False,
+    width: int = 0,
 ) -> Text:
     """Render task details as a Rich Text object.
 
@@ -65,7 +68,7 @@ def render_task_details(
     lines = [
         Text(f"Task ID:   {task.task_id}"),
     ]
-    lines.append(Text(f"Name:      {task.name}"))
+    lines.append(Text(wrap_with_hanging_indent("Name:      ", task.name, "", width)))
     type_line = f"Type:      {m_emoji} {mode_display}".rstrip()
     lines += [
         Text(f"Status:    {render_emoji(s_info)} {s_info.label}"),
@@ -165,6 +168,10 @@ class TaskDetails(Static):
         """Initialize the task details panel."""
         super().__init__(**kwargs)
         self.current_project_id: str | None = None
+        self._current_task: TaskMeta | None = None
+        self._current_empty_message: str | None = None
+        self._current_image_old: bool | None = None
+        self._last_render_width = -1
 
     def compose(self) -> ComposeResult:
         """Yield the inner Static widget used for rendered task content."""
@@ -177,11 +184,28 @@ class TaskDetails(Static):
         image_old: bool | None = None,
     ) -> None:
         """Render and display details for the given task (or clear if None)."""
-        content = self.query_one("#task-details-content", Static)
         if task is None:
             self.current_project_id = None
         else:
             self.current_project_id = self.app.current_project_id if self.app else None
+
+        self._current_task = task
+        self._current_empty_message = empty_message
+        self._current_image_old = image_old
+        self._last_render_width = -1  # task changed — force re-render
+        self._render()
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-render only when the panel's content width changes."""
+        width = self.query_one("#task-details-content", Static).size.width
+        if width == self._last_render_width:
+            return
+        self._render()
+
+    def _render(self) -> None:
+        """Render the cached task into the inner Static at the current width."""
+        content = self.query_one("#task-details-content", Static)
+        self._last_render_width = content.size.width
 
         # Determine shield hook health from the cached project-level env check.
         hooks_ok: bool | None = None
@@ -193,14 +217,15 @@ class TaskDetails(Static):
             pass
 
         rendered = render_task_details(
-            task,
+            self._current_task,
             self.current_project_id,
-            image_old,
-            empty_message,
+            self._current_image_old,
+            self._current_empty_message,
             _get_css_variables(self),
             show_workspace=False,
             shield_hooks_ok=hooks_ok,
             is_web=bool(self.app and self.app.is_web),
+            width=self._last_render_width,
         )
         content.update(rendered)
 
