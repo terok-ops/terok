@@ -1564,7 +1564,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
     def _render_details(self) -> None:
         """Render the cached task into the detail pane at its current width."""
         detail_widget = self.query_one("#detail-content", Static)
-        width = detail_widget.size.width
+        width = detail_widget.content_size.width
         if width == self._last_render_width:
             return
         self._last_render_width = width

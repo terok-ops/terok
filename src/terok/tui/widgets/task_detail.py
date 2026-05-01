@@ -197,7 +197,7 @@ class TaskDetails(Static):
 
     def on_resize(self, event: events.Resize) -> None:
         """Re-render only when the panel's content width changes."""
-        width = self.query_one("#task-details-content", Static).size.width
+        width = self.query_one("#task-details-content", Static).content_size.width
         if width == self._last_render_width:
             return
         self._render()
@@ -205,7 +205,7 @@ class TaskDetails(Static):
     def _render(self) -> None:
         """Render the cached task into the inner Static at the current width."""
         content = self.query_one("#task-details-content", Static)
-        self._last_render_width = content.size.width
+        self._last_render_width = content.content_size.width
 
         # Determine shield hook health from the cached project-level env check.
         hooks_ok: bool | None = None

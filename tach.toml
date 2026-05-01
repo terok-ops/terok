@@ -843,6 +843,10 @@ expose = ["ensure_dir", "ensure_dir_writable", "archive_timestamp", "unique_arch
 from = ["terok.lib.util.fs"]
 
 [[interfaces]]
+expose = ["wrap_with_hanging_indent"]
+from = ["terok.lib.util.text_wrap"]
+
+[[interfaces]]
 expose = ["assign_web_port", "release_web_port"]
 from = ["terok.lib.orchestration.ports"]
 
