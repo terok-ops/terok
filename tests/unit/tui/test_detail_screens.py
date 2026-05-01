@@ -427,6 +427,28 @@ class TestRenderHelpers:
         assert task.exit_code == expected
 
 
+class TestTextualMethodNameCollisions:
+    """Guard against shadowing Textual Widget rendering hooks.
+
+    Defining ``_render`` (or ``_render_content``) on a Widget subclass
+    breaks the renderer with ``'NoneType' has no attribute
+    'render_strips'`` because Textual calls ``self._render()`` to obtain
+    a Visual during repaint.  Custom redraw helpers must use a different
+    name (we use ``_redraw_content``).
+    """
+
+    RESERVED_BY_TEXTUAL = ("_render", "_render_content", "_render_widget")
+
+    def test_task_details_does_not_shadow_textual_render(self) -> None:
+        widgets = import_widgets()
+        defined = vars(widgets.TaskDetails)
+        for name in self.RESERVED_BY_TEXTUAL:
+            assert name not in defined, (
+                f"TaskDetails.{name} would shadow Textual's Widget.{name} "
+                "and crash the renderer; rename to e.g. _redraw_content."
+            )
+
+
 class TestScreenConstruction:
     """Tests that screen classes can be instantiated with correct arguments."""
 

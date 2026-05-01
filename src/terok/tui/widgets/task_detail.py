@@ -193,17 +193,24 @@ class TaskDetails(Static):
         self._current_empty_message = empty_message
         self._current_image_old = image_old
         self._last_render_width = -1  # task changed — force re-render
-        self._render()
+        self._redraw_content()
 
     def on_resize(self, event: events.Resize) -> None:
         """Re-render only when the panel's content width changes."""
         width = self.query_one("#task-details-content", Static).content_size.width
         if width == self._last_render_width:
             return
-        self._render()
+        self._redraw_content()
 
-    def _render(self) -> None:
-        """Render the cached task into the inner Static at the current width."""
+    def _redraw_content(self) -> None:
+        """Render the cached task into the inner Static at the current width.
+
+        Named ``_redraw_content`` (not ``_render``) because Textual's
+        :class:`~textual.widget.Widget` already defines ``_render(self) ->
+        Visual`` as part of its rendering pipeline; shadowing that method
+        crashes the renderer with ``'NoneType' has no attribute
+        'render_strips'`` when this Widget gets repainted.
+        """
         content = self.query_one("#task-details-content", Static)
         self._last_render_width = content.content_size.width
 
