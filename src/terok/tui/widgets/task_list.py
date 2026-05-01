@@ -5,12 +5,14 @@
 
 from typing import Any
 
+from textual import events
 from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
 
 from ...lib.core.task_display import STATUS_DISPLAY, mode_info
 from ...lib.orchestration.tasks import TaskMeta
 from ...lib.util.emoji import render_emoji
+from ...lib.util.text_wrap import wrap_with_hanging_indent
 
 
 class TaskListItem(ListItem):
@@ -69,9 +71,15 @@ class TaskList(ListView):
         self.project_id: str | None = None
         self.tasks: list[TaskMeta] = []
         self._generation = 0
+        self._last_label_width = -1
 
-    def _format_task_label(self, task: TaskMeta) -> str:
-        """Build a human-readable label string for a task list entry."""
+    def _format_task_label(self, task: TaskMeta, width: int = 0) -> str:
+        """Build a human-readable label string for a task list entry.
+
+        When *width* is positive, long names wrap at dashes (or anywhere
+        if a dashless segment overflows), with continuations indented to
+        align with the start of the name.
+        """
         m_emoji = render_emoji(mode_info(task.mode))
         s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
         s_emoji = render_emoji(s_info)
@@ -82,10 +90,28 @@ class TaskList(ListView):
         if task.web_port is not None:
             extra_parts.append(f"port={task.web_port}")
 
-        label = f"{task.task_id} {m_emoji} {s_emoji} {task.name}"
-        if extra_parts:
-            label += f" [{'; '.join(extra_parts)}]"
-        return label
+        prefix = f"{task.task_id} {m_emoji} {s_emoji} "
+        suffix = f" [{'; '.join(extra_parts)}]" if extra_parts else ""
+        return wrap_with_hanging_indent(prefix, task.name, suffix, width)
+
+    def _label_width(self) -> int:
+        """Cell width available to a list item's label (excludes border/scrollbar)."""
+        return self.content_size.width
+
+    def refresh_labels(self) -> None:
+        """Re-render every visible task label at the current width."""
+        width = self._label_width()
+        for item in self.query(TaskListItem):
+            label = self._format_task_label(item.task_meta, width)
+            item.query_one(Static).update(label)
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Re-wrap labels only when the panel's content width changes."""
+        width = self._label_width()
+        if width == self._last_label_width:
+            return
+        self._last_label_width = width
+        self.refresh_labels()
 
     def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
         """Populate the list from ``TaskMeta`` instances, newest first."""
@@ -99,12 +125,13 @@ class TaskList(ListView):
         self._generation += 1
         self.clear()
 
+        width = self._label_width()
         for tm in sorted(tasks_meta, key=lambda t: t.created_at or "", reverse=True):
             if tm.task_id in existing_states:
                 tm.container_state = existing_states[tm.task_id]
             self.tasks.append(tm)
 
-            label = self._format_task_label(tm)
+            label = self._format_task_label(tm, width)
             self.append(TaskListItem(project_id, tm, label, self._generation))
 
     def mark_deleting(self, task_id: str) -> bool:
@@ -117,11 +144,12 @@ class TaskList(ListView):
                 found = True
                 break
 
+        width = self._label_width()
         for item in self.query(TaskListItem):
             if item.task_meta.task_id != task_id:
                 continue
             item.task_meta.deleting = True
-            label = self._format_task_label(item.task_meta)
+            label = self._format_task_label(item.task_meta, width)
             item.query_one(Static).update(label)
             found = True
 

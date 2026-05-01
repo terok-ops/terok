@@ -490,6 +490,13 @@ layer = "core"
 depends_on = []
 utility = true
 
+# Hanging-indent text wrapping (TUI label rendering)
+[[modules]]
+path = "terok.lib.util.text_wrap"
+layer = "core"
+depends_on = []
+utility = true
+
 
 # ── Interfaces ────────────────────────────────────────────────────
 
@@ -834,6 +841,10 @@ from = ["terok.lib.util.emoji"]
 [[interfaces]]
 expose = ["ensure_dir", "ensure_dir_writable", "archive_timestamp", "unique_archive_path", "create_archive_dir", "create_archive_file"]
 from = ["terok.lib.util.fs"]
+
+[[interfaces]]
+expose = ["wrap_with_hanging_indent"]
+from = ["terok.lib.util.text_wrap"]
 
 [[interfaces]]
 expose = ["assign_web_port", "release_web_port"]

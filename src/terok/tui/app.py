@@ -74,7 +74,7 @@ if _HAS_TEXTUAL:
     from textual import on, work
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Footer, Header, Static
+    from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
     from ..lib.core.config import (
@@ -132,7 +132,6 @@ if _HAS_TEXTUAL:
         ProjectState,
         TaskDetails,
         TaskList,
-        TaskListItem,
         TaskMeta,
     )
     from .worker_log_screen import WorkerLogScreen
@@ -769,9 +768,7 @@ if _HAS_TEXTUAL:
             task_list = self.query_one("#task-list", TaskList)
             for tm in task_list.tasks:
                 tm.starting = (pid, tm.task_id) in self._launching_tasks
-            for item in task_list.query(TaskListItem):
-                label = task_list._format_task_label(item.task_meta)
-                item.query_one(Static).update(label)
+            task_list.refresh_labels()
             if self.current_task is not None:
                 self.current_task.starting = (
                     pid,
@@ -1046,9 +1043,7 @@ if _HAS_TEXTUAL:
                         changed = True
                 if changed:
                     # Regenerate labels on visible list items so status badges update
-                    for item in task_list.query(TaskListItem):
-                        label = task_list._format_task_label(item.task_meta)
-                        item.query_one(Static).update(label)
+                    task_list.refresh_labels()
                     if self.current_task:
                         details = self.query_one("#task-details", TaskDetails)
                         details.set_task(self.current_task)
