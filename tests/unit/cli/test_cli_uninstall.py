@@ -3,11 +3,13 @@
 
 """Tests for ``terok uninstall`` — symmetric teardown of ``terok setup``.
 
-Uninstall now delegates the service stack to
-[`terok_sandbox.sandbox_uninstall`][terok_sandbox.sandbox_uninstall] (the public aggregator) plus
-a reader-script cleanup that sandbox's shield phase doesn't cover
-today.  Terok's own phases shrink to desktop-entry removal and
-optional credential-DB purge.
+The sandbox aggregator owns the full teardown — bridge + clearance
++ gate + vault + shield — and bridge teardown is now its own
+first-class phase (``run_bridge_uninstall_phase`` in
+``terok_sandbox._setup``), not the earlier ``uninstall_shield_bridge``
+workaround called from terok directly.  Terok's own phases shrink
+to desktop-entry removal and optional credential-DB purge; the
+``_uninstall_sandbox_stack`` wrapper is a thin delegating call.
 """
 
 from __future__ import annotations
