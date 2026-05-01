@@ -56,9 +56,7 @@ class TestUninstallSandboxStack:
     delegating wrapper that's left.
     """
 
-    def test_happy_path_delegates_to_aggregator(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_happy_path_delegates_to_aggregator(self, capsys: pytest.CaptureFixture[str]) -> None:
         with patch("terok_sandbox.sandbox_uninstall") as aggregator:
             assert _uninstall_sandbox_stack(root=False) is True
         aggregator.assert_called_once_with(root=False)
