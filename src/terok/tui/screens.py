@@ -1564,7 +1564,10 @@ class TaskDetailsScreen(screen.Screen[str | None]):
     def _render_details(self) -> None:
         """Render the cached task into the detail pane at its current width."""
         detail_widget = self.query_one("#detail-content", Static)
-        width = detail_widget.content_size.width
+        # ``scrollable_content_region`` subtracts the vertical scrollbar's
+        # gutter (the pane has ``overflow-y: auto``) so the wrap doesn't
+        # overshoot once the content scrolls.
+        width = detail_widget.scrollable_content_region.size.width
         if width == self._last_render_width:
             return
         self._last_render_width = width

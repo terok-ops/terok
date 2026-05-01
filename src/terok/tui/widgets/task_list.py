@@ -95,8 +95,14 @@ class TaskList(ListView):
         return wrap_with_hanging_indent(prefix, task.name, suffix, width)
 
     def _label_width(self) -> int:
-        """Cell width available to a list item's label (excludes border/scrollbar)."""
-        return self.content_size.width
+        """Cell width available to a list item's label.
+
+        ``scrollable_content_region`` (rather than ``content_size``)
+        subtracts the vertical scrollbar's gutter when one appears —
+        otherwise the wrap overshoots by 2 cells the moment enough
+        tasks pile up to make the list scroll.
+        """
+        return self.scrollable_content_region.size.width
 
     def refresh_labels(self) -> None:
         """Re-render every visible task label at the current width."""

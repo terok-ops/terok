@@ -197,7 +197,7 @@ class TaskDetails(Static):
 
     def on_resize(self, event: events.Resize) -> None:
         """Re-render only when the panel's content width changes."""
-        width = self.query_one("#task-details-content", Static).content_size.width
+        width = self.query_one("#task-details-content", Static).scrollable_content_region.size.width
         if width == self._last_render_width:
             return
         self._redraw_content()
@@ -212,7 +212,7 @@ class TaskDetails(Static):
         'render_strips'`` when this Widget gets repainted.
         """
         content = self.query_one("#task-details-content", Static)
-        self._last_render_width = content.content_size.width
+        self._last_render_width = content.scrollable_content_region.size.width
 
         # Determine shield hook health from the cached project-level env check.
         hooks_ok: bool | None = None
