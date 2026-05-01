@@ -1,75 +1,29 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Hanging-indent wrapping for prefix-aligned labels.
+"""Hanging-indent wrapping for prefix-aligned TUI labels.
 
-Used by the TUI to wrap long task names at dash boundaries (and char
-boundaries when a single segment overflows), keeping continuation lines
-indented to where the body started after a fixed-width prefix.
+Wrapping itself is delegated to :func:`textwrap.wrap` (which already breaks
+on hyphens and folds overlong dashless words). This helper exists only to
+stitch together a cell-aware *prefix* (which may contain wide characters
+like emoji that would throw off ``textwrap``'s char-count accounting), the
+wrapped body, and an optional trailing *suffix*.
 """
 
 from __future__ import annotations
 
+import textwrap
+
 from rich.cells import cell_len
-
-
-def _wrap_at_dashes(text: str, width: int) -> list[str]:
-    """Split *text* into lines of at most *width* cells, breaking at dashes.
-
-    Dashes stay attached to the segment on their left so a wrap point looks
-    like "foo-\\nbar" rather than "foo\\n-bar". Segments longer than *width*
-    fall back to character-folding.
-    """
-    if width <= 0 or cell_len(text) <= width:
-        return [text]
-
-    # Pair every segment with its cell width to keep this loop O(n).
-    segments: list[tuple[str, int]] = []
-    buf = ""
-    for ch in text:
-        buf += ch
-        if ch == "-":
-            segments.append((buf, cell_len(buf)))
-            buf = ""
-    if buf:
-        segments.append((buf, cell_len(buf)))
-
-    lines: list[tuple[str, int]] = []
-    line, line_w = "", 0
-    for seg, seg_w in segments:
-        if not line or line_w + seg_w <= width:
-            line += seg
-            line_w += seg_w
-        else:
-            lines.append((line, line_w))
-            line, line_w = seg, seg_w
-    if line:
-        lines.append((line, line_w))
-
-    folded: list[str] = []
-    for ln, ln_w in lines:
-        while ln_w > width:
-            cut, taken = "", 0
-            for ch in ln:
-                w = cell_len(ch)
-                if taken + w > width:
-                    break
-                cut += ch
-                taken += w
-            folded.append(cut)
-            ln = ln[len(cut) :]
-            ln_w -= taken
-        folded.append(ln)
-    return folded
 
 
 def wrap_with_hanging_indent(prefix: str, body: str, suffix: str, width: int) -> str:
     """Render ``prefix + body + suffix`` with continuation lines hanging-indented.
 
-    *body* wraps at dash boundaries (or anywhere, if a dashless segment is
-    still too wide) so that each output line fits in *width* cells. Wrapped
-    lines are prepended with spaces aligning to the cell width of *prefix*,
-    so continuations sit underneath the start of *body*.
+    *body* wraps with :func:`textwrap.wrap` (so dashes are break points and
+    overlong segments fold by character). Continuation lines are prepended
+    with spaces aligning to the *cell* width of *prefix*, so they sit
+    underneath the start of *body* even when *prefix* contains emoji.
 
     *suffix* attaches to the last body line if it fits; otherwise it lands
     on its own continuation line with the leading space stripped.
@@ -86,13 +40,14 @@ def wrap_with_hanging_indent(prefix: str, body: str, suffix: str, width: int) ->
     if avail <= 0:
         return full
 
-    body_lines = _wrap_at_dashes(body, avail)
+    # textwrap counts in chars; it lines up with cell width as long as *body*
+    # is ASCII (terok task names are).
+    lines = textwrap.wrap(body, width=avail) or [""]
     if suffix:
-        last = body_lines[-1]
-        if cell_len(last) + cell_len(suffix) <= avail:
-            body_lines[-1] = last + suffix
+        if cell_len(lines[-1]) + cell_len(suffix) <= avail:
+            lines[-1] += suffix
         else:
-            body_lines.append(suffix.lstrip())
+            lines.append(suffix.lstrip())
 
     pad = " " * indent
-    return prefix + body_lines[0] + "".join(f"\n{pad}{ln}" for ln in body_lines[1:])
+    return prefix + ("\n" + pad).join(lines)
