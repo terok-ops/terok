@@ -75,7 +75,7 @@ _INITIAL_PROMPT_PATH = f"{CONTAINER_TEROK_CONFIG}/{_INITIAL_PROMPT_FILENAME}"
 _BASH_INITIAL_PROMPT_WRAPPER = (
     f"p={shlex.quote(_INITIAL_PROMPT_PATH)}; "
     '[ -s "$p" ] && { '
-    'printf "\\n\\033[1;33m\U0001f4dd Initial prompt:\\033[0m\\n"; '
+    f'printf "\\n\\033[1;33m\U0001f4dd Initial prompt\\033[0m \\033[2m(%s)\\033[0m\\n" {shlex.quote(_INITIAL_PROMPT_PATH)}; '
     'cat "$p"; printf "\\n\\n"; '
     "}; exec bash -i"
 )
