@@ -77,6 +77,64 @@ class TestRecordHook:
         meta_path = tmp_path / "nonexistent.json"
         _record_hook(meta_path, "post_start")  # should not raise
 
+    def test_record_hook_migrates_yaml_then_keeps_recording(self, tmp_path: Path) -> None:
+        """A caller pinning the legacy ``.yml`` Path keeps recording after migration.
+
+        Regression: the first call rotates ``.yml`` → ``.json`` and unlinks
+        the YAML.  Without resolving to the canonical ``.json`` first, every
+        later call (``post_start`` → ``post_ready`` → ``post_stop``) would hit
+        the existence check on the now-gone YAML and silently drop the hook
+        from ``hooks_fired``.
+        """
+        import json
+
+        from terok.lib.util.yaml import dump as yaml_dump
+
+        # Caller hands in a stale YAML path — the typical pre_start/post_start
+        # call site captures meta_path before any migration has happened.
+        yaml_path = tmp_path / "1.yml"
+        yaml_path.write_text(yaml_dump({"task_id": "1", "mode": "cli"}))
+
+        _record_hook(yaml_path, "pre_start")  # migrates to JSON, unlinks YAML
+        _record_hook(yaml_path, "post_start")  # would no-op without the fix
+        _record_hook(yaml_path, "post_ready")
+        _record_hook(yaml_path, "post_stop")
+
+        # YAML is gone, JSON is canonical.
+        assert not yaml_path.exists()
+        json_path = tmp_path / "1.json"
+        assert json_path.is_file()
+        meta = json.loads(json_path.read_text())
+        assert meta["hooks_fired"] == ["pre_start", "post_start", "post_ready", "post_stop"]
+
+    def test_record_hook_writes_atomically(self, tmp_path: Path) -> None:
+        """``_record_hook`` stages to ``*.tmp`` and ``os.replace`` — no truncated JSON.
+
+        An interrupted record must never leave a partial file behind.  Force
+        a failure during the temp-file write and assert the canonical JSON
+        is unchanged (would otherwise be truncated under the old in-place
+        ``write_text`` pattern).
+        """
+        import json
+        from unittest import mock
+
+        meta_path = tmp_path / "1.json"
+        original = {"task_id": "1", "hooks_fired": ["pre_start"]}
+        meta_path.write_text(json.dumps(original, indent=2))
+
+        original_write_text = Path.write_text
+
+        def _fail_on_tmp(self: Path, *args, **kwargs):  # noqa: ANN001, ANN202
+            if self.suffix == ".tmp":
+                raise OSError("disk full")
+            return original_write_text(self, *args, **kwargs)
+
+        with mock.patch.object(Path, "write_text", _fail_on_tmp):
+            _record_hook(meta_path, "post_start")  # logs + swallows OSError
+
+        # Original content intact — no torn write.
+        assert json.loads(meta_path.read_text()) == original
+
 
 class TestRunHook:
     """Tests for run_hook execution."""

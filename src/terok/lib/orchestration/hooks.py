@@ -55,28 +55,39 @@ def _build_hook_env(
 def _record_hook(meta_path: Path, hook_name: str) -> None:
     """Append *hook_name* to the ``hooks_fired`` list in task metadata.
 
-    The path may be the canonical JSON file (post-migration) or a
-    leftover YAML file from an older install that no read has touched
-    yet — both shapes are tolerated so the post-stop hook can record
-    itself even when the task was created before the JSON migration
-    landed.  After a YAML record, the file rotates to JSON.
+    The path the caller hands in may be either the canonical JSON file
+    or a leftover YAML one from an older install.  We resolve to the
+    canonical ``.json`` path first — once the migration has happened
+    (any earlier hook in this run could have done it) the on-disk YAML
+    is gone, so a stale ``Path("…task.yml")`` would otherwise fail the
+    existence check and silently drop subsequent hook records.
+
+    The write goes through the same ``.tmp`` + ``os.replace`` pattern
+    the rest of the metadata layer uses, so an interrupted record can
+    never leave a truncated ``.json`` behind.
     """
-    if not meta_path.is_file():
+    json_path = meta_path.with_suffix(".json")
+    if json_path.is_file():
+        source_path = json_path
+    elif meta_path.is_file():
+        source_path = meta_path
+    else:
         return
     try:
-        text = meta_path.read_text(encoding="utf-8")
-        meta = _decode_meta(text, meta_path.suffix)
+        text = source_path.read_text(encoding="utf-8")
+        meta = _decode_meta(text, source_path.suffix)
         fired = meta.get("hooks_fired") or []
         if hook_name not in fired:
             fired.append(hook_name)
         meta["hooks_fired"] = fired
-        json_path = meta_path.with_suffix(".json")
-        json_path.write_text(
+        tmp = json_path.with_suffix(json_path.suffix + ".tmp")
+        tmp.write_text(
             json.dumps(meta, indent=2, ensure_ascii=False, default=str) + "\n",
             encoding="utf-8",
         )
-        if meta_path.suffix == ".yml":
-            meta_path.unlink(missing_ok=True)
+        os.replace(tmp, json_path)
+        if source_path.suffix == ".yml":
+            source_path.unlink(missing_ok=True)
     except Exception:
         logger.warning("failed to record hook %s in %s", hook_name, meta_path, exc_info=True)
 

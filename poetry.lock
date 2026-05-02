@@ -3155,7 +3155,7 @@ PyYAML = ">=6.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
 reference = "feat/dossier-in-events"
-resolved_reference = "0334200c5c4b9aef893dc7ed028026351781aae8"
+resolved_reference = "4ad2cdcfa6ef86dba64301e345d5bf7166e6d0b3"
 
 [[package]]
 name = "textual"

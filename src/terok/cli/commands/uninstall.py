@@ -4,17 +4,18 @@
 """Mirror of ``terok setup``: tears down everything the bootstrap installs.
 
 Reverse install order: desktop entry first (most user-visible), then
-the sandbox aggregator's symmetric uninstall.  The aggregator now
-owns every piece of the service stack, including the shield→clearance
-event bridge — its ``run_bridge_uninstall_phase`` runs first in the
-teardown sequence so the wire goes down before its endpoints
-(clearance hub/verdict/notifier → gate → vault → shield hooks).
-Terok's wrapper is a thin delegating call into the aggregator; this
-module no longer performs any direct reader/bridge cleanup of its
-own.
+the sandbox aggregator's symmetric uninstall.  The aggregator owns
+every piece of the service stack — clearance hub/verdict/notifier,
+gate, vault, and the shield hook pair (which now installs both nft
+and bridge hooks together, so a single shield-uninstall covers the
+event wire too).  Terok's wrapper is a thin delegating call.
 
-The vault credential DB is left on disk so a re-install picks up the
-operator's tokens and SSH keys without a fresh auth cycle;
+The standalone NFLOG reader script under XDG_DATA_HOME survives an
+uninstall on purpose: it's harmless without the hooks that feed it,
+and the next ``terok setup`` overwrites it.
+
+The vault credential DB is also left on disk so a re-install picks up
+the operator's tokens and SSH keys without a fresh auth cycle;
 ``--purge-credentials`` deletes it.
 """
 
@@ -35,8 +36,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         description=(
             "Symmetric teardown of `terok setup` — removes desktop entry "
             "plus the full sandbox stack (clearance, gate, vault, shield "
-            "hooks, NFLOG reader) via the sandbox aggregator.  The vault "
-            "credential DB is preserved unless --purge-credentials is passed."
+            "hooks) via the sandbox aggregator.  The standalone NFLOG "
+            "reader script under XDG_DATA_HOME is preserved (harmless "
+            "without the hooks that feed it; the next setup overwrites "
+            "it).  The vault credential DB is also preserved unless "
+            "--purge-credentials is passed."
         ),
     )
     p.add_argument(
