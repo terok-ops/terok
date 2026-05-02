@@ -125,17 +125,15 @@ class _LifecyclePosted(Message):
 def _render_notification(message: _NotificationPosted) -> str:
     """Format a notification for the TUI log + pending list.
 
-    When both the container name and ID arrived on the bus, surface them
-    together as ``name (id)`` — the TUI has the space and operators running
-    multiple tasks benefit from the disambiguation.  When only one is
-    available (older hubs, resolver miss), the subscriber-generated body
-    is already correct; pass it through untouched.
+    The subscriber's body already does dossier-aware identity rendering
+    via ``_identity_label`` (``project/task · name`` or fall back to the
+    bare container slug) — the TUI just concatenates the title and body
+    so every consumer of the same event renders identically.  An earlier
+    iteration here recomposed ``Container: {name} ({id})`` from the
+    notifier's typed kwargs and silently diverged from the desktop
+    popup; one renderer, one source of truth, no divergence.
     """
-    if not (message.container_name and message.container_id):
-        return f"{message.summary}  {message.body}"
-    body_lines = message.body.split("\n", 1)
-    tail = f"\n{body_lines[1]}" if len(body_lines) == 2 else ""
-    return f"{message.summary}  Container: {message.container_name} ({message.container_id}){tail}"
+    return f"{message.summary}  {message.body}"
 
 
 # ---------------------------------------------------------------------------

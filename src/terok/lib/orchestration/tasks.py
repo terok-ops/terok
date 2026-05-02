@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Task metadata, lifecycle, and query operations.
@@ -319,6 +320,16 @@ class TaskMeta(TaskState):
     """
 
     task_id: str
+    project_id: str = ""
+    """Project the task belongs to.
+
+    Carried in the meta JSON so consumers that don't already know the
+    project (e.g. terok-shield's host-side dossier resolver, which only
+    has the meta-path pointer) can render full ``project/task`` identity
+    without re-deriving it from the on-disk path.  Empty string for
+    pre-this-release meta files; the lifecycle backfills it on the
+    next mutation.
+    """
     mode: str | None
     workspace: str
     web_port: int | None
@@ -459,6 +470,7 @@ def get_task_meta(project_id: str, task_id: str) -> TaskMeta:
             pass
     return TaskMeta(
         task_id=tid,
+        project_id=raw.get("project_id", project_id),
         mode=mode,
         workspace=raw.get("workspace", ""),
         web_port=raw.get("web_port"),
@@ -615,6 +627,7 @@ def _task_new(project: ProjectConfig, *, name: str | None = None) -> str:
     _write_task_readme(ws)
 
     meta = {
+        "project_id": project.id,
         "task_id": next_id,
         "name": task_name,
         "mode": None,

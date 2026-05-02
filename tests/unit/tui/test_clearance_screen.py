@@ -136,27 +136,39 @@ class TestLifecycleBridge:
 
 
 class TestRenderNotification:
-    """``_render_notification`` builds the log line from structured fields."""
+    """``_render_notification`` is a one-liner that joins ``summary`` + subscriber body.
 
-    def test_name_and_id_render_as_name_paren_id(self) -> None:
-        """When both name and id are present, show ``name (id)`` with protocol."""
+    The subscriber's body already does dossier-aware identity rendering —
+    ``Task: project/task · name`` for orchestrator-managed containers,
+    ``Container: <slug>`` otherwise — so the TUI must not recompose its
+    own identity string.  An earlier iteration here built ``Container:
+    {name} ({id})`` from the typed kwargs and silently diverged from the
+    desktop popup.  These tests pin the no-divergence contract: whatever
+    the subscriber wrote in ``body`` is what the operator sees.
+    """
+
+    def test_passes_subscriber_body_through_verbatim(self) -> None:
+        """The dossier-aware body the subscriber composed lands in the log unchanged."""
         mod = _import_clearance()
         msg = mod._NotificationPosted(
             nid=1,
             summary="Blocked: seznam.cz:80",
-            body="Container: my-task\nProtocol: TCP",
+            body="Task: terok/abc · diligent-octopus\nProtocol: TCP",
             actions=[("allow", "Allow"), ("deny", "Deny")],
             replaces_id=0,
             container_id="fa0905d97a1c",
-            container_name="my-task",
+            container_name="terok-cli-abc",
+            project="terok",
+            task_id="abc",
+            task_name="diligent-octopus",
         )
         assert (
             mod._render_notification(msg)
-            == "Blocked: seznam.cz:80  Container: my-task (fa0905d97a1c)\nProtocol: TCP"
+            == "Blocked: seznam.cz:80  Task: terok/abc · diligent-octopus\nProtocol: TCP"
         )
 
-    def test_id_only_passes_body_through(self) -> None:
-        """Without a resolved name, the subscriber-built body reaches the log as-is."""
+    def test_bare_container_body_passes_through_too(self) -> None:
+        """Standalone container path: the subscriber's bare-name body reaches the log as-is."""
         mod = _import_clearance()
         msg = mod._NotificationPosted(
             nid=1,
