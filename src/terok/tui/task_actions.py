@@ -69,14 +69,9 @@ def _build_interactive_agent_command(provider: object, prompt: str | None) -> st
 _LAUNCH_NOTE_FILENAME = "launch-note.txt"
 _LAUNCH_NOTE_PATH = f"{CONTAINER_TEROK_CONFIG}/{_LAUNCH_NOTE_FILENAME}"
 
-# Shell wrapper for bash-agent launches with a note. Reads the note via cat
-# (no shell expansion of user data), prints it after the login profile has
-# run, then execs an interactive shell.  The note file is left in place so
-# the user can pipe it into whichever agent they invoke from the shell
-# (``claude < $note``, ``codex < $note``, etc.) — overwritten on the next
-# bash launch with a fresh prompt, removed when the task is deleted.
-# Wrapper string contains zero user-data interpolation — the note travels
-# via the file mount.
+# Shell wrapper for bash-agent launches with a note. The note travels via
+# the file mount, never as a shell argument — wrapper string contains zero
+# user-data interpolation.
 _BASH_NOTE_WRAPPER = (
     f"n={shlex.quote(_LAUNCH_NOTE_PATH)}; "
     '[ -s "$n" ] && { '
@@ -92,11 +87,9 @@ def _build_bash_login_cmd(
     """Login command for the bash agent, optionally surfacing a launch note.
 
     With no prompt the base login command (login shell inside tmux) is used
-    unchanged.  With a prompt, the note is written to the task's mounted
+    unchanged.  With a prompt, the note is dropped into the task's mounted
     agent-config dir and a small wrapper prints it after the login banner
-    before dropping into an interactive shell.  The note persists at
-    ``$CONTAINER_TEROK_CONFIG/launch-note.txt`` so the user can feed it
-    into any agent they invoke later.
+    before dropping into an interactive shell.
     """
     if not prompt:
         return base_cmd
