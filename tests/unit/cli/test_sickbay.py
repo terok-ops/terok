@@ -722,6 +722,7 @@ class TestCheckClearanceStack:
     """
 
     def test_current_version_is_ok(self) -> None:
+        """Both install targets surface in the detail line, side-by-side."""
         from terok.cli.commands.sickbay import _check_clearance_stack
 
         with (
@@ -731,11 +732,15 @@ class TestCheckClearanceStack:
             unittest.mock.patch(
                 "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=1
             ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._clearance_notifier_unit_version", return_value=3
+            ),
         ):
             sev, label, detail = _check_clearance_stack()
         assert sev == "ok"
         assert label == "Clearance stack"
         assert "terok-clearance-hub.service v1" in detail
+        assert "terok-clearance-notifier.service v3" in detail
 
     def test_outdated_is_warn(self) -> None:
         from terok.cli.commands.sickbay import _check_clearance_stack
@@ -759,7 +764,37 @@ class TestCheckClearanceStack:
             unittest.mock.patch(
                 "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=None
             ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._clearance_notifier_unit_version", return_value=None
+            ),
         ):
             sev, _, detail = _check_clearance_stack()
         assert sev == "ok"
         assert "not installed" in detail
+
+    def test_notifier_only_install_renders_just_the_notifier_line(self) -> None:
+        """Headless hosts that ship only the notifier (or vice versa) render one stamp.
+
+        Sickbay must not assume both stamps are always present — a
+        partial-install host (e.g. someone disabled the hub) should
+        still produce a sensible detail string rather than hiding the
+        one install target that does exist behind a misleading "not
+        installed" branch.
+        """
+        from terok.cli.commands.sickbay import _check_clearance_stack
+
+        with (
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._clearance_check_units_outdated", return_value=None
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._clearance_hub_unit_version", return_value=None
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._clearance_notifier_unit_version", return_value=3
+            ),
+        ):
+            sev, _, detail = _check_clearance_stack()
+        assert sev == "ok"
+        assert "terok-clearance-hub" not in detail
+        assert "terok-clearance-notifier.service v3" in detail

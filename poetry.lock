@@ -3086,11 +3086,11 @@ pyyaml = "^6.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-clearance.git"
 reference = "feat/dossier-in-events"
-resolved_reference = "32f8942302d79bb43ea805facdab7a62566ea2f6"
+resolved_reference = "dbc9362e9fae562c01814d935897400e5d0651ae"
 
 [[package]]
 name = "terok-executor"
-version = "0.0.124"
+version = "0.0.125"
 description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
@@ -3110,7 +3110,7 @@ tomli-w = ">=1.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-executor.git"
 reference = "feat/dossier-chain"
-resolved_reference = "96a827ff7982674ab198be6ae361760ac12888b8"
+resolved_reference = "13f297b726e6b44f639c5384f77e3452f7c29f0a"
 
 [[package]]
 name = "terok-sandbox"
@@ -3155,7 +3155,7 @@ PyYAML = ">=6.0"
 type = "git"
 url = "https://github.com/sliwowitz/terok-shield.git"
 reference = "feat/dossier-in-events"
-resolved_reference = "4ad2cdcfa6ef86dba64301e345d5bf7166e6d0b3"
+resolved_reference = "af3e68c4c16c43b42283bd498c97753b5d701008"
 
 [[package]]
 name = "textual"

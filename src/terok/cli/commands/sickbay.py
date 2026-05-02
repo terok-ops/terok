@@ -27,10 +27,12 @@ from pathlib import Path
 
 from terok_clearance import (
     check_units_outdated as _clearance_check_units_outdated,
+    read_installed_notifier_unit_version as _clearance_notifier_unit_version,
     read_installed_unit_version as _clearance_hub_unit_version,
 )
 from terok_clearance.runtime.installer import (
     HUB_UNIT_NAME as _CLEARANCE_HUB_UNIT_NAME,
+    NOTIFIER_UNIT_NAME as _CLEARANCE_NOTIFIER_UNIT_NAME,
 )
 from terok_sandbox import (
     SERVICES_TCP_OPTOUT_YAML,
@@ -147,16 +149,25 @@ def _check_clearance_stack() -> _CheckResult:
 
     Delegates drift detection to the clearance package so sickbay
     tracks whatever new units terok-clearance ships next without
-    knowing the triple's shape itself.
+    knowing the triple's shape itself.  Hub and notifier versions
+    surface side-by-side so an operator who edits the notifier-only
+    profile (e.g. hardening tweaks) doesn't have to read the unit
+    file to see whether their drift was picked up.
     """
     label = "Clearance stack"
     outdated = _clearance_check_units_outdated()
     if outdated:
         return ("warn", label, outdated)
-    installed = _clearance_hub_unit_version()
-    if installed is None:
+    hub = _clearance_hub_unit_version()
+    notifier = _clearance_notifier_unit_version()
+    if hub is None and notifier is None:
         return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} not installed")
-    return ("ok", label, f"{_CLEARANCE_HUB_UNIT_NAME} v{installed}")
+    parts: list[str] = []
+    if hub is not None:
+        parts.append(f"{_CLEARANCE_HUB_UNIT_NAME} v{hub}")
+    if notifier is not None:
+        parts.append(f"{_CLEARANCE_NOTIFIER_UNIT_NAME} v{notifier}")
+    return ("ok", label, ", ".join(parts))
 
 
 def _check_vault() -> _CheckResult:
