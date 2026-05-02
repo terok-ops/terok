@@ -1250,8 +1250,8 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
         self._installed = installed
         self._container_ready = False
         self._poll_timer = None
-        self._poll_count = 0
         self._probe_in_flight = False
+        self._start_time = 0.0
 
     def compose(self) -> ComposeResult:
         """Build status, agent selector, prompt input, and action buttons."""
@@ -1280,13 +1280,17 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
 
     def on_mount(self) -> None:
         """Start polling for container readiness and focus the prompt input."""
+        import time
+
         prompt = self.query_one("#launch-prompt", Input)
         prompt.focus()
+        self._start_time = time.monotonic()
         self._poll_timer = self.set_interval(1.5, self._poll_status)
 
-    # After this many polls (~90s at 1.5s interval) without the container
-    # appearing, assume the launch failed and show a hint.
-    _POLL_STALL_THRESHOLD = 60
+    # If no container has appeared within this many wall-clock seconds, assume
+    # the launch failed and surface a hint.  Wall-clock based (not tick count)
+    # so the hint still fires when a probe is wedged on ``podman inspect``.
+    _POLL_STALL_TIMEOUT_S = 90.0
 
     def _probe_readiness(self) -> tuple[str | None, bool]:
         """Synchronous readiness probe — runs in a worker thread.
@@ -1318,20 +1322,28 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
         If the container never appears after many polls, updates the status
         to indicate a likely launch failure so the user can dismiss.
         """
+        import asyncio
+        import time
+
+        elapsed = time.monotonic() - self._start_time
+        stalled = elapsed >= self._POLL_STALL_TIMEOUT_S
+        status_widget = self.query_one("#launch-status", Static)
+
         # The probe shells out to podman; skip overlapping ticks so a slow
         # subprocess can't fan out into a backlog of in-flight threads.
+        # The stall hint still fires here so a wedged ``podman inspect`` can
+        # surface a failure to the user.
         if self._probe_in_flight:
+            if stalled:
+                status_widget.update("Status: Launch may have failed \u2014 check notifications")
             return
-        import asyncio
 
-        self._poll_count += 1
         self._probe_in_flight = True
         try:
             state, has_mode = await asyncio.to_thread(self._probe_readiness)
         finally:
             self._probe_in_flight = False
 
-        status_widget = self.query_one("#launch-status", Static)
         if state == "running" and has_mode:
             status_widget.update("Status: Container ready")
             self._container_ready = True
@@ -1343,7 +1355,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
             status_widget.update("Status: Initializing\u2026")
         elif state:
             status_widget.update(f"Status: {state}")
-        elif self._poll_count >= self._POLL_STALL_THRESHOLD:
+        elif stalled:
             status_widget.update("Status: Launch may have failed \u2014 check notifications")
 
     def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
