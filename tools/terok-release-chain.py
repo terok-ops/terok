@@ -708,6 +708,7 @@ def _resolve_sibling_version(
 
 def generate_plan(
     chain: list[str],
+    live_deps: DepGraph,
     *,
     org: str,
     fork: str,
@@ -722,13 +723,13 @@ def generate_plan(
 ) -> Plan:
     """Build the full, serialisable release plan for *chain*.
 
-    Fails fast if any repo's live pyproject.toml disagrees with ``DEPS``.
-    Otherwise emits one ``PackagePlan`` + step sequence per repo, in
-    order; downstream repos pick sibling versions from what upstream
-    repos ship in the same run.
+    *live_deps* is the verified live dep graph for the full ``CHAIN``
+    family (callers run ``_verify_dep_graph(CHAIN, cache_dir)`` up front
+    and pass the result here — and to ``_resolve_chain``, so closure runs
+    on the same authoritative view).  Emits one ``PackagePlan`` + step
+    sequence per repo, in order; downstream repos pick sibling versions
+    from what upstream repos ship in the same run.
     """
-    live_deps = _verify_dep_graph(chain, cache_dir)
-
     packages: list[PackagePlan] = []
     all_steps: list[Step] = []
     released: ReleasedVersions = {}
@@ -1198,19 +1199,25 @@ def parse_chain_spec(spec: str) -> list[tuple[str, int | None]]:
     return entries
 
 
-def _downstream_closure(explicit: list[str]) -> list[str]:
+def _downstream_closure(explicit: list[str], graph: DepGraph) -> list[str]:
     """Add every package that transitively depends on any package in *explicit*.
 
     A new release of P bumps P's version, so every Q whose pyproject pins P
-    (directly or transitively per ``DEPS``) must also be re-released so its
-    URL pin can be bumped — otherwise consumers see two URL-pinned versions
-    of the same package and Poetry blocks the install.  Returned list is
-    ordered by ``CHAIN``.
+    (directly or transitively) must also be re-released so its URL pin can
+    be bumped — otherwise consumers see two URL-pinned versions of the same
+    package and Poetry blocks the install.  Returned list is ordered by
+    ``CHAIN``.
+
+    *graph* must be the verified live dep graph from ``_verify_dep_graph``,
+    not the vendored ``DEPS``: a stale ``DEPS`` would silently drop repos
+    out of the closure (the missed repo never lands in any chain so its
+    pyproject mismatch goes undetected as well).  Callers must validate
+    against the cloned ``pyproject.toml`` files first.
     """
     needed = set(explicit)
     while True:
         added = {
-            r for r, deps in DEPS.items() if r not in needed and any(d in needed for d in deps)
+            r for r, deps in graph.items() if r not in needed and any(d in needed for d in deps)
         }
         if not added:
             return [r for r in CHAIN if r in needed]
@@ -1241,6 +1248,7 @@ def _render_plan_preview(plan: Plan) -> None:
 
 def _resolve_chain(
     spec: str,
+    graph: DepGraph,
     *,
     open_top: bool = False,
 ) -> tuple[list[str], str | None, dict[str, int]]:
@@ -1250,12 +1258,18 @@ def _resolve_chain(
     executor and terok too, because their pin to clearance would otherwise
     fall out of sync.  See ``_downstream_closure`` for the full rationale.
 
+    *graph* must be the verified live dep graph (callers run
+    ``_verify_dep_graph(CHAIN, cache_dir)`` first to validate ``DEPS``
+    against cloned pyproject.toml files and pass the result here).  This
+    prevents a stale ``DEPS`` from silently dropping repos out of the
+    closure.
+
     Returns ``(ordered_chain, stop_at, pr_specs)``.  With ``--open-top``,
     the last package becomes ``DEPS_ONLY`` (deps update only, no release).
     """
     entries = parse_chain_spec(spec)
     pr_specs = {repo: pr for repo, pr in entries if pr is not None}
-    chain = _downstream_closure([repo for repo, _ in entries])
+    chain = _downstream_closure([repo for repo, _ in entries], graph)
     return chain, (chain[-1] if open_top else None), pr_specs
 
 
@@ -1357,19 +1371,24 @@ def quick(
     """
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, pretend, yes, skip_checks, check_timeout)
 
-    chain, stop_at, pr_specs = _resolve_chain(chain_spec, open_top=open_top)
-
     # Prompt for release name if not given
     if not release_name and not pretend:
         release_name = alert_prompt("Release name (empty for version-only)", default="")
 
-    # Sync clones
+    # Clone the WHOLE family up front so closure can run on the verified
+    # live dep graph — a stale vendored ``DEPS`` would otherwise silently
+    # drop repos out of the closure (and the missing repo's pyproject
+    # mismatch would never reach ``_verify_dep_graph``).
     console.print("\n[bold]Syncing clones...[/]")
-    for repo in chain:
+    for repo in CHAIN:
         ensure_clone(repo, cd, org, fork)
+    live_deps = _verify_dep_graph(CHAIN, cd)
+
+    chain, stop_at, pr_specs = _resolve_chain(chain_spec, live_deps, open_top=open_top)
 
     plan = generate_plan(
         chain,
+        live_deps,
         org=org,
         fork=fork,
         release_name=release_name,
@@ -1538,17 +1557,22 @@ def plan_cmd(
     Same CHAIN_SPEC grammar as ``quick``; see ``quick --help`` for examples.
     """
     org, fork, cd, ctx = _common_ctx(org, fork, cache_dir, True, True, True, 0)
-    chain, stop_at, pr_specs = _resolve_chain(chain_spec, open_top=open_top)
     if not release_name:
         console.print(
             "[yellow]Warning: no release name (-n). Release titles will be version-only.[/]"
         )
 
-    for repo in chain:
+    # Clone the WHOLE family up front so closure runs on the verified live
+    # dep graph (see ``quick`` for the rationale).
+    for repo in CHAIN:
         ensure_clone(repo, cd, org, fork)
+    live_deps = _verify_dep_graph(CHAIN, cd)
+
+    chain, stop_at, pr_specs = _resolve_chain(chain_spec, live_deps, open_top=open_top)
 
     plan = generate_plan(
         chain,
+        live_deps,
         org=org,
         fork=fork,
         release_name=release_name,
