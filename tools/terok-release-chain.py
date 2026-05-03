@@ -462,14 +462,39 @@ def _check_gh_version() -> None:
         die(f"gh >= {need} required (found {have}). Upgrade: https://github.com/cli/cli/releases")
 
 
+def _poll_checks(pr_url: str, gh_repo: str, *, in_grace: bool) -> list[dict]:
+    """Fetch the PR's checks once.  Empty list means "not ready — keep polling".
+
+    Covers two cases that both want the caller to wait:
+    - ``gh`` succeeded but returned an empty list (CI hasn't registered the
+      push yet).  Fail-closed: never treat absent CI as "passed" — operators
+      whose repo genuinely has none must say so with ``--skip-checks``.
+    - ``gh`` errored without stdout (transient API blip, common during the
+      grace window right after a fresh push).
+
+    Hard ``gh`` failures outside the grace window die immediately.  ``gh
+    pr checks`` exits 8 when checks are failing or pending but still emits
+    valid JSON, so 8 is treated as success here.
+    """
+    r = subprocess.run(
+        ["gh", "pr", "checks", pr_url, "--repo", gh_repo, "--json", "name,bucket"],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode not in (0, 8) and not r.stdout.strip():
+        if in_grace:
+            return []
+        die(f"gh pr checks failed (exit {r.returncode}): {(r.stderr or r.stdout).strip()}")
+    return json.loads(r.stdout) if r.stdout.strip() else []
+
+
 def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
     """Block until CI settles on the PR.
 
-    Returns ``"passed"`` when all checks are green, or ``"merged"`` if
-    somebody merged the PR out-of-band while we were waiting.  On a
-    check failure, prompts the operator to force-merge; on a flat
-    timeout, calls ``die()``.  The grace window tolerates the brief gap
-    between push and check registration.
+    Returns ``"passed"`` when checks are green, ``"merged"`` if somebody
+    merged the PR out-of-band while waiting.  Failing checks prompt the
+    operator to force-merge; flat timeout calls ``die()``.  The grace
+    window tolerates the brief gap between push and check registration.
     """
     if ctx.skip_checks:
         console.print("[yellow]Skipping CI checks[/]")
@@ -481,41 +506,22 @@ def wait_for_checks(pr_url: str, gh_repo: str, ctx: Ctx) -> str:
     console.print(f"Waiting for PR checks (timeout {ctx.check_timeout}s)...")
 
     for elapsed in range(0, ctx.check_timeout, CHECK_POLL_INTERVAL):
+        # Every CHECK_STATE_RECHECK seconds, notice if the PR was merged or
+        # closed out-of-band so we don't poll its checks forever.
         if elapsed and elapsed % CHECK_STATE_RECHECK == 0:
-            st = pr_state(pr_url, gh_repo)
-            if st == "MERGED":
-                console.print("[green]PR merged externally.[/]")
-                return "merged"
-            if st == "CLOSED":
-                die("PR closed without merging.")
+            match pr_state(pr_url, gh_repo):
+                case "MERGED":
+                    console.print("[green]PR merged externally.[/]")
+                    return "merged"
+                case "CLOSED":
+                    die("PR closed without merging.")
 
-        r = subprocess.run(
-            ["gh", "pr", "checks", pr_url, "--repo", gh_repo, "--json", "name,bucket"],
-            capture_output=True,
-            text=True,
-        )
-
-        if r.returncode not in (0, 8) and not r.stdout.strip():
-            if elapsed < CHECK_GRACE_WINDOW:
-                time.sleep(CHECK_POLL_INTERVAL)
-                continue
-            detail = (r.stderr or r.stdout or "").strip()
-            die(f"gh pr checks failed (exit {r.returncode}): {detail}")
-
-        checks = json.loads(r.stdout) if r.stdout.strip() else []
-        # Fail-closed: an empty check list is never "passed".  Keep polling
-        # until real checks appear or ctx.check_timeout fires — operators
-        # whose repo genuinely has no CI must say so with --skip-checks.
-        if not checks:
+        checks = _poll_checks(pr_url, gh_repo, in_grace=elapsed < CHECK_GRACE_WINDOW)
+        if not checks or any(c["bucket"] == "pending" for c in checks):
             time.sleep(CHECK_POLL_INTERVAL)
             continue
 
-        pending = sum(1 for c in checks if c["bucket"] == "pending")
         failing = [c for c in checks if c["bucket"] in ("fail", "cancel")]
-
-        if pending:
-            time.sleep(CHECK_POLL_INTERVAL)
-            continue
         if not failing:
             console.print("[green]All checks passed![/]")
             return "passed"
