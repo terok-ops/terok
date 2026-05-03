@@ -50,7 +50,7 @@ unique-namer = ">=1.3"
 textual-serve = ">=1.1.0"
 # DEV-TIME BRANCH PINS — track the Codex vaulted-OAuth PR chain until the
 # sibling wheels ship.  The release chain flips these back to wheel URLs.
-terok-executor = {git = "https://github.com/sliwowitz/terok-executor.git", branch = "feat/initial-prompt-wrapper-pickup"}
+terok-executor = {url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.128/terok_executor-0.0.128-py3-none-any.whl"}
 terok-sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.106/terok_sandbox-0.0.106-py3-none-any.whl"}
 terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.36/terok_shield-0.6.36-py3-none-any.whl"}
 terok-clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.8/terok_clearance-0.6.8-py3-none-any.whl"}
