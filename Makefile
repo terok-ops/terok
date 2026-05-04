@@ -140,11 +140,11 @@ install-dev:
 
 # Build documentation locally
 docs:
-	poetry run mkdocs serve
+	poetry run properdocs serve
 
 # Build documentation for deployment
 docs-build:
-	poetry run mkdocs build --strict
+	poetry run properdocs build --strict
 
 # Clean build artifacts
 clean:

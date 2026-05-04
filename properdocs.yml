@@ -59,16 +59,13 @@ plugins:
             merge_init_into_class: true
   - terok:
       ci_map: true
-      ci_map_path: ci_map.md
       quality_report: true
-      quality_report_path: quality-report.md
       quality_report_include_layer_overview: true
       quality_report_include_graph_coarsening: true
       quality_report_codecov_treemap_path: docs/assets/coverage_treemap.svg
       quality_report_src_label: "Source (`src/terok/`)"
       quality_report_tests_label: "Tests (`tests/`)"
       test_map: true
-      test_map_path: test_map.md
       test_map_show_markers: false
       ref_pages: true
   - gen-files:
@@ -116,8 +113,8 @@ nav:
   - Developer Guide:
     - Contributing: developer.md
     - Agent Compatibility Matrix: agent-compat-matrix.md
-    - Integration Test Map: test_map.md
-    - CI Workflow Map: ci_map.md
+    - Integration Test Map: test-map.md
+    - CI Workflow Map: ci-map.md
     - Code Metrics: quality-report.md
   - API Reference: reference/
 
