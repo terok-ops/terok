@@ -21,6 +21,7 @@ from .commands import (
     clearance,
     completions,
     dbus,
+    hardening,
     image,
     info,
     panic,
@@ -55,6 +56,7 @@ _DISPATCHERS = [
     shield.dispatch,
     dbus.dispatch,
     clearance.dispatch,
+    hardening.dispatch,
     sickbay.dispatch,
     info.dispatch,
     agents.dispatch,
@@ -150,6 +152,7 @@ def main(prog: str = "terok") -> None:
     clearance.register(sub)
     sickbay.register(sub)
     shield.register(sub)
+    hardening.register(sub)
     agents.register(sub)
     info.register(sub)
 

@@ -57,10 +57,18 @@ jobs:
       - name: Fetch Codecov coverage treemap
         run: |
           mkdir -p docs/assets
-          curl -sfL "https://codecov.io/gh/terok-ai/terok/graphs/tree.svg?token=zfJUmuTAqG" \
-            -o docs/assets/coverage_treemap.svg
-          # Intentionally fatal: if the download fails, rerun the job manually.
-          [ -s docs/assets/coverage_treemap.svg ]
+          # Best-effort: Codecov's per-repo treemap endpoint occasionally
+          # 404s for several minutes after a coverage upload, and the
+          # ``?token=…`` form was deprecated mid-2026 — sandbox and
+          # clearance pages run with the same plain URL below.  A
+          # missing treemap leaves a placeholder gap on the docs
+          # page; preferable to blocking the whole docs build on a
+          # transient external dependency.
+          curl -sfL "https://codecov.io/gh/terok-ai/terok/graphs/tree.svg" \
+            -o docs/assets/coverage_treemap.svg \
+            || true
+          [ -s docs/assets/coverage_treemap.svg ] \
+            || rm -f docs/assets/coverage_treemap.svg
 
       - name: Build documentation
         run: poetry run mkdocs build --strict

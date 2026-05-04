@@ -129,6 +129,15 @@ def test_cmd_sickbay_reports_health(
             "Clearance notifier",
             "terok-clearance-notifier.service not installed",
         ),
+        # Hardening rows hit /sys/fs/selinux + /sys/kernel/security/apparmor
+        # — on Ubuntu CI runners AppArmor is loaded but no terok profiles
+        # are installed, so the real probe returns ``PROFILES_MISSING``
+        # (warn) and the [all-ok] case fails.  Stub them ok to keep the
+        # test scope on gate-server / outdated-units behaviour.
+        "_check_selinux_policy": ("ok", "SELinux policy", "not needed"),
+        "_check_selinux_hardening": ("ok", "Hardening (SELinux)", "not applicable"),
+        "_check_apparmor_hardening": ("ok", "Hardening (AppArmor)", "not applicable"),
+        "_check_clearance_hardening": ("ok", "Hardening (Clearance)", "not applicable"),
     }
     patched_checks = [
         (label, (lambda r=_stubs[fn.__name__]: r) if fn.__name__ in _stubs else fn)
