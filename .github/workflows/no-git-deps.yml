@@ -1,0 +1,52 @@
+name: no-git-deps
+
+# Inert until merge queue is enabled on `master` and `no-git-deps` is
+# listed as a required status check in the master ruleset.
+# Settings → Rules → Rulesets → (master ruleset): add "Require merge queue"
+# and add `no-git-deps` under "Require status checks to pass".
+
+on:
+  merge_group:
+
+jobs:
+  no-git-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Scan pyproject.toml for git sources
+        run: |
+          python3 <<'PY'
+          import sys, tomllib, pathlib
+
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          offenders = []
+
+          def scan(label, deps):
+              for name, spec in deps.items():
+                  if isinstance(spec, dict) and "git" in spec:
+                      ref = spec.get("branch") or spec.get("rev") or spec.get("tag") or "?"
+                      offenders.append(f"{label}.{name} -> {spec['git']}@{ref}")
+
+          poetry = data.get("tool", {}).get("poetry", {})
+          for key in ("dependencies", "dev-dependencies"):
+              scan(key, poetry.get(key, {}))
+          for gname, g in poetry.get("group", {}).items():
+              scan(f"group.{gname}", g.get("dependencies", {}))
+
+          project = data.get("project", {})
+          for dep in project.get("dependencies", []):
+              if "git+" in dep:
+                  offenders.append(dep)
+          for gname, deps in project.get("optional-dependencies", {}).items():
+              for dep in deps:
+                  if "git+" in dep:
+                      offenders.append(f"{gname}: {dep}")
+
+          if offenders:
+              print("Git sources found in pyproject.toml:")
+              for o in offenders:
+                  print(f"  - {o}")
+              print("\nSwap to released wheels before merging.")
+              sys.exit(1)
+          print("No git sources - OK.")
+          PY
