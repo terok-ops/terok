@@ -327,7 +327,7 @@ def _image_agents_for_task(
         if cache_key in label_cache:
             return label_cache[cache_key]
         raw = image.labels().get(AGENTS_LABEL, "")
-    except (FileNotFoundError, RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError) as exc:
         _logger.debug("_image_agents_for_task(%s): %s", task.id, exc)
         return set()
     parsed = {token for token in (s.strip() for s in raw.split(",")) if token}

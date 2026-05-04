@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import select
 import shutil
 import socket
 import subprocess
@@ -190,8 +191,6 @@ def _inprocess_pump(sock_path: Path) -> None:
     :func:`select` to multiplex; partial sends/writes are looped until
     drained.
     """
-    import select
-
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(str(sock_path))
     sock.setblocking(False)
@@ -209,44 +208,60 @@ def _inprocess_pump(sock_path: Path) -> None:
                 read_fds.append(stdin_fd)
             ready, _, _ = select.select(read_fds, [], [])
             if stdin_open and stdin_fd in ready:
-                data = os.read(stdin_fd, 4096)
-                if not data:
-                    # ``shutdown`` may raise if the daemon already
-                    # closed its end — tolerate that, the SHUT_WR is
-                    # advisory anyway.
-                    try:
-                        sock.shutdown(socket.SHUT_WR)
-                    except OSError:
-                        pass
-                    stdin_open = False
-                else:
-                    # Non-blocking ``send`` may write fewer bytes than
-                    # requested under backpressure, and ``BlockingIOError``
-                    # signals "kernel send buffer full".  Loop until the
-                    # whole frame is committed; wait for write-readiness
-                    # via a single-fd ``select`` between attempts.
-                    view = memoryview(data)
-                    while view:
-                        try:
-                            sent = sock.send(view)
-                            view = view[sent:]
-                        except BlockingIOError:
-                            select.select([], [sock], [])
-            if sock in ready:
-                try:
-                    data = sock.recv(4096)
-                except BlockingIOError:
-                    continue
-                if not data:
-                    return
-                # ``os.write`` may also write fewer bytes than supplied
-                # (rare on regular fds, but possible on pipes/ptys).
-                view = memoryview(data)
-                while view:
-                    written = os.write(stdout_fd, view)
-                    view = view[written:]
+                stdin_open = _forward_stdin_to_socket(stdin_fd, sock)
+            if sock in ready and not _forward_socket_to_stdout(sock, stdout_fd):
+                return
     finally:
         try:
             sock.close()
         except OSError:
             pass
+
+
+def _forward_stdin_to_socket(stdin_fd: int, sock: socket.socket) -> bool:
+    """Forward one stdin chunk to *sock*; return ``False`` once stdin hits EOF."""
+    data = os.read(stdin_fd, 4096)
+    if not data:
+        # ``shutdown`` may raise if the daemon already closed its end —
+        # tolerate that, the SHUT_WR is advisory anyway.
+        try:
+            sock.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+        return False
+    _send_all(sock, data)
+    return True
+
+
+def _send_all(sock: socket.socket, data: bytes) -> None:
+    """Drain *data* into the non-blocking *sock*, looping past short sends.
+
+    A non-blocking ``send`` may write fewer bytes than requested under
+    backpressure, and ``BlockingIOError`` signals "kernel send buffer
+    full" — wait for write-readiness via a single-fd ``select`` and
+    retry until the whole frame is committed.
+    """
+    view = memoryview(data)
+    while view:
+        try:
+            sent = sock.send(view)
+            view = view[sent:]
+        except BlockingIOError:
+            select.select([], [sock], [])
+
+
+def _forward_socket_to_stdout(sock: socket.socket, stdout_fd: int) -> bool:
+    """Forward one socket chunk to *stdout_fd*; return ``False`` on daemon EOF."""
+    try:
+        data = sock.recv(4096)
+    except BlockingIOError:
+        return True
+    if not data:
+        return False
+    # ``os.write`` may also write fewer bytes than supplied (rare on
+    # regular fds, but possible on pipes/ptys).
+    view = memoryview(data)
+    while view:
+        written = os.write(stdout_fd, view)
+        view = view[written:]
+    return True
