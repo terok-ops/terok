@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import os
 import socket
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,6 +23,7 @@ from terok.cli.commands.acp import (
     _forward_socket_to_stdout,
     _forward_stdin_to_socket,
     _send_all,
+    _wait_for_socket,
 )
 
 
@@ -150,3 +153,27 @@ class TestForwardSocketToStdout:
             os.close(r)
             os.close(w)
         assert keep_going is False
+
+
+class TestWaitForSocket:
+    """``_wait_for_socket`` short-circuits when the daemon dies during startup."""
+
+    def test_daemon_early_exit_fails_fast(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A dead daemon ends the wait loop immediately with its exit code.
+
+        Without the early-exit poll, ``acp connect`` would stall the full
+        ``_DAEMON_BIND_TIMEOUT_SEC`` window and then misreport a
+        "did not bind" timeout — masking the real startup failure.
+        """
+        # Pretend the socket never appears — the daemon's exit must do the work.
+        monkeypatch.setattr("terok.cli.commands.acp.acp_socket_is_live", lambda _path: False)
+        daemon = MagicMock()
+        daemon.poll.return_value = 1
+        daemon.returncode = 1
+        with pytest.raises(SystemExit) as excinfo:
+            _wait_for_socket(tmp_path / "nope.sock", timeout=10.0, daemon=daemon)
+        assert excinfo.value.code == 1
+        # poll() must have been consulted before the loop's own timeout.
+        daemon.poll.assert_called()
