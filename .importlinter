@@ -69,6 +69,10 @@ allowed_importers =
     terok.tui.setup_screen
     terok.tui.task_actions
     terok.tui.widgets.project_state
+    # Out-of-band hardening orchestrator — packager-side, separate
+    # from the daily user CLI.  Imports the per-package install/remove
+    # functions to chain them.
+    terok.tools.hardening
 
 [importlinter:contract:executor-boundary]
 name = terok_executor access restricted to designated modules

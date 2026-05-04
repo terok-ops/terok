@@ -129,6 +129,11 @@ def test_cmd_sickbay_reports_health(
             "Clearance notifier",
             "terok-clearance-notifier.service not installed",
         ),
+        # Stub the SELinux-policy hole-punch row — on Ubuntu CI
+        # runners SELinux is permissive, the row returns ok anyway,
+        # but stubbing keeps this fixture independent of any
+        # libselinux probe behaviour.
+        "_check_selinux_policy": ("ok", "SELinux policy", "not needed"),
     }
     patched_checks = [
         (label, (lambda r=_stubs[fn.__name__]: r) if fn.__name__ in _stubs else fn)

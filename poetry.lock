@@ -3066,18 +3066,19 @@ description = "Shield clearance and desktop notifications for terok"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_clearance-0.6.9-py3-none-any.whl", hash = "sha256:6e0a7c877d4e71543e02d172078004418acb9f5a8df117375f41725ea9995564"},
-]
+files = []
+develop = false
 
 [package.dependencies]
-asyncvarlink = ">=0.3.1,<0.4.0"
+asyncvarlink = "^0.3.1"
 dbus-fast = ">=2.0,<5.0"
-pyyaml = ">=6.0,<7.0"
+pyyaml = "^6.0"
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.9/terok_clearance-0.6.9-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-clearance.git"
+reference = "feat/mac-hardening"
+resolved_reference = "480bae252c07f7738367910a5f2b42c8d0978ed3"
 
 [[package]]
 name = "terok-executor"
@@ -3086,21 +3087,22 @@ description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_executor-0.0.129-py3-none-any.whl", hash = "sha256:546910aee46a4480353c8df3436493bcd6efbcbbb1ccc5e13c76515d026412a3"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 pwinput = ">=1.0.3"
 pydantic = ">=2.9"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.107/terok_sandbox-0.0.107-py3-none-any.whl"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", branch = "feat/mac-hardening"}
 tomli-w = ">=1.0"
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-executor/releases/download/v0.0.129/terok_executor-0.0.129-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-executor.git"
+reference = "feat/mac-hardening"
+resolved_reference = "8f92b15eeee6a0e01ed8b80e3edacd8862375cb7"
 
 [[package]]
 name = "terok-sandbox"
@@ -3109,9 +3111,8 @@ description = "Hardened Podman container runner with gate server and shield inte
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_sandbox-0.0.107-py3-none-any.whl", hash = "sha256:9096c3234d715a92a2885e31cb8db81f1337205a7c5158a73ef60bcf22a8313b"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 aiohttp = ">=3.9"
@@ -3119,12 +3120,14 @@ cryptography = ">=46.0.7"
 packaging = ">=24"
 platformdirs = ">=4.9.6"
 pydantic = ">=2.9"
-terok_clearance = {url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.6.9/terok_clearance-0.6.9-py3-none-any.whl"}
-terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.37/terok_shield-0.6.37-py3-none-any.whl"}
+terok-clearance = {git = "https://github.com/sliwowitz/terok-clearance.git", branch = "feat/mac-hardening"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.6.37/terok_shield-0.6.37-py3-none-any.whl"}
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.107/terok_sandbox-0.0.107-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-sandbox.git"
+reference = "feat/mac-hardening"
+resolved_reference = "9e91da1ea532452d7c850315e455e01bfbc13f1b"
 
 [[package]]
 name = "terok-shield"
@@ -4023,4 +4026,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "458ad7a54eb4023947e9ef80cf7f0bc8c705250541ba2a866c42dc60eb515029"
+content-hash = "066863aea8f0a523fc95b2c41316978a3cbd45d77d3a305d417869adb5099270"

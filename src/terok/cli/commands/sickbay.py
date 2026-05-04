@@ -524,7 +524,6 @@ def _check_selinux_policy() -> _CheckResult:
         SelinuxStatus,
         check_selinux_status,
         selinux_install_command,
-        selinux_install_script,
     )
 
     label = "SELinux policy"
@@ -562,12 +561,7 @@ def _check_selinux_policy() -> _CheckResult:
                 "Fix: sudo dnf install libselinux",
             )
         case SelinuxStatus.OK:
-            return (
-                "ok",
-                label,
-                "terok_socket_t installed, binding functional "
-                f"(installer: {selinux_install_script()})",
-            )
+            return ("ok", label, "terok_socket_t installed, binding functional")
 
 
 def _check_vault_migration() -> _CheckResult:

@@ -188,6 +188,16 @@ def cmd_setup(
         f"  terok task run <project>                   Start a CLI task (attaches on TTY)\n"
     )
 
+    # MAC hardening is out-of-band tooling, not a daily-CLI feature
+    # (in distro packaging it lands via the package's postinst).  Hint
+    # at the manual fallback only when no terok confined domain is
+    # currently loaded; ≤5 LoC by design — full status lives in the
+    # tool itself.
+    from terok_sandbox import is_selinux_enforcing, selinux_loaded_confined_domains
+
+    if is_selinux_enforcing() and not selinux_loaded_confined_domains():
+        print("Optional MAC hardening: python -m terok.tools.hardening install\n")
+
     if sandbox_failed or images_failed:
         sys.exit(1)
 

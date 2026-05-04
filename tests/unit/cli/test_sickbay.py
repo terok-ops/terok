@@ -9,7 +9,12 @@ import unittest.mock
 from pathlib import Path
 
 import pytest
-from terok_sandbox import SelinuxCheckResult, SelinuxStatus
+from terok_sandbox import (
+    ApparmorCheckResult,
+    ApparmorStatus,
+    SelinuxCheckResult,
+    SelinuxStatus,
+)
 
 from terok.cli.commands.sickbay import (
     _check_gate_server,
@@ -416,8 +421,7 @@ class TestCheckSelinuxPolicy:
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.POLICY_MISSING))
         assert sev == "warn"
         assert "terok_socket_t NOT installed" in detail
-        assert "sudo bash" in detail
-        assert "install_policy.sh" in detail
+        assert "terok hardening install" in detail
         # Opt-out must be surfaced — the user may not have root.
         assert "services: {mode: tcp}" in detail
 
@@ -445,12 +449,18 @@ class TestCheckSelinuxPolicy:
         assert "unconfined_t" in detail
 
     def test_ok_when_everything_ready(self) -> None:
-        """OK renders with the installer path for future reinstall/debug."""
+        """OK renders just the binding-functional confirmation.
 
+        The installer path used to be appended here for reinstall hint
+        purposes, but the orchestrator (``terok hardening install``) is
+        already mentioned in any non-OK branch — the OK row stays
+        terse to match the rest of the sickbay output.
+        """
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.OK))
         assert sev == "ok"
         assert "terok_socket_t installed" in detail
-        assert "install_policy.sh" in detail
+        assert "binding functional" in detail
+
 
 
 class TestCheckVaultMigration:
