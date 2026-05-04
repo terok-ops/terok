@@ -524,7 +524,6 @@ def _check_selinux_policy() -> _CheckResult:
         SelinuxStatus,
         check_selinux_status,
         selinux_install_command,
-        selinux_install_script,
     )
 
     label = "SELinux policy"
@@ -562,12 +561,177 @@ def _check_selinux_policy() -> _CheckResult:
                 "Fix: sudo dnf install libselinux",
             )
         case SelinuxStatus.OK:
+            return ("ok", label, "terok_socket_t installed, binding functional")
+
+
+def _check_selinux_hardening() -> _CheckResult:
+    """Report optional SELinux confined-domain hardening status.
+
+    Independent of `_check_selinux_policy` — that one covers the
+    legacy ``terok_socket_t`` allow rule (required for hook-mode
+    container connectto, hence keyed on ``services.mode``); this one
+    covers the optional confined domains (``terok_gate_t``,
+    ``terok_vault_t``) loaded by ``terok hardening install``.  Domains
+    confine the daemon process via systemd ``SELinuxContext=`` and
+    apply regardless of how the daemon exposes its sockets — so
+    services-mode is *not* a gating signal here, only whether SELinux
+    itself is enforcing.
+
+    Both layers can be installed independently; sickbay surfaces them
+    as separate rows so the user can see which layer needs attention.
+    """
+    from terok_sandbox import (
+        SELINUX_CONFINED_DOMAINS,
+        hardening_install_command,
+        is_selinux_enforcing,
+        selinux_loaded_confined_domains,
+    )
+
+    label = "Hardening (SELinux)"
+
+    # Hardening applies whether the daemon speaks TCP or Unix sockets,
+    # so gate only on whether SELinux itself is enforcing — NOT on
+    # services.mode (the legacy bug had the row hidden in TCP mode,
+    # which is exactly when the daemon-process confinement is most
+    # valuable as a fallback for the missing connectto guard).
+    if not is_selinux_enforcing():
+        return ("ok", label, "not applicable (SELinux not enforcing)")
+
+    loaded = selinux_loaded_confined_domains()
+    if not loaded:
+        return (
+            "warn",
+            label,
+            f"optional confined domains NOT loaded — install: {hardening_install_command()}",
+        )
+    if len(loaded) < len(SELINUX_CONFINED_DOMAINS):
+        missing = sorted(set(SELINUX_CONFINED_DOMAINS) - set(loaded))
+        return (
+            "warn",
+            label,
+            f"partial install (loaded: {', '.join(loaded)}; "
+            f"missing: {', '.join(missing)}) — "
+            f"fix: {hardening_install_command()}",
+        )
+    return ("ok", label, f"all domains loaded ({', '.join(loaded)})")
+
+
+def _check_apparmor_hardening() -> _CheckResult:
+    """Report optional AppArmor profile hardening status.
+
+    Parallel of `_check_selinux_hardening` for the Debian/Ubuntu
+    world.  Same noise-free contract: silently OK on hosts where
+    AppArmor isn't active; WARNs only when the active backend has
+    nothing or a partial install of terok's profiles.
+    """
+    from terok_sandbox import (
+        ApparmorStatus,
+        check_apparmor_status,
+        hardening_install_command,
+    )
+
+    label = "Hardening (AppArmor)"
+    result = check_apparmor_status()
+
+    match result.status:
+        case ApparmorStatus.NOT_APPLICABLE:
+            return ("ok", label, "not applicable (AppArmor not active)")
+        case ApparmorStatus.PROFILES_MISSING:
+            return (
+                "warn",
+                label,
+                f"optional profiles NOT loaded — install: {hardening_install_command()}",
+            )
+        case ApparmorStatus.PROFILES_PARTIAL:
+            return (
+                "warn",
+                label,
+                f"partial install (loaded: {', '.join(result.loaded)}) — "
+                f"fix: {hardening_install_command()}",
+            )
+        case ApparmorStatus.OK_COMPLAIN:
             return (
                 "ok",
                 label,
-                "terok_socket_t installed, binding functional "
-                f"(installer: {selinux_install_script()})",
+                f"loaded in complain mode ({', '.join(result.loaded)}) — "
+                "soak posture, denials log without blocking",
             )
+        case ApparmorStatus.OK_ENFORCE:
+            return (
+                "ok",
+                label,
+                f"loaded in enforce mode ({', '.join(result.loaded)})",
+            )
+
+
+def _check_clearance_hardening() -> _CheckResult:
+    """Report optional hardening status for the clearance hub + notifier.
+
+    Mirror of `_check_selinux_hardening` / `_check_apparmor_hardening`
+    but scoped to the terok-clearance package: clearance ships its
+    own ``terok_clearance.hardening`` install path (parallel of sandbox's, in clearance's
+    ``resources/``) that loads ``terok_clearance_hub_t`` /
+    ``terok_clearance_notifier_t`` and the equivalent AppArmor
+    profiles.  The verdict daemon is intentionally NOT confined —
+    its ``terok-shield allow|deny`` re-exec doesn't tolerate tight
+    MAC labelling (see the unit-template comment in
+    ``terok-clearance-verdict.service``).
+
+    One row covers both backends because they share an install script
+    and a status surface; the row says which backend(s) are loaded so
+    the operator can tell at a glance whether their distro's MAC is
+    in scope.
+    """
+    from terok_clearance import (
+        HARDENING_CONFINED_DOMAINS,
+        HARDENING_CONFINED_PROFILES,
+        hardening_install_command,
+        hardening_loaded_confined_domains,
+        hardening_loaded_confined_profiles,
+        is_apparmor_enabled,
+        is_selinux_enabled,
+    )
+
+    label = "Hardening (Clearance)"
+
+    # No active LSM → nothing to do.  Clearance ships systemd-native
+    # hardening directly in the unit templates regardless, so silence
+    # is the right default.
+    selinux_active = is_selinux_enabled()
+    apparmor_active = is_apparmor_enabled()
+    if not (selinux_active or apparmor_active):
+        return ("ok", label, "not applicable (no active LSM)")
+
+    # Per-backend state — only count what's relevant for the active LSM.
+    parts: list[str] = []
+    missing_anything = False
+    if selinux_active:
+        loaded = hardening_loaded_confined_domains()
+        total = len(HARDENING_CONFINED_DOMAINS)
+        if not loaded:
+            missing_anything = True
+            parts.append(f"SELinux: {total} domain(s) NOT loaded")
+        elif len(loaded) < total:
+            missing_anything = True
+            parts.append(f"SELinux: partial ({len(loaded)}/{total} loaded)")
+        else:
+            parts.append(f"SELinux: {total} domain(s) loaded")
+    if apparmor_active:
+        loaded_p = hardening_loaded_confined_profiles()
+        total_p = len(HARDENING_CONFINED_PROFILES)
+        if not loaded_p:
+            missing_anything = True
+            parts.append(f"AppArmor: {total_p} profile(s) NOT loaded")
+        elif len(loaded_p) < total_p:
+            missing_anything = True
+            parts.append(f"AppArmor: partial ({len(loaded_p)}/{total_p} loaded)")
+        else:
+            parts.append(f"AppArmor: {total_p} profile(s) loaded")
+
+    detail = "; ".join(parts)
+    if missing_anything:
+        return ("warn", label, f"{detail} — install: {hardening_install_command()}")
+    return ("ok", label, detail)
 
 
 def _check_vault_migration() -> _CheckResult:
@@ -605,6 +769,9 @@ _GLOBAL_CHECKS = [
     ("SSH signer", _check_ssh_signer),
     ("Keyring", _check_keyring),
     ("SELinux policy", _check_selinux_policy),
+    ("Hardening (SELinux)", _check_selinux_hardening),
+    ("Hardening (AppArmor)", _check_apparmor_hardening),
+    ("Hardening (Clearance)", _check_clearance_hardening),
     ("Clearance stack", _check_clearance_stack),
 ]
 """Global checks paired with the label shown while they run.

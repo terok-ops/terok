@@ -36,6 +36,7 @@ name = terok_sandbox access restricted to designated modules
 type = protected
 protected_modules = terok_sandbox
 allowed_importers =
+    terok.cli.commands.hardening
     terok.cli.commands.project
     terok.cli.commands.setup
     terok.cli.commands.shield

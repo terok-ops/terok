@@ -111,6 +111,7 @@ nav:
     - Shield Security: shield-security.md
     - Kernel Keyring: kernel-keyring.md
     - SELinux & Socket Transport: selinux.md
+    - AppArmor: apparmor.md
     - Login Design: login-design.md
 
   - Developer Guide:

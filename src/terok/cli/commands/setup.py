@@ -188,6 +188,13 @@ def cmd_setup(
         f"  terok task run <project>                   Start a CLI task (attaches on TTY)\n"
     )
 
+    # Hardening is opt-in — surface the install command but don't run
+    # it.  The orchestrator will prompt for sudo internally when invoked.
+    print(
+        "Optional MAC hardening (SELinux + AppArmor):\n"
+        "  terok hardening install                    Install confined domains + drop-ins\n"
+    )
+
     if sandbox_failed or images_failed:
         sys.exit(1)
 

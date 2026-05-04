@@ -9,10 +9,18 @@ import unittest.mock
 from pathlib import Path
 
 import pytest
-from terok_sandbox import SelinuxCheckResult, SelinuxStatus
+from terok_sandbox import (
+    ApparmorCheckResult,
+    ApparmorStatus,
+    SelinuxCheckResult,
+    SelinuxStatus,
+)
 
 from terok.cli.commands.sickbay import (
+    _check_apparmor_hardening,
+    _check_clearance_hardening,
     _check_gate_server,
+    _check_selinux_hardening,
     _check_selinux_policy,
     _check_ssh_signer,
     _check_task_hook,
@@ -416,8 +424,7 @@ class TestCheckSelinuxPolicy:
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.POLICY_MISSING))
         assert sev == "warn"
         assert "terok_socket_t NOT installed" in detail
-        assert "sudo bash" in detail
-        assert "install_policy.sh" in detail
+        assert "terok hardening install" in detail
         # Opt-out must be surfaced — the user may not have root.
         assert "services: {mode: tcp}" in detail
 
@@ -445,12 +452,212 @@ class TestCheckSelinuxPolicy:
         assert "unconfined_t" in detail
 
     def test_ok_when_everything_ready(self) -> None:
-        """OK renders with the installer path for future reinstall/debug."""
+        """OK renders just the binding-functional confirmation.
 
+        The installer path used to be appended here for reinstall hint
+        purposes, but the orchestrator (``terok hardening install``) is
+        already mentioned in any non-OK branch — the OK row stays
+        terse to match the rest of the sickbay output.
+        """
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.OK))
         assert sev == "ok"
         assert "terok_socket_t installed" in detail
-        assert "install_policy.sh" in detail
+        assert "binding functional" in detail
+
+
+class TestCheckSelinuxHardening:
+    """Verify the optional confined-domain status row.
+
+    Independent of `_check_selinux_policy` (which covers the legacy
+    allow-rule).  Branching: not-applicable when SELinux isn't
+    enforcing — independent of services.mode, since confined domains
+    apply to the daemon process whether it speaks TCP or Unix
+    sockets.  Then missing / partial / fully-loaded.
+    """
+
+    @staticmethod
+    def _run(*, enforcing: bool, loaded: tuple[str, ...] = ()) -> tuple[str, str, str]:
+        """Patch the enforcing probe and the loaded-domains probe."""
+        with (
+            unittest.mock.patch("terok_sandbox.is_selinux_enforcing", return_value=enforcing),
+            unittest.mock.patch(
+                "terok_sandbox.selinux_loaded_confined_domains", return_value=loaded
+            ),
+        ):
+            return _check_selinux_hardening()
+
+    def test_not_applicable_when_selinux_not_enforcing(self) -> None:
+        """Permissive / disabled host → silently OK, hardening is meaningless."""
+        sev, _, detail = self._run(enforcing=False)
+        assert sev == "ok"
+        assert "not applicable" in detail
+        assert "not enforcing" in detail
+
+    def test_warn_when_no_domains_loaded(self) -> None:
+        """Enforcing host, no domains → WARN with install hint."""
+        sev, _, detail = self._run(enforcing=True, loaded=())
+        assert sev == "warn"
+        assert "NOT loaded" in detail
+        assert "terok hardening install" in detail
+
+    def test_warn_when_partially_loaded(self) -> None:
+        """Half-broken install — surface what's loaded AND what's missing."""
+        sev, _, detail = self._run(enforcing=True, loaded=("terok_gate_t",))
+        assert sev == "warn"
+        assert "partial install" in detail
+        assert "terok_gate_t" in detail
+        assert "terok_vault_t" in detail
+        assert "terok hardening install" in detail
+
+    def test_ok_when_all_loaded(self) -> None:
+        """Full set loaded → OK with the loaded list (for debug visibility)."""
+        sev, _, detail = self._run(
+            enforcing=True,
+            loaded=("terok_gate_t", "terok_vault_t"),
+        )
+        assert sev == "ok"
+        assert "all domains loaded" in detail
+        assert "terok_gate_t" in detail
+        assert "terok_vault_t" in detail
+
+    def test_warn_in_tcp_mode_when_enforcing(self) -> None:
+        """The bug we just fixed: TCP services-mode must NOT silence
+        the hardening row.  Confined domains apply regardless of
+        transport — it's only the legacy connectto allow rule that's
+        socket-mode-specific.  In TCP mode without hardening installed
+        the row should still WARN, not silently report OK."""
+        sev, _, _ = self._run(enforcing=True, loaded=())
+        assert sev == "warn"
+
+
+class TestCheckApparmorHardening:
+    """Verify the AppArmor profile status row mirrors the SELinux one."""
+
+    @staticmethod
+    def _run(result: ApparmorCheckResult) -> tuple[str, str, str]:
+        """Patch ``check_apparmor_status`` with a synthetic result."""
+        with unittest.mock.patch("terok_sandbox.check_apparmor_status", return_value=result):
+            return _check_apparmor_hardening()
+
+    def test_not_applicable_when_apparmor_off(self) -> None:
+        """Non-AppArmor host → silently OK."""
+        sev, _, detail = self._run(ApparmorCheckResult(ApparmorStatus.NOT_APPLICABLE))
+        assert sev == "ok"
+        assert "not applicable" in detail
+        assert "AppArmor not active" in detail
+
+    def test_warn_when_profiles_missing(self) -> None:
+        """AppArmor active, no terok profiles → WARN with install hint."""
+        sev, _, detail = self._run(ApparmorCheckResult(ApparmorStatus.PROFILES_MISSING))
+        assert sev == "warn"
+        assert "NOT loaded" in detail
+        assert "terok hardening install" in detail
+
+    def test_warn_when_profiles_partial(self) -> None:
+        """Half-broken install — surface the loaded subset."""
+        sev, _, detail = self._run(
+            ApparmorCheckResult(ApparmorStatus.PROFILES_PARTIAL, loaded=("terok-gate",))
+        )
+        assert sev == "warn"
+        assert "partial install" in detail
+        assert "terok-gate" in detail
+
+    def test_ok_complain_calls_out_soak_posture(self) -> None:
+        """Complain mode is the soak default — render it explicitly so
+        operators don't mistake it for the final state."""
+        sev, _, detail = self._run(
+            ApparmorCheckResult(ApparmorStatus.OK_COMPLAIN, loaded=("terok-gate", "terok-vault"))
+        )
+        assert sev == "ok"
+        assert "complain mode" in detail
+        assert "soak posture" in detail
+
+    def test_ok_enforce_is_terminal_state(self) -> None:
+        """Enforce mode renders without the soak caveat."""
+        sev, _, detail = self._run(
+            ApparmorCheckResult(ApparmorStatus.OK_ENFORCE, loaded=("terok-gate", "terok-vault"))
+        )
+        assert sev == "ok"
+        assert "enforce mode" in detail
+        assert "soak" not in detail
+
+
+class TestCheckClearanceHardening:
+    """Verify the combined SELinux + AppArmor row for clearance.
+
+    One row, both backends — clearance ships its own
+    ``terok hardening install`` (which delegates per-package).  The detail string
+    enumerates whichever backend(s) are active on the host.
+    """
+
+    @staticmethod
+    def _run(
+        *,
+        selinux_active: bool = False,
+        apparmor_active: bool = False,
+        selinux_loaded: tuple[str, ...] = (),
+        apparmor_loaded: tuple[str, ...] = (),
+    ) -> tuple[str, str, str]:
+        """Patch the per-backend probes on the terok_clearance import surface."""
+        with (
+            unittest.mock.patch("terok_clearance.is_selinux_enabled", return_value=selinux_active),
+            unittest.mock.patch(
+                "terok_clearance.is_apparmor_enabled", return_value=apparmor_active
+            ),
+            unittest.mock.patch(
+                "terok_clearance.hardening_loaded_confined_domains",
+                return_value=selinux_loaded,
+            ),
+            unittest.mock.patch(
+                "terok_clearance.hardening_loaded_confined_profiles",
+                return_value=apparmor_loaded,
+            ),
+        ):
+            return _check_clearance_hardening()
+
+    def test_not_applicable_when_no_lsm(self) -> None:
+        """Neither SELinux nor AppArmor → silently OK."""
+        sev, _, detail = self._run()
+        assert sev == "ok"
+        assert "no active LSM" in detail
+
+    def test_warn_when_selinux_active_and_no_domains(self) -> None:
+        """Enforcing SELinux host without clearance domains loaded → WARN."""
+        sev, _, detail = self._run(selinux_active=True)
+        assert sev == "warn"
+        assert "SELinux: 2 domain(s) NOT loaded" in detail
+        assert "terok hardening install" in detail
+
+    def test_ok_when_all_selinux_domains_loaded(self) -> None:
+        """All clearance domains loaded → OK, no install hint."""
+        sev, _, detail = self._run(
+            selinux_active=True,
+            selinux_loaded=("terok_clearance_hub_t", "terok_clearance_notifier_t"),
+        )
+        assert sev == "ok"
+        assert "2 domain(s) loaded" in detail
+        assert "terok hardening install" not in detail
+
+    def test_warn_on_partial_apparmor(self) -> None:
+        """Only one of two profiles loaded → WARN, partial."""
+        sev, _, detail = self._run(
+            apparmor_active=True,
+            apparmor_loaded=("terok-clearance-hub",),
+        )
+        assert sev == "warn"
+        assert "AppArmor: partial (1/2 loaded)" in detail
+
+    def test_combined_when_both_lsms_active(self) -> None:
+        """Dual-LSM host (rare but possible) — both rows in one detail line."""
+        sev, _, detail = self._run(
+            selinux_active=True,
+            apparmor_active=True,
+            selinux_loaded=("terok_clearance_hub_t", "terok_clearance_notifier_t"),
+            apparmor_loaded=("terok-clearance-hub", "terok-clearance-notifier"),
+        )
+        assert sev == "ok"
+        assert "SELinux:" in detail
+        assert "AppArmor:" in detail
 
 
 class TestCheckVaultMigration:
