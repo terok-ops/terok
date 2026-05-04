@@ -130,8 +130,8 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
     """
     sock_path = acp_socket_path(project_id, task_id)
     if not acp_socket_is_live(sock_path):
-        _spawn_daemon(project_id, task_id)
-        _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC)
+        daemon = _spawn_daemon(project_id, task_id)
+        _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC, daemon=daemon)
 
     socat = shutil.which("socat")
     if socat is not None:
@@ -142,7 +142,7 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
     _inprocess_pump(sock_path)
 
 
-def _spawn_daemon(project_id: str, task_id: str) -> None:
+def _spawn_daemon(project_id: str, task_id: str) -> subprocess.Popen:
     """Start the proxy daemon detached, so it survives the CLI exit.
 
     ``sys.executable`` resolves to the running interpreter's absolute
@@ -150,8 +150,12 @@ def _spawn_daemon(project_id: str, task_id: str) -> None:
     constant) and the project / task ids parsed by argparse.  No shell,
     no untrusted input — the bandit S603 / S607 warnings on subprocess
     + partial-path analyses are documented false positives here.
+
+    Returns the ``Popen`` handle so the caller can poll for an early
+    exit while waiting on the socket — a daemon that crashes during
+    startup should fail fast, not stall the full bind timeout.
     """
-    subprocess.Popen(  # noqa: S603 — argv built from interpreter + module ref
+    return subprocess.Popen(  # noqa: S603 — argv built from interpreter + module ref
         [sys.executable, "-m", "terok.cli.acp_proxy", project_id, task_id],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -161,16 +165,27 @@ def _spawn_daemon(project_id: str, task_id: str) -> None:
     )
 
 
-def _wait_for_socket(path: Path, *, timeout: float) -> None:
+def _wait_for_socket(path: Path, *, timeout: float, daemon: subprocess.Popen | None = None) -> None:
     """Block until *path* is bound by a live daemon or *timeout* elapses.
 
     A bare existence check would race against a stale ``.sock`` left by
     a previous crash — ``connect`` would think the daemon is up and
     skip the spawn.  Probing accept-readiness instead lets the wait
     loop drive a real handshake.
+
+    When *daemon* is supplied, also poll its exit status: a startup
+    crash exits the loop immediately with the daemon's return code,
+    rather than stalling the full *timeout* and reporting a misleading
+    "did not bind" error.
     """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if daemon is not None and daemon.poll() is not None:
+            print(
+                f"terok: ACP daemon exited before binding {path} (exit code {daemon.returncode})",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         if acp_socket_is_live(path):
             return
         time.sleep(0.05)
