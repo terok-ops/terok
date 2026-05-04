@@ -6,10 +6,12 @@ name: no-git-deps
 # and add `no-git-deps` under "Require status checks to pass".
 
 on:
+  pull_request:
   merge_group:
 
 jobs:
   no-git-deps:
+    if: github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
