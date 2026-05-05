@@ -35,8 +35,7 @@ _logger = logging.getLogger(__name__)
 CONTAINER_POLL_INTERVAL_SEC = 2.0
 """How often the daemon checks whether the container is still alive.
 
-Two seconds is fast enough that ``acp list`` reflects shutdown
-without lag, slow enough that the polling overhead is invisible.
+Tuned to balance ``acp list`` freshness against polling overhead.
 """
 
 

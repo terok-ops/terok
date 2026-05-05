@@ -35,9 +35,8 @@ if TYPE_CHECKING:
 
 
 _DAEMON_BIND_TIMEOUT_SEC = 6.0
-"""How long ``acp connect`` waits for the daemon to bind the socket
-after spawning it.  Daemon startup is hundreds of milliseconds at
-most on typical hardware; six seconds is a forgiving ceiling."""
+"""Generous bind-timeout ceiling for the freshly spawned daemon, so a
+slow startup doesn't show up as a phantom failure."""
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
