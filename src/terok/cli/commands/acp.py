@@ -10,17 +10,14 @@ model selector as namespaced ``agent:model`` ids.
 
 ``acp list`` is a cheap discovery view — one filesystem check per
 running task plus one credential-DB read.  ``acp connect`` exec's
-``socat`` (or an in-process pump fallback) at the chosen socket,
-spawning the proxy daemon if it is not already up.
+``socat`` at the chosen socket, spawning the proxy daemon if it is
+not already up.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
-import select
-import shutil
-import socket
 import subprocess  # nosec B404 — only used with explicit argv (no shell, no untrusted input)
 import sys
 import time
@@ -120,26 +117,19 @@ def _projects_to_show(project_id_filter: str | None) -> list[Project]:
 
 
 def _cmd_connect(project_id: str, task_id: str) -> None:
-    """Bridge the caller's stdio to a task's ACP socket.
+    """Bridge the caller's stdio to a task's ACP socket via ``socat``.
 
-    Spawns the proxy daemon if the socket does not yet exist.  Then
-    exec's ``socat`` (preferred — transparent, full-duplex) or falls
-    back to a tiny in-process pump if socat is missing.  The exec
-    pattern matches :func:`task_login`, so the caller's terminal flow
-    is preserved.
+    Spawns the proxy daemon if the socket does not yet exist, then
+    replaces the CLI process with ``socat`` so the caller's terminal
+    flow is preserved end-to-end.  ``socat`` is part of the supported
+    runtime — if it is missing, ``execvp`` raises ``FileNotFoundError``
+    and the user should run ``terok sickbay`` to investigate.
     """
     sock_path = acp_socket_path(project_id, task_id)
     if not acp_socket_is_live(sock_path):
         daemon = _spawn_daemon(project_id, task_id)
         _wait_for_socket(sock_path, timeout=_DAEMON_BIND_TIMEOUT_SEC, daemon=daemon)
-
-    socat = shutil.which("socat")
-    if socat is not None:
-        # Pass the resolved absolute path so we don't re-walk PATH in
-        # ``execv``.  Static analysers also stop flagging "partial path".
-        os.execv(socat, [socat, "-", f"UNIX-CONNECT:{sock_path}"])  # nosec B606 — replacing the CLI with socat is the design
-        return  # pragma: no cover — execv never returns
-    _inprocess_pump(sock_path)
+    os.execvp("socat", ["socat", "-", f"UNIX-CONNECT:{sock_path}"])  # nosec B606 B607 — replacing the CLI with socat is the design
 
 
 def _spawn_daemon(project_id: str, task_id: str) -> subprocess.Popen:
@@ -165,22 +155,18 @@ def _spawn_daemon(project_id: str, task_id: str) -> subprocess.Popen:
     )
 
 
-def _wait_for_socket(path: Path, *, timeout: float, daemon: subprocess.Popen | None = None) -> None:
-    """Block until *path* is bound by a live daemon or *timeout* elapses.
+def _wait_for_socket(path: Path, *, timeout: float, daemon: subprocess.Popen) -> None:
+    """Block until *daemon* binds *path* or *timeout* elapses.
 
-    A bare existence check would race against a stale ``.sock`` left by
-    a previous crash — ``connect`` would think the daemon is up and
-    skip the spawn.  Probing accept-readiness instead lets the wait
-    loop drive a real handshake.
-
-    When *daemon* is supplied, also poll its exit status: a startup
-    crash exits the loop immediately with the daemon's return code,
-    rather than stalling the full *timeout* and reporting a misleading
+    Probing accept-readiness rather than just existence handles the
+    case of a stale ``.sock`` left by a previous crash.  Polling
+    *daemon* surfaces an early-exit crash immediately instead of
+    stalling the full *timeout* and reporting a misleading
     "did not bind" error.
     """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if daemon is not None and daemon.poll() is not None:
+        if daemon.poll() is not None:
             print(
                 f"terok: ACP daemon exited before binding {path} (exit code {daemon.returncode})",
                 file=sys.stderr,
@@ -194,89 +180,3 @@ def _wait_for_socket(path: Path, *, timeout: float, daemon: subprocess.Popen | N
         file=sys.stderr,
     )
     raise SystemExit(1)
-
-
-def _inprocess_pump(sock_path: Path) -> None:
-    """Bridge stdin/stdout to *sock_path* in-process — socat fallback.
-
-    Used only when socat is unavailable.  Stdin EOF triggers a
-    ``SHUT_WR`` on the socket so the daemon sees the half-close and
-    can drain its final reply; daemon EOF returns from the loop and
-    the ``finally`` block closes the socket.  Non-blocking IO with
-    :func:`select` to multiplex; partial sends/writes are looped until
-    drained.
-    """
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(str(sock_path))
-    sock.setblocking(False)
-    stdin_fd = sys.stdin.buffer.fileno()
-    stdout_fd = sys.stdout.buffer.fileno()
-    stdin_open = True
-    try:
-        while True:
-            # Drop stdin from the watch set after EOF — otherwise
-            # ``select`` keeps marking it ready and we'd attempt a
-            # second ``shutdown(SHUT_WR)``, dropping the daemon's
-            # final reply on the floor.
-            read_fds: list[object] = [sock]
-            if stdin_open:
-                read_fds.append(stdin_fd)
-            ready, _, _ = select.select(read_fds, [], [])
-            if stdin_open and stdin_fd in ready:
-                stdin_open = _forward_stdin_to_socket(stdin_fd, sock)
-            if sock in ready and not _forward_socket_to_stdout(sock, stdout_fd):
-                return
-    finally:
-        try:
-            sock.close()
-        except OSError:
-            pass
-
-
-def _forward_stdin_to_socket(stdin_fd: int, sock: socket.socket) -> bool:
-    """Forward one stdin chunk to *sock*; return ``False`` once stdin hits EOF."""
-    data = os.read(stdin_fd, 4096)
-    if not data:
-        # ``shutdown`` may raise if the daemon already closed its end —
-        # tolerate that, the SHUT_WR is advisory anyway.
-        try:
-            sock.shutdown(socket.SHUT_WR)
-        except OSError:
-            pass
-        return False
-    _send_all(sock, data)
-    return True
-
-
-def _send_all(sock: socket.socket, data: bytes) -> None:
-    """Drain *data* into the non-blocking *sock*, looping past short sends.
-
-    A non-blocking ``send`` may write fewer bytes than requested under
-    backpressure, and ``BlockingIOError`` signals "kernel send buffer
-    full" — wait for write-readiness via a single-fd ``select`` and
-    retry until the whole frame is committed.
-    """
-    view = memoryview(data)
-    while view:
-        try:
-            sent = sock.send(view)
-            view = view[sent:]
-        except BlockingIOError:
-            select.select([], [sock], [])
-
-
-def _forward_socket_to_stdout(sock: socket.socket, stdout_fd: int) -> bool:
-    """Forward one socket chunk to *stdout_fd*; return ``False`` on daemon EOF."""
-    try:
-        data = sock.recv(4096)
-    except BlockingIOError:
-        return True
-    if not data:
-        return False
-    # ``os.write`` may also write fewer bytes than supplied (rare on
-    # regular fds, but possible on pipes/ptys).
-    view = memoryview(data)
-    while view:
-        written = os.write(stdout_fd, view)
-        view = view[written:]
-    return True
