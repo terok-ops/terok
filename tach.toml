@@ -874,6 +874,9 @@ expose = [
     "core_state_dir",
     "runtime_root",
     "runtime_dir",
+    "acp_socket_path",
+    "acp_bound_path",
+    "acp_socket_is_live",
 ]
 from = ["terok.lib.core.paths"]
 

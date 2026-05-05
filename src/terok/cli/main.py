@@ -16,6 +16,7 @@ import sys
 from ..lib.core.config import set_experimental
 from ..lib.core.version import format_version_string, get_version_info
 from .commands import (
+    acp,
     agents,
     auth,
     clearance,
@@ -57,6 +58,7 @@ _DISPATCHERS = [
     clearance.dispatch,
     sickbay.dispatch,
     info.dispatch,
+    acp.dispatch,
     agents.dispatch,
     completions.dispatch,
 ]
@@ -152,6 +154,7 @@ def main(prog: str = "terok") -> None:
     shield.register(sub)
     agents.register(sub)
     info.register(sub)
+    acp.register(sub)
 
     # Mount sub-package command registries under scoped prefixes.
     # Groups that touch SandboxConfig paths receive config_factory so the
