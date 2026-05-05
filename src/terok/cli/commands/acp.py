@@ -21,7 +21,7 @@ import os
 import select
 import shutil
 import socket
-import subprocess
+import subprocess  # nosec B404 — only used with explicit argv (no shell, no untrusted input)
 import sys
 import time
 from pathlib import Path
@@ -137,7 +137,7 @@ def _cmd_connect(project_id: str, task_id: str) -> None:
     if socat is not None:
         # Pass the resolved absolute path so we don't re-walk PATH in
         # ``execv``.  Static analysers also stop flagging "partial path".
-        os.execv(socat, [socat, "-", f"UNIX-CONNECT:{sock_path}"])
+        os.execv(socat, [socat, "-", f"UNIX-CONNECT:{sock_path}"])  # nosec B606 — replacing the CLI with socat is the design
         return  # pragma: no cover — execv never returns
     _inprocess_pump(sock_path)
 
@@ -155,7 +155,7 @@ def _spawn_daemon(project_id: str, task_id: str) -> subprocess.Popen:
     exit while waiting on the socket — a daemon that crashes during
     startup should fail fast, not stall the full bind timeout.
     """
-    return subprocess.Popen(  # noqa: S603 — argv built from interpreter + module ref
+    return subprocess.Popen(  # nosec B603 — argv = [interpreter, -m, module, argparse-validated ids]
         [sys.executable, "-m", "terok.cli.acp_proxy", project_id, task_id],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
